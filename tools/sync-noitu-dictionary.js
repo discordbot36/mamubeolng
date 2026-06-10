@@ -1,0 +1,1 @@
+require("./sync-dictionary-online");
