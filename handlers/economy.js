@@ -271,10 +271,15 @@ async function daily(interaction) {
     const coin = getCurrencyEmoji();
 
     if (!result.success) {
-        const hours = Math.floor(result.timeLeft / 1000 / 60 / 60);
+        const totalMinutes = Math.ceil(result.timeLeft / 1000 / 60);
+        const hours = Math.floor(totalMinutes / 60);
+        const minutes = totalMinutes % 60;
 
         return interaction.reply({
-            content: `⏳ Bạn đã điểm danh rồi!\n` + `Quay lại sau ${hours} giờ`,
+            content:
+                `⏳ Bạn đã điểm danh hôm nay rồi!\n` +
+                `Qua **00:00 mỗi ngày** là điểm danh lại được.\n` +
+                `Còn khoảng **${hours} giờ ${minutes} phút**.`,
             ephemeral: true,
         });
     }
@@ -778,23 +783,21 @@ async function sell(interaction) {
     }
 
     if (itemId === "all_iphone") {
-    const result = sellAllIphones(
-        interaction.user.id,
-    );
+        const result = sellAllIphones(interaction.user.id);
 
-    if (!result.success) {
+        if (!result.success) {
+            return interaction.reply({
+                content: `❌ ${result.message}`,
+                ephemeral: true,
+            });
+        }
+
         return interaction.reply({
-            content: `❌ ${result.message}`,
-            ephemeral: true,
+            content:
+                `📱 Chủ tiệm Apple bất ngờ vì bạn bán **${result.quantity} iPhone**\n` +
+                `${coin} Tổng nhận: **${formatMoney(result.totalPrice)}**`,
         });
     }
-
-    return interaction.reply({
-        content:
-            `📱 Chủ tiệm Apple bất ngờ vì bạn bán **${result.quantity} iPhone**\n` +
-            `${coin} Tổng nhận: **${formatMoney(result.totalPrice)}**`,
-    });
-}
 
     const result = sellItem(interaction.user.id, itemId, quantity);
 

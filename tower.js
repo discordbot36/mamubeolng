@@ -166,11 +166,18 @@ function isChestFloor(floor) {
 }
 
 function getMoneyReward(floor) {
-    if (isChestFloor(floor)) return 0;
-
-    return Math.floor(
-        towerConfig.reward.base * Math.pow(floor, towerConfig.reward.power),
+    const reward = Math.floor(
+        Number(towerConfig.reward.base || 120) *
+            Math.pow(floor, Number(towerConfig.reward.power || 1.12)),
     );
+
+    if (isChestFloor(floor)) {
+        return Math.floor(
+            reward * Number(towerConfig.reward.chestFloorMultiplier || 2),
+        );
+    }
+
+    return reward;
 }
 
 function getChestByFloor(floor) {
@@ -185,15 +192,20 @@ function getChestByFloor(floor) {
 }
 
 function getRewardText(floor) {
+    const coin = getCurrencyEmoji();
+    const moneyReward = getMoneyReward(floor);
+
     if (isChestFloor(floor)) {
         const chest = getChestByFloor(floor);
 
-        return `${chest.emoji} **${chest.name}**\n⚠️ Rương hiện tại chưa mở được, chờ update.`;
+        return (
+            `${coin} **${formatMoney(moneyReward)}**\n` +
+            `${chest.emoji} **${chest.name}**\n` +
+            `🎁 Boss.`
+        );
     }
 
-    const coin = getCurrencyEmoji();
-
-    return `${coin} **${formatMoney(getMoneyReward(floor))}**`;
+    return `${coin} **${formatMoney(moneyReward)}**`;
 }
 
 function buildFightButton(userId, disabled = false) {
@@ -228,7 +240,7 @@ function buildTowerEmbed(interaction, tower, profile) {
         .setThumbnail(interaction.user.displayAvatarURL())
         .setDescription(
             `Người chơi chỉ có **1 tiến độ leo tháp**, không reset.\n` +
-                `Thắng được đánh tiếp ngay, thua bị khóa **1 tiếng**.\n\n` +
+                `Thắng được đánh tiếp ngay, thua bị khóa **${formatTimeLeft(towerConfig.cooldownOnLoseMs)}**.\n\n` +
                 `📍 Tầng đã clear: **${tower.floor || 0}**\n` +
                 `🚪 Tầng tiếp theo: **${nextFloor}**\n\n` +
                 `👹 Quái: **${monster.name}**\n` +
@@ -820,7 +832,7 @@ async function fight(interaction) {
         const resultText =
             `💀 **Thất bại tại tầng ${nextFloor}!**\n` +
             `Đạo hữu bị **${monster.name}** húc bay khỏi Tháp Mamu.\n\n` +
-            `⏳ Trọng thương, cần **1 tiếng** để hồi phục.\n` +
+            `⏳ Trọng thương, cần **${formatTimeLeft(towerConfig.cooldownOnLoseMs)}** để hồi phục.\n` +
             `Còn lại: **${formatTimeLeft(updatedTower.loseCooldownUntil - Date.now())}**`;
 
         return interaction.message.edit({
@@ -834,6 +846,10 @@ async function fight(interaction) {
 
     if (isChestFloor(nextFloor)) {
         const chest = getChestByFloor(nextFloor);
+        const reward = getMoneyReward(nextFloor);
+        const coin = getCurrencyEmoji();
+
+        addMoney(userId, reward);
 
         addInventoryItem(userId, {
             id: chest.id,
@@ -850,13 +866,14 @@ async function fight(interaction) {
             data.floor = nextFloor;
             data.highestFloor = Math.max(data.highestFloor || 0, nextFloor);
             data.totalChests = Number(data.totalChests || 0) + 1;
+            data.totalEarned = Number(data.totalEarned || 0) + reward;
             data.loseCooldownUntil = 0;
         });
 
         rewardText =
+            `${coin} Nhận: **${formatMoney(reward)}**\n` +
             `${chest.emoji} **${chest.name}**\n` +
-            `📦 Đã cất vào kho đồ.\n` +
-            `⚠️ Tính năng mở rương sẽ được cập nhật sau.`;
+            `📦 Đã cất rương vào kho đồ.`;
     } else {
         const reward = getMoneyReward(nextFloor);
         const coin = getCurrencyEmoji();

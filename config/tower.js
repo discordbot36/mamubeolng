@@ -2,8 +2,9 @@ module.exports = {
     cooldownOnLoseMs: 30 * 60 * 1000,
     activeSkillTriggerChance: 0.25,
     reward: {
-        base: 15,
-        power: 1.04,
+        base: 120,
+        power: 1.15,
+        chestFloorMultiplier: 2,
     },
 
     monster: {

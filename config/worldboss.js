@@ -30,6 +30,9 @@ module.exports = {
 
     attackCooldownMinutes: 5,
 
+    respawnHours: 3.6,
+    autoSpawnOnStartup: true,
+
     consolationReward: 500,
 
     chestItemId: "tu_luyen_chest",

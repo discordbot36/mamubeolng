@@ -338,24 +338,66 @@ function transferMoney(fromUserId, toUserId, amount) {
     });
 }
 
+function getVietnamDateKey(timestamp = Date.now()) {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(new Date(timestamp));
+}
+
+function getVietnamDayNumber(timestamp = Date.now()) {
+    const dateKey = getVietnamDateKey(timestamp);
+    const [year, month, day] = dateKey.split("-").map(Number);
+
+    return Math.floor(Date.UTC(year, month - 1, day) / 86400000);
+}
+
+function getMsUntilVietnamMidnight() {
+    const now = new Date();
+
+    const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).formatToParts(now);
+
+    const year = Number(parts.find((p) => p.type === "year")?.value);
+    const month = Number(parts.find((p) => p.type === "month")?.value);
+    const day = Number(parts.find((p) => p.type === "day")?.value);
+
+    const nextMidnightVietnamAsUtc = Date.UTC(year, month - 1, day + 1, -7, 0, 0);
+
+    return Math.max(0, nextMidnightVietnamAsUtc - Date.now());
+}
+
 function claimDaily(userId) {
     return withData((data) => {
         const user = ensureUser(data, userId);
         const now = Date.now();
         const daily = economy.daily;
 
-        if (now - user.lastDaily < daily.cooldownMs) {
+        const todayKey = getVietnamDateKey(now);
+        const todayNumber = getVietnamDayNumber(now);
+
+        const lastDaily = Number(user.lastDaily || 0);
+        const lastDailyDate = user.lastDailyDate || getVietnamDateKey(lastDaily);
+        const lastDailyNumber = lastDaily > 0 ? getVietnamDayNumber(lastDaily) : 0;
+
+        if (lastDailyDate === todayKey) {
             return {
                 success: false,
-                timeLeft: daily.cooldownMs - (now - user.lastDaily),
+                timeLeft: getMsUntilVietnamMidnight(),
             };
         }
 
-        if (now - user.lastDaily > daily.resetAfterMs) {
-            user.dailyStreak = 0;
+        if (lastDailyNumber > 0 && todayNumber - lastDailyNumber === 1) {
+            user.dailyStreak = Number(user.dailyStreak || 0) + 1;
+        } else {
+            user.dailyStreak = 1;
         }
-
-        user.dailyStreak += 1;
 
         const reward = Math.min(
             Math.ceil(
@@ -367,6 +409,7 @@ function claimDaily(userId) {
 
         user.money += reward;
         user.lastDaily = now;
+        user.lastDailyDate = todayKey;
 
         return {
             success: true,
@@ -1095,6 +1138,7 @@ function getSecretRealmFatigue(userId) {
             state.userFatigue[userId] = {
                 guestRuns: 0,
                 hostRuns: 0,
+                resetDate: "",
                 updatedAt: 0,
             };
         }
@@ -1111,6 +1155,7 @@ function updateSecretRealmFatigue(userId, updater) {
             state.userFatigue[userId] = {
                 guestRuns: 0,
                 hostRuns: 0,
+                resetDate: "",
                 updatedAt: 0,
             };
         }

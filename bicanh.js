@@ -193,17 +193,23 @@ function getFatigueLevel(runs) {
     );
 }
 
-function resetFatigueIfNeeded(fatigue) {
-    const now = Date.now();
-    const updatedAt = Number(fatigue.updatedAt || 0);
+function getTodayKey() {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(new Date());
+}
 
-    if (
-        updatedAt <= 0 ||
-        now - updatedAt >= Number(config.fatigue.resetAfterMs || 0)
-    ) {
+function resetFatigueIfNeeded(fatigue) {
+    const todayKey = getTodayKey();
+
+    if (fatigue.resetDate !== todayKey) {
         fatigue.guestRuns = 0;
         fatigue.hostRuns = 0;
-        fatigue.updatedAt = now;
+        fatigue.resetDate = todayKey;
+        fatigue.updatedAt = Date.now();
     }
 
     return fatigue;
@@ -327,11 +333,11 @@ function buildLobbyEmbed(realm) {
         .setTitle("🌌 BÍ CẢNH HỮU DUYÊN")
         .setDescription(
             `👑 Host: <@${realm.hostId}>\n` +
-            `👥 Thành viên: **${realm.memberIds.length}/${realm.maxMembers}**\n` +
-            `📌 Tối thiểu bắt đầu: **${realm.minMembers} người**\n\n` +
-            `${memberLines.join("\n")}\n\n` +
-            `Người chơi đủ điều kiện có thể bấm **Tham gia**.\n` +
-            `Khi đủ ${realm.maxMembers} người, Bí Cảnh sẽ tự bắt đầu.`,
+                `👥 Thành viên: **${realm.memberIds.length}/${realm.maxMembers}**\n` +
+                `📌 Tối thiểu bắt đầu: **${realm.minMembers} người**\n\n` +
+                `${memberLines.join("\n")}\n\n` +
+                `Người chơi đủ điều kiện có thể bấm **Tham gia**.\n` +
+                `Khi đủ ${realm.maxMembers} người, Bí Cảnh sẽ tự bắt đầu.`,
         )
         .setFooter({
             text: `ID: ${realm.id}`,
@@ -599,20 +605,24 @@ async function joinRealm(interaction, realm) {
         });
 
         if (lobbyMessage) {
-            await lobbyMessage.edit({
-                embeds: [buildLobbyEmbed(realm)],
-                components: [buildLobbyButtons(realm)],
-            }).catch(() => null);
+            await lobbyMessage
+                .edit({
+                    embeds: [buildLobbyEmbed(realm)],
+                    components: [buildLobbyButtons(realm)],
+                })
+                .catch(() => null);
         }
 
         return startRealmDirect(interaction.channel, realm, lobbyMessage);
     }
 
     if (lobbyMessage) {
-        await lobbyMessage.edit({
-            embeds: [buildLobbyEmbed(realm)],
-            components: [buildLobbyButtons(realm)],
-        }).catch(() => null);
+        await lobbyMessage
+            .edit({
+                embeds: [buildLobbyEmbed(realm)],
+                components: [buildLobbyButtons(realm)],
+            })
+            .catch(() => null);
     }
 
     return interaction.reply({
@@ -738,6 +748,7 @@ async function startRealmDirect(channel, realm, lobbyMessage = null) {
         const safe = resetFatigueIfNeeded(data);
 
         safe.hostRuns = Number(safe.hostRuns || 0) + 1;
+        safe.resetDate = getTodayKey();
         safe.updatedAt = Date.now();
     });
 
@@ -746,19 +757,21 @@ async function startRealmDirect(channel, realm, lobbyMessage = null) {
         (await channel.messages.fetch(realm.messageId).catch(() => null));
 
     if (message) {
-        await message.edit({
-            content: realm.memberIds.map((id) => `<@${id}>`).join(" "),
-            embeds: [
-                new EmbedBuilder()
-                    .setColor(0xe74c3c)
-                    .setTitle("⚔️ BÍ CẢNH BẮT ĐẦU")
-                    .setDescription(
-                        `Đội hình **${realm.memberIds.length} người** đã khóa.\n` +
-                        `Chỉ thành viên trong đội mới còn xem và chat được.`,
-                    ),
-            ],
-            components: [],
-        }).catch(() => null);
+        await message
+            .edit({
+                content: realm.memberIds.map((id) => `<@${id}>`).join(" "),
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xe74c3c)
+                        .setTitle("⚔️ BÍ CẢNH BẮT ĐẦU")
+                        .setDescription(
+                            `Đội hình **${realm.memberIds.length} người** đã khóa.\n` +
+                                `Chỉ thành viên trong đội mới còn xem và chat được.`,
+                        ),
+                ],
+                components: [],
+            })
+            .catch(() => null);
     }
 
     realm.starting = false;
@@ -838,17 +851,19 @@ async function expireLobby(client, realmId) {
         return;
     }
 
-    await channel.send({
-        embeds: [
-            new EmbedBuilder()
-                .setColor(0x95a5a6)
-                .setTitle("🌫️ BÍ CẢNH ĐÃ BIẾN MẤT")
-                .setDescription(
-                    "Không đủ đạo hữu tập hợp kịp thời. Lối vào Bí Cảnh đã khép lại.",
-                ),
-        ],
-        components: [],
-    }).catch(() => null);
+    await channel
+        .send({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor(0x95a5a6)
+                    .setTitle("🌫️ BÍ CẢNH ĐÃ BIẾN MẤT")
+                    .setDescription(
+                        "Không đủ đạo hữu tập hợp kịp thời. Lối vào Bí Cảnh đã khép lại.",
+                    ),
+            ],
+            components: [],
+        })
+        .catch(() => null);
 
     setTimeout(() => {
         const latestRealm = getRealm(realmId);
@@ -1379,8 +1394,8 @@ async function finishBattle(channel, realm, success) {
 
                 rewardParts.push(
                     `${item.emoji || "🎁"} ` +
-                    `**${item.name || itemId}** ` +
-                    `x${formatNumber(amount)}`,
+                        `**${item.name || itemId}** ` +
+                        `x${formatNumber(amount)}`,
                 );
             }
 
@@ -1390,11 +1405,11 @@ async function finishBattle(channel, realm, success) {
 
             resultLines.push(
                 `<@${userId}> — ` +
-                `${rewardParts.join(" | ")}\n` +
-                `> Đóng góp: **${formatNumber(
-                    contribution.totalScore || 0,
-                )}** | ` +
-                `AFK: **${formatNumber(member.afkTurns || 0)} lượt**`,
+                    `${rewardParts.join(" | ")}\n` +
+                    `> Đóng góp: **${formatNumber(
+                        contribution.totalScore || 0,
+                    )}** | ` +
+                    `AFK: **${formatNumber(member.afkTurns || 0)} lượt**`,
             );
         }
     } else {
@@ -1403,9 +1418,9 @@ async function finishBattle(channel, realm, success) {
 
             resultLines.push(
                 `<@${userId}> — ` +
-                `Đóng góp **${formatNumber(
-                    contribution.totalScore || 0,
-                )}**`,
+                    `Đóng góp **${formatNumber(
+                        contribution.totalScore || 0,
+                    )}**`,
             );
         }
     }
@@ -1423,7 +1438,7 @@ async function finishBattle(channel, realm, success) {
             const safe = resetFatigueIfNeeded(data);
 
             safe.guestRuns = Number(safe.guestRuns || 0) + 1;
-
+            safe.resetDate = getTodayKey();
             safe.updatedAt = Date.now();
         });
     }
@@ -1441,15 +1456,15 @@ async function finishBattle(channel, realm, success) {
             (success
                 ? `Đội đã hoàn thành Bí Cảnh trong **${battle.turn}/${battle.maxTurns} lượt**.`
                 : `Đội đã không thể vượt qua Bí Cảnh.`) +
-            `\n\n` +
-            `📈 Tiến độ: **${formatNumber(battle.progress)}/${formatNumber(
-                battle.requiredProgress,
-            )}**\n` +
-            `❤️ Sinh lực còn lại: **${formatNumber(
-                battle.teamHp,
-            )}/${formatNumber(battle.maxTeamHp)}**\n\n` +
-            `### Kết quả thành viên\n` +
-            resultLines.join("\n\n"),
+                `\n\n` +
+                `📈 Tiến độ: **${formatNumber(battle.progress)}/${formatNumber(
+                    battle.requiredProgress,
+                )}**\n` +
+                `❤️ Sinh lực còn lại: **${formatNumber(
+                    battle.teamHp,
+                )}/${formatNumber(battle.maxTeamHp)}**\n\n` +
+                `### Kết quả thành viên\n` +
+                resultLines.join("\n\n"),
         )
         .setFooter({
             text: "Channel Bí Cảnh sẽ tự động đóng.",
@@ -1586,7 +1601,7 @@ async function resolveBattleRound(channel, realmId) {
 
         resultLines.push(
             `${ACTIONS[action].emoji} <@${userId}> dùng **${ACTIONS[action].label}**` +
-            (actionResult.matchedMechanic ? " ✅" : ""),
+                (actionResult.matchedMechanic ? " ✅" : ""),
         );
     }
 
@@ -1652,12 +1667,12 @@ async function resolveBattleRound(channel, realmId) {
                 )
                 .setDescription(
                     `${resultLines.join("\n")}\n\n` +
-                    `📈 Tiến độ nhận được: **+${formatNumber(totalProgress)}**\n` +
-                    `💥 Sát thương đội chịu: **-${formatNumber(receivedDamage)}**\n\n` +
-                    `📊 Tổng tiến độ: **${formatNumber(battle.progress)}/${formatNumber(battle.requiredProgress)}**\n` +
-                    `❤️ Sinh lực còn lại: **${formatNumber(battle.teamHp)}/${formatNumber(battle.maxTeamHp)}**\n` +
-                    `🔵 Linh khí: **${battle.energy}/100**\n` +
-                    `🌀 Ổn định: **${battle.stability}/100**`,
+                        `📈 Tiến độ nhận được: **+${formatNumber(totalProgress)}**\n` +
+                        `💥 Sát thương đội chịu: **-${formatNumber(receivedDamage)}**\n\n` +
+                        `📊 Tổng tiến độ: **${formatNumber(battle.progress)}/${formatNumber(battle.requiredProgress)}**\n` +
+                        `❤️ Sinh lực còn lại: **${formatNumber(battle.teamHp)}/${formatNumber(battle.maxTeamHp)}**\n` +
+                        `🔵 Linh khí: **${battle.energy}/100**\n` +
+                        `🌀 Ổn định: **${battle.stability}/100**`,
                 ),
         ],
     });
@@ -1782,15 +1797,15 @@ function buildBattleEmbed(realm) {
         .setTitle(`⚔️ BÍ CẢNH — LƯỢT ${battle.turn}/${battle.maxTurns}`)
         .setDescription(
             `### ${mechanic.name}\n` +
-            `${mechanic.description}\n\n` +
-            `📈 Tiến độ: **${battle.progress}/${battle.requiredProgress}**\n` +
-            `${makeBar(battle.progress, battle.requiredProgress)}\n\n` +
-            `❤️ Sinh lực đội: **${battle.teamHp}/${battle.maxTeamHp}**\n` +
-            `${makeBar(battle.teamHp, battle.maxTeamHp)}\n\n` +
-            `🔵 Linh khí: **${battle.energy}/100**\n` +
-            `🌀 Ổn định: **${battle.stability}/100**\n\n` +
-            `👥 Đã chọn: **${selectedCount}/${realm.memberIds.length}**\n` +
-            `⏰ Mỗi người hãy chọn một hành động.`,
+                `${mechanic.description}\n\n` +
+                `📈 Tiến độ: **${battle.progress}/${battle.requiredProgress}**\n` +
+                `${makeBar(battle.progress, battle.requiredProgress)}\n\n` +
+                `❤️ Sinh lực đội: **${battle.teamHp}/${battle.maxTeamHp}**\n` +
+                `${makeBar(battle.teamHp, battle.maxTeamHp)}\n\n` +
+                `🔵 Linh khí: **${battle.energy}/100**\n` +
+                `🌀 Ổn định: **${battle.stability}/100**\n\n` +
+                `👥 Đã chọn: **${selectedCount}/${realm.memberIds.length}**\n` +
+                `⏰ Mỗi người hãy chọn một hành động.`,
         )
         .setFooter({
             text: `ID: ${realm.id}`,

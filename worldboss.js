@@ -20,8 +20,10 @@ const tuTienConfig = require("./config/tutien");
 const combat = require("./utils/combat");
 
 const STATE_KEY = "worldBoss";
+const RESPAWN_KEY = "worldBossRespawn";
 
 let worldBossAttackQueue = Promise.resolve();
+let worldBossRespawnTimer = null;
 
 function runWorldBossAttackLocked(callback) {
     const currentTask = worldBossAttackQueue.then(callback, callback);
@@ -49,6 +51,18 @@ function formatTimeLeft(ms) {
 
 function getAttackCooldownMs() {
     return Number(worldBossConfig.attackCooldownMinutes || 5) * 60 * 1000;
+}
+
+function getRespawnMs() {
+    return Number(worldBossConfig.respawnHours || 3.6) * 60 * 60 * 1000;
+}
+
+function formatRespawnTime(timestamp) {
+    if (!timestamp) {
+        return "không rõ";
+    }
+
+    return `<t:${Math.floor(Number(timestamp) / 1000)}:R>`;
 }
 
 function formatNumber(number) {
@@ -519,6 +533,52 @@ function shuffleArray(array) {
     return result;
 }
 
+function clearWorldBossRespawnTimer() {
+    if (worldBossRespawnTimer) {
+        clearTimeout(worldBossRespawnTimer);
+        worldBossRespawnTimer = null;
+    }
+}
+
+function scheduleWorldBossRespawn(client, respawnAt) {
+    clearWorldBossRespawnTimer();
+
+    const delay = Math.max(1000, Number(respawnAt || 0) - Date.now());
+
+    worldBossRespawnTimer = setTimeout(async () => {
+        try {
+            const currentBoss = getSystemValue(STATE_KEY);
+
+            if (currentBoss && currentBoss.active) {
+                return;
+            }
+
+            const respawnState = getSystemValue(RESPAWN_KEY);
+            const targetRespawnAt = Number(
+                respawnState?.respawnAt || respawnAt || 0,
+            );
+
+            if (targetRespawnAt > Date.now()) {
+                scheduleWorldBossRespawn(client, targetRespawnAt);
+                return;
+            }
+
+            const result = await spawnBossInChannel(client, {
+                channelId: respawnState?.channelId || worldBossConfig.channelId,
+                spawnedBy: "auto_respawn",
+            });
+
+            if (!result.success) {
+                console.error("[WorldBoss AutoRespawn]", result.message);
+                scheduleWorldBossRespawn(client, Date.now() + 60 * 1000);
+            }
+        } catch (error) {
+            console.error("[WorldBoss AutoRespawn]", error);
+            scheduleWorldBossRespawn(client, Date.now() + 60 * 1000);
+        }
+    }, delay);
+}
+
 function getHitRanking(boss) {
     return Object.entries(boss.damage || {})
         .map(([userId, data]) => ({
@@ -666,6 +726,7 @@ async function finishBoss(client, reason = "killed") {
     }
 
     setSystemValue(STATE_KEY, boss);
+    deleteSystemValue(RESPAWN_KEY);
 
     const channel = await client.channels
         .fetch(boss.channelId)
@@ -699,9 +760,31 @@ async function finishBoss(client, reason = "killed") {
 
     deleteSystemValue(STATE_KEY);
 
+    const respawnAt = Date.now() + getRespawnMs();
+
+    setSystemValue(RESPAWN_KEY, {
+        channelId: boss.channelId || worldBossConfig.channelId,
+        killedAt: boss.killedAt,
+        respawnAt,
+        reason,
+    });
+
+    scheduleWorldBossRespawn(client, respawnAt);
+
+    if (channel && channel.isTextBased()) {
+        channel
+            .send({
+                content:
+                    `⏳ Boss mới sẽ tự động xuất hiện ${formatRespawnTime(respawnAt)} ` +
+                    `(**${worldBossConfig.respawnHours || 3.6} giờ** sau khi chết).`,
+            })
+            .catch(() => undefined);
+    }
+
     return {
         success: true,
-        message: "Boss đã chết và phần thưởng đã được chia.",
+        message:
+            "Boss đã chết, phần thưởng đã được chia và đã hẹn giờ boss mới.",
     };
 }
 
@@ -714,6 +797,24 @@ function hasBossAccess(interaction) {
 }
 
 class WorldBossManager {
+        startAutoSpawn(client) {
+        const currentBoss = getSystemValue(STATE_KEY);
+
+        if (currentBoss && currentBoss.active) {
+            return;
+        }
+
+        const respawnState = getSystemValue(RESPAWN_KEY);
+
+        if (respawnState?.respawnAt) {
+            scheduleWorldBossRespawn(client, Number(respawnState.respawnAt));
+            return;
+        }
+
+        if (worldBossConfig.autoSpawnOnStartup === true) {
+            scheduleWorldBossRespawn(client, Date.now() + 5000);
+        }
+    }
     async spawn(interaction) {
         await interaction.deferReply({
             ephemeral: true,

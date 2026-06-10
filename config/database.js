@@ -8,6 +8,7 @@ module.exports = {
         losses: 0,
         dailyStreak: 0,
         lastDaily: 0,
+        lastDailyDate: "",
         inventory: {},
         inventoryItems: [],
         weapons: [],

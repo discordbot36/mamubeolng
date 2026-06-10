@@ -4,8 +4,8 @@ const { Client, GatewayIntentBits } = require("discord.js");
 const botConfig = require("./config/bot");
 const router = require("./core/router");
 const leaderboard = require("./leaderboard");
-const bicanh =
-    require("./bicanh");
+const bicanh = require("./bicanh");
+const worldboss = require("./worldboss");
 
 function requireEnv(name) {
     const value = process.env[name];
@@ -52,15 +52,12 @@ process.on("uncaughtException", (error) => {
 client.once("clientReady", () => {
     console.log(`Logged in as ${client.user.tag}`);
 
-    bicanh.recover(client)
-    .catch((error) => {
-        console.error(
-            "[BiCanh Recover]",
-            error,
-        );
+    bicanh.recover(client).catch((error) => {
+        console.error("[BiCanh Recover]", error);
     });
 
     leaderboard.startAutoUpdate(client);
+    worldboss.startAutoSpawn(client);
 });
 
 client.on("interactionCreate", async (interaction) => {
