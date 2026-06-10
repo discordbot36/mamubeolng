@@ -21,6 +21,7 @@ const combat = require("./utils/combat");
 
 const STATE_KEY = "worldBoss";
 const RESPAWN_KEY = "worldBossRespawn";
+const BOSS_ROTATION_KEY = "worldBossNextIndex";
 
 let worldBossAttackQueue = Promise.resolve();
 let worldBossRespawnTimer = null;
@@ -532,6 +533,147 @@ function shuffleArray(array) {
 
     return result;
 }
+function getBossList() {
+    if (
+        Array.isArray(worldBossConfig.bosses) &&
+        worldBossConfig.bosses.length > 0
+    ) {
+        return worldBossConfig.bosses;
+    }
+
+    return [worldBossConfig.defaultBoss];
+}
+
+function getNextBossTemplate() {
+    const bosses = getBossList();
+
+    const currentIndex = Number(getSystemValue(BOSS_ROTATION_KEY) || 0);
+    const safeIndex = Math.max(0, currentIndex) % bosses.length;
+
+    const bossTemplate = bosses[safeIndex];
+
+    const nextIndex = (safeIndex + 1) % bosses.length;
+
+    setSystemValue(BOSS_ROTATION_KEY, nextIndex);
+
+    return bossTemplate;
+}
+
+function createBossState(options = {}) {
+    const combatStats = worldBossConfig.combatStats || {};
+
+    const bossTemplate = options.bossTemplate || getNextBossTemplate();
+
+    const name =
+        options.name || bossTemplate.name || worldBossConfig.defaultBoss.name;
+    const maxHp = Number(
+        options.maxHp ||
+            bossTemplate.maxHp ||
+            worldBossConfig.defaultBoss.maxHp,
+    );
+    const imageUrl =
+        options.imageUrl ||
+        bossTemplate.imageUrl ||
+        worldBossConfig.defaultBoss.imageUrl;
+
+    return {
+        active: true,
+
+        id: bossTemplate.id || "world_boss",
+
+        name,
+
+        hp: maxHp,
+        maxHp,
+
+        combatPower: Number(combatStats.combatPower || 0),
+
+        atk: Number(combatStats.atk || 0),
+
+        defense: Number(combatStats.defense || 0),
+
+        speed: Number(combatStats.speed || 100),
+
+        critChance: Number(combatStats.critChance || 0.08),
+
+        dodgeChance: Number(combatStats.dodgeChance || 0),
+
+        damageReduction: Number(combatStats.damageReduction || 0.05),
+
+        skills: Array.isArray(combatStats.skills) ? combatStats.skills : [],
+
+        shield: 0,
+        cooldowns: {},
+        buffs: [],
+        debuffs: [],
+
+        status: {
+            stunned: false,
+            revived: false,
+            reviveAttempted: false,
+            defending: false,
+        },
+
+        imageUrl,
+
+        channelId: options.channelId || worldBossConfig.channelId,
+
+        messageId: null,
+
+        damage: {},
+
+        spawnedAt: Date.now(),
+        spawnedBy: options.spawnedBy || "auto",
+    };
+}
+
+async function spawnBossInChannel(client, options = {}) {
+    const oldBoss = getSystemValue(STATE_KEY);
+
+    if (oldBoss && oldBoss.active) {
+        return {
+            success: false,
+            message: "Đang có boss còn sống, không thể spawn thêm.",
+        };
+    }
+
+    const channelId = options.channelId || worldBossConfig.channelId;
+    const channel = await client.channels.fetch(channelId).catch(() => null);
+
+    if (!channel || !channel.isTextBased()) {
+        return {
+            success: false,
+            message: `Không tìm thấy channel spawn boss: ${channelId}`,
+        };
+    }
+
+    const boss = createBossState({
+        channelId,
+        spawnedBy: options.spawnedBy || "auto",
+        name: options.name,
+        maxHp: options.maxHp,
+        imageUrl: options.imageUrl,
+    });
+
+    const bossEmbed = await buildBossEmbed(client, boss);
+    const rankingEmbed = await buildAutoRankingEmbed(client, boss, false);
+
+    const bossMessage = await channel.send({
+        content: "👹 **World Boss đã xuất hiện!**",
+        embeds: [bossEmbed, rankingEmbed],
+        components: [createBossButtons(false)],
+    });
+
+    boss.messageId = bossMessage.id;
+
+    setSystemValue(STATE_KEY, boss);
+    deleteSystemValue(RESPAWN_KEY);
+
+    return {
+        success: true,
+        boss,
+    };
+}
 
 function clearWorldBossRespawnTimer() {
     if (worldBossRespawnTimer) {
@@ -797,7 +939,7 @@ function hasBossAccess(interaction) {
 }
 
 class WorldBossManager {
-        startAutoSpawn(client) {
+    startAutoSpawn(client) {
         const currentBoss = getSystemValue(STATE_KEY);
 
         if (currentBoss && currentBoss.active) {
@@ -854,57 +996,13 @@ class WorldBossManager {
                 interaction.options.getString("anh") ||
                 worldBossConfig.defaultBoss.imageUrl;
 
-            const combatStats = worldBossConfig.combatStats || {};
-
-            const boss = {
-                active: true,
-
-                name,
-
-                hp: maxHp,
-                maxHp,
-
-                combatPower: Number(combatStats.combatPower || 0),
-
-                atk: Number(combatStats.atk || 0),
-
-                defense: Number(combatStats.defense || 0),
-
-                speed: Number(combatStats.speed || 100),
-
-                critChance: Number(combatStats.critChance || 0.08),
-
-                dodgeChance: Number(combatStats.dodgeChance || 0),
-
-                damageReduction: Number(combatStats.damageReduction || 0.05),
-
-                skills: Array.isArray(combatStats.skills)
-                    ? combatStats.skills
-                    : [],
-
-                shield: 0,
-                cooldowns: {},
-                buffs: [],
-                debuffs: [],
-
-                status: {
-                    stunned: false,
-                    revived: false,
-                    reviveAttempted: false,
-                    defending: false,
-                },
-
-                imageUrl,
-
+            const boss = createBossState({
                 channelId: interaction.channelId,
-
-                messageId: null,
-
-                damage: {},
-
-                spawnedAt: Date.now(),
                 spawnedBy: interaction.user.id,
-            };
+                name,
+                maxHp,
+                imageUrl,
+            });
 
             const bossEmbed = await buildBossEmbed(interaction.client, boss);
             const rankingEmbed = await buildAutoRankingEmbed(

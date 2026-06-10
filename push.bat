@@ -1,21 +1,45 @@
 @echo off
 chcp 65001 >nul
-title Push code len GitHub
+title PUSH CODE LEN GITHUB
 
 echo ================================
 echo   PUSH CODE LEN GITHUB
 echo ================================
 echo.
 
-where git >nul 2>nul
-if errorlevel 1 (
-    echo [LOI] May ban chua cai Git.
-    echo Hay cai Git for Windows truoc.
+echo Dang kiem tra file nguy hiem...
+echo.
+
+git ls-files --error-unmatch .env >nul 2>&1
+if not errorlevel 1 (
+    echo [NGUY HIEM] .env dang bi Git theo doi.
+    echo Dung lai de tranh lo token.
+    echo Chay lenh:
+    echo git rm --cached .env
     pause
     exit /b
 )
 
-echo Dang kiem tra file nguy hiem...
+git ls-files --error-unmatch data.json >nul 2>&1
+if not errorlevel 1 (
+    echo [NGUY HIEM] data.json dang bi Git theo doi.
+    echo Dung lai de tranh lo data.
+    echo Chay lenh:
+    echo git rm --cached data.json
+    pause
+    exit /b
+)
+
+git ls-files --error-unmatch node_modules >nul 2>&1
+if not errorlevel 1 (
+    echo [NGUY HIEM] node_modules dang bi Git theo doi.
+    echo Chay lenh:
+    echo git rm -r --cached node_modules
+    pause
+    exit /b
+)
+
+echo OK: .env, data.json, node_modules khong bi Git theo doi.
 echo.
 
 git status --short
@@ -27,46 +51,47 @@ echo - data.json KHONG duoc push
 echo - node_modules KHONG duoc push
 echo.
 
-set /p MSG=Nhap noi dung update roi bam Enter: 
+set /p msg=Nhap noi dung update roi bam Enter: 
 
-if "%MSG%"=="" (
-    set MSG=update code
+if "%msg%"=="" (
+    set msg=update
 )
 
+echo.
+echo Dang add file...
 git add .
 
-git status --short | findstr /R "^A  .env ^M  .env ^A  data.json ^M  data.json" >nul
-if not errorlevel 1 (
+echo.
+echo Dang commit...
+git commit -m "%msg%"
+
+echo.
+echo Dang pull code moi nhat...
+git pull --rebase origin main
+
+if errorlevel 1 (
     echo.
-    echo [NGUY HIEM] .env hoac data.json dang bi Git theo doi.
-    echo Dung lai de tranh lo token hoac de data.
-    echo Chay cac lenh sau:
-    echo git rm --cached .env
-    echo git rm --cached data.json
+    echo [LOI] Pull bi loi hoac conflict.
+    echo Sua conflict xong chay:
+    echo git add .
+    echo git rebase --continue
     pause
     exit /b
 )
 
-git commit -m "%MSG%"
+echo.
+echo Dang push len GitHub...
+git push origin main
 
 if errorlevel 1 (
     echo.
-    echo Khong co thay doi moi de commit hoac commit bi loi.
-    pause
-    exit /b
-)
-
-git push
-
-if errorlevel 1 (
-    echo.
-    echo [LOI] Push len GitHub that bai.
+    echo [LOI] Push that bai.
     pause
     exit /b
 )
 
 echo.
 echo ================================
-echo   DA PUSH XONG LEN GITHUB
+echo   PUSH THANH CONG
 echo ================================
 pause
