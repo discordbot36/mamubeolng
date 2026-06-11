@@ -198,12 +198,8 @@ function parsePickedUserIds(input) {
 }
 
 function buildActiveRainReasonText(user) {
-    if (user.reason === "random") {
+    if (user.reason === "random" || user.reason === "admin") {
         return "🎲 ngẫu nhiên";
-    }
-
-    if (user.reason === "admin") {
-        return "👑 admin chọn";
     }
 
     return "🏆 tương tác tốt";
@@ -610,14 +606,14 @@ class AdminManager {
             .map((user, index) => {
                 const reasonText = buildActiveRainReasonText(user);
 
-                if (user.reason === "admin") {
-                    return `${index + 1}. <@${user.userId}> - ${reasonText}`;
+                if (user.reason === "active") {
+                    return (
+                        `${index + 1}. <@${user.userId}> - ${reasonText} ` +
+                        `(**${user.score} điểm** / ${user.messageCount} tin tốt)`
+                    );
                 }
 
-                return (
-                    `${index + 1}. <@${user.userId}> - ${reasonText} ` +
-                    `(**${user.score} điểm** / ${user.messageCount} tin tốt)`
-                );
+                return `${index + 1}. <@${user.userId}> - ${reasonText}`;
             })
             .join("\n");
 
@@ -626,11 +622,7 @@ class AdminManager {
         }).length;
 
         const randomPickedCount = selectedUsers.filter((user) => {
-            return user.reason === "random";
-        }).length;
-
-        const adminPickedCount = selectedUsers.filter((user) => {
-            return user.reason === "admin";
+            return user.reason === "random" || user.reason === "admin";
         }).length;
 
         let rainMessage;
@@ -645,7 +637,6 @@ class AdminManager {
                     `🐷 Người được chọn: **${allowedUserIds.length}/${maxTargets}**\n` +
                     `🏆 Tương tác tốt: **${activeCount}**\n` +
                     `🎲 Ngẫu nhiên: **${randomPickedCount}**\n` +
-                    `👑 Admin chọn: **${adminPickedCount}**\n` +
                     `⏳ Thời gian nhận: **60 phút**\n\n` +
                     `📊 **Danh sách được chọn:**\n${scoreText}\n\n` +
                     `Chỉ người được tag mới bấm nút nhận được. Không bấm thì phần tiền đó hoàn lại người tạo.`,
