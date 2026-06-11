@@ -574,18 +574,34 @@ function calculateCultivateExp(profile) {
     const root = getRootById(profile.rootId);
     const rootBonus = root ? Number(root.expBonus || 0) : 0;
 
-    const realmIndex = Number(profile.realmIndex || 0);
-    const floor = Number(profile.floor || 1);
+    const realmIndex = Math.max(0, Number(profile.realmIndex || 0));
+    const floor = Math.max(1, Number(profile.floor || 1));
 
     const baseExp = 100;
-    const floorBonus = floor * 7;
-    const randomBonus = Math.floor(Math.random() * 41);
-
-    const realmMultiplier = 1 + realmIndex * 0.22;
-    const cappedRealmMultiplier = Math.min(realmMultiplier, 3.2);
+    const floorBonus = floor * 10;
+    const randomBonus = Math.floor(Math.random() * 61);
 
     const rawExp = baseExp + floorBonus + randomBonus;
-    const expAfterRealm = Math.floor(rawExp * cappedRealmMultiplier);
+
+    const realmMultiplierTable = [
+        1, // Phàm Lợn
+        1.4, // Luyện Khí
+        2, // Trúc Cơ
+        3, // Kim Đan
+        4.5, // Nguyên Anh
+        6.5, // Hóa Thần
+        9, // Luyện Hư
+        13, // Hợp Thể
+        18, // Đại Thừa
+        25, // Độ Kiếp
+        35, // Chân Tiên Lợn
+    ];
+
+    const realmMultiplier =
+        realmMultiplierTable[realmIndex] ||
+        Math.min(35 + (realmIndex - 10) * 8, 80);
+
+    const expAfterRealm = Math.floor(rawExp * realmMultiplier);
     const gainedExp = Math.floor(expAfterRealm * (1 + rootBonus));
 
     return {
@@ -593,11 +609,10 @@ function calculateCultivateExp(profile) {
         rootBonus,
         rawExp,
         expAfterRealm,
-        realmMultiplier: cappedRealmMultiplier,
+        realmMultiplier,
         gainedExp,
     };
 }
-
 function renderBar(current, max, size = 10) {
     const safeMax = Math.max(1, max);
     const ratio = Math.max(0, Math.min(1, current / safeMax));

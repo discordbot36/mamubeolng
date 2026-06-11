@@ -156,7 +156,55 @@ module.exports = [
             },
         ],
     },
-
+    {
+        name: "activerain",
+        description:
+            "Admin rain cho người tương tác tốt, ngẫu nhiên hoặc chỉ định",
+        handler: "admin.activeRain",
+        adminOnly: true,
+        dmPermission: false,
+        options: [
+            {
+                type: "integer",
+                name: "sotien",
+                description: "Tổng số tiền muốn rain",
+                required: true,
+                minValue: 1000,
+            },
+            {
+                type: "integer",
+                name: "songuoi",
+                description: "Tổng số người được tag nhận quà",
+                required: true,
+                minValue: 1,
+                maxValue: 20,
+            },
+            {
+                type: "integer",
+                name: "ngaunhien",
+                description:
+                    "Số suất ngẫu nhiên, phần còn lại sẽ lấy theo tương tác tốt",
+                required: false,
+                minValue: 0,
+                maxValue: 20,
+            },
+            {
+                type: "string",
+                name: "chon",
+                description:
+                    "Tag hoặc ID người muốn chọn sẵn, ví dụ: @A @B 123456",
+                required: false,
+            },
+            {
+                type: "channel",
+                name: "kenh",
+                description:
+                    "Kênh cần lọc tương tác, bỏ trống là kênh hiện tại",
+                required: false,
+                channelTypes: [0],
+            },
+        ],
+    },
     {
         name: "addmoney",
         description: "Admin cộng tiền cho user",

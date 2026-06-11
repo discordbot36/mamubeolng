@@ -16,6 +16,7 @@ const {
     sellItem,
     sellAllDogs,
     sellAllIphones,
+    sellAllDoThachUnder360k,
     getInventory,
 } = require("../database");
 
@@ -171,6 +172,25 @@ async function autocompleteInventory(interaction) {
                     `(${iphoneItems.length} cái - ${formatMoney(totalIphoneValue)})`,
             ),
             value: "all_iphone",
+        });
+    }
+
+    const cheapDoThachItems = inventoryData.specialItems.filter((item) => {
+        const value = Math.max(0, Math.floor(Number(item.value || 0)));
+
+        return item.type === "dothach" && value > 0 && value < 360000;
+    });
+
+    if (cheapDoThachItems.length > 0 ){
+        const totalDoThachValue = cheapDoThachItems.reduce((sum, item) => {
+            return sum+Math.max(0, Math.floor(Number(item.value || 0 )));
+        }, 0);
+        choices.push({
+            name: cutAutocompleteName(
+                `Bán đá dưới 360k` + 
+                `(${cheapDoThachItems.length} viên - ${formatMoney(totalDoThachValue)})`, 
+            ),
+            value:"all_dothach_under360k",
         });
     }
 
@@ -796,6 +816,23 @@ async function sell(interaction) {
             content:
                 `📱 Chủ tiệm Apple bất ngờ vì bạn bán **${result.quantity} iPhone**\n` +
                 `${coin} Tổng nhận: **${formatMoney(result.totalPrice)}**`,
+        });
+    }
+
+    if (itemId === "all_dothach_under_360k"){
+        const result = sellAllDoThachUnder360k(interaction.user.id);
+
+        if (!result.success) {
+            return interaction.reply({
+                content: ` ${result.message}`,
+                ephemeral: true,
+            });
+        }
+
+        return interaction.reply({
+            content: 
+                `Đã bán **${result.quantity} đá dưới 360k**\n` +
+                `${coin} Tổng nhận **${formatMoney(result.totalPrice)}**`,
         });
     }
 

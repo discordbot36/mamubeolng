@@ -9,10 +9,12 @@ const {
 
 const {
     ensureTuTienProfile,
+    updateTuTienProfile,
     getSecretRealmState,
     updateSecretRealmState,
     getSecretRealmFatigue,
     updateSecretRealmFatigue,
+    addMoney,
     addShopItem,
 } = require("./database");
 
@@ -1250,6 +1252,8 @@ function giveSecretRealmReward(realm, userId) {
     if (finalMultiplier <= 0) {
         return {
             items,
+            moneyReward: 0,
+            expReward: 0,
             participationMultiplier,
             fatigueMultiplier,
             rollsGranted: 0,
@@ -1279,16 +1283,12 @@ function giveSecretRealmReward(realm, userId) {
     mergeRewardItem(items, guaranteed.itemId, guaranteedAmount);
 
     /*
-     * Số lượt random.
+     * Số lượt random item.
      */
     const baseRolls = isHost
         ? Number(config.rewards.hostRolls || 3)
         : Number(config.rewards.guestRolls || 2);
 
-    /*
-     * Người tham gia đầy đủ nhận đủ roll.
-     * Người thiếu lượt có thể bị giảm roll.
-     */
     const rollsGranted = Math.max(1, Math.ceil(baseRolls * finalMultiplier));
 
     for (let rollIndex = 0; rollIndex < rollsGranted; rollIndex += 1) {
@@ -1302,6 +1302,50 @@ function giveSecretRealmReward(realm, userId) {
     }
 
     /*
+     * Buff nhẹ economy.
+     */
+    const economy = config.rewards?.economy || {};
+
+    const moneyMin = isHost
+        ? Number(economy.hostMin || 0)
+        : Number(economy.guestMin || 0);
+
+    const moneyMax = isHost
+        ? Number(economy.hostMax || moneyMin)
+        : Number(economy.guestMax || moneyMin);
+
+    const baseMoney = randomInt(moneyMin, moneyMax);
+
+    const moneyReward = Math.max(0, Math.floor(baseMoney * finalMultiplier));
+
+    if (moneyReward > 0) {
+        addMoney(userId, moneyReward);
+    }
+
+    /*
+     * Buff nhẹ tu vi / exp.
+     */
+    const tuVi = config.rewards?.tuVi || {};
+
+    const expMin = isHost
+        ? Number(tuVi.hostMin || 0)
+        : Number(tuVi.guestMin || 0);
+
+    const expMax = isHost
+        ? Number(tuVi.hostMax || expMin)
+        : Number(tuVi.guestMax || expMin);
+
+    const baseExp = randomInt(expMin, expMax);
+
+    const expReward = Math.max(0, Math.floor(baseExp * finalMultiplier));
+
+    if (expReward > 0) {
+        updateTuTienProfile(userId, (profile) => {
+            profile.exp = Number(profile.exp || 0) + expReward;
+        });
+    }
+
+    /*
      * Phát toàn bộ item đã gộp.
      */
     for (const [itemId, amount] of Object.entries(items)) {
@@ -1310,6 +1354,8 @@ function giveSecretRealmReward(realm, userId) {
 
     return {
         items,
+        moneyReward,
+        expReward,
         participationMultiplier,
         fatigueMultiplier,
         rollsGranted,
@@ -1401,6 +1447,18 @@ async function finishBattle(channel, realm, success) {
 
             if (rewardParts.length === 0) {
                 rewardParts.push("Không nhận được vật phẩm");
+            }
+
+            if (reward.moneyReward > 0) {
+                rewardParts.push(
+                    `💰 **${formatNumber(reward.moneyReward)}** đồng`,
+                );
+            }
+
+            if (reward.expReward > 0) {
+                rewardParts.push(
+                    `✨ **${formatNumber(reward.expReward)}** tu vi`,
+                );
             }
 
             resultLines.push(

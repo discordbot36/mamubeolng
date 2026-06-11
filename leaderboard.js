@@ -26,6 +26,7 @@ const LEADERBOARD_TYPES = {
     DOG: "dog",
     MONEY: "money",
     TOWER: "tower",
+    NOITU: "noitu",
 };
 
 let isUpdating = false;
@@ -87,6 +88,16 @@ function createLeaderboardButtons(activeType = LEADERBOARD_TYPES.COMBAT) {
             .setEmoji("🗼")
             .setStyle(
                 activeType === LEADERBOARD_TYPES.TOWER
+                    ? ButtonStyle.Success
+                    : ButtonStyle.Secondary,
+            ),
+
+        new ButtonBuilder()
+            .setCustomId("leaderboard_noitu")
+            .setLabel("Nối từ")
+            .setEmoji("📚")
+            .setStyle(
+                activeType === LEADERBOARD_TYPES.NOITU
                     ? ButtonStyle.Success
                     : ButtonStyle.Secondary,
             ),
@@ -254,6 +265,58 @@ async function buildTowerRanking(client) {
     return ranked;
 }
 
+async function buildNoiTuRanking(client) {
+    const limit = Number(leaderboardConfig.limit || 10);
+    const users = getAllUsers();
+
+    const ranked = users
+        .filter((user) => !isHiddenLeaderboardUser(user.userId))
+        .map((user) => {
+            const stats = user.noituStats || {};
+
+            const correct = Number(stats.correct || 0);
+            const wins = Number(stats.wins || 0);
+            const botStuckWins = Number(stats.botStuckWins || 0);
+            const forfeitWins = Number(stats.forfeitWins || 0);
+
+            if (
+                correct <= 0 &&
+                wins <= 0 &&
+                botStuckWins <= 0 &&
+                forfeitWins <= 0
+            ) {
+                return null;
+            }
+
+            return {
+                userId: user.userId,
+                correct,
+                wins,
+                botStuckWins,
+                forfeitWins,
+            };
+        })
+        .filter(Boolean)
+        .sort((a, b) => {
+            if (b.correct !== a.correct) {
+                return b.correct - a.correct;
+            }
+
+            if (b.wins !== a.wins) {
+                return b.wins - a.wins;
+            }
+
+            return b.botStuckWins - a.botStuckWins;
+        })
+        .slice(0, limit);
+
+    for (const item of ranked) {
+        item.username = await getUsername(client, item.userId);
+    }
+
+    return ranked;
+}
+
 function buildDogEmbed(ranked) {
     const embed = new EmbedBuilder()
         .setColor(0x8b4513)
@@ -354,6 +417,35 @@ function buildTowerEmbed(ranked) {
     return embed;
 }
 
+function buildNoiTuEmbed(ranked) {
+    const embed = new EmbedBuilder()
+        .setColor(0x3498db)
+        .setTitle("📚 BẢNG XẾP HẠNG NỐI TỪ")
+        .setFooter({
+            text: `Xếp hạng theo số câu nối đúng • Top ${ranked.length}`,
+        })
+        .setTimestamp();
+
+    if (ranked.length <= 0) {
+        embed.setDescription("Chưa có dữ liệu nối từ để xếp hạng.");
+        return embed;
+    }
+
+    const lines = ranked.map((item, index) => {
+        return (
+            `${getRankIcon(index)} **${item.username}**\n` +
+            `> ✅ Nối đúng: **${formatNumber(item.correct)}** câu\n` +
+            `> 🏆 Thắng nối từ: **${formatNumber(item.wins)}** trận\n` +
+            `> 🤖 Làm bot bí từ: **${formatNumber(item.botStuckWins)}** lần\n` +
+            `> 🏳️ Thắng do chịu thua: **${formatNumber(item.forfeitWins)}** lần`
+        );
+    });
+
+    embed.setDescription(lines.join("\n\n"));
+
+    return embed;
+}
+
 async function buildLeaderboardByType(client, type) {
     if (type === LEADERBOARD_TYPES.DOG) {
         const ranked = await buildDogRanking(client);
@@ -387,6 +479,19 @@ async function buildLeaderboardByType(client, type) {
             signature: ranked
                 .map((item) => {
                     return `${item.userId}:${item.highestFloor}:${item.currentFloor}:${item.totalChests}:${item.totalEarned}:${item.combatPower}`;
+                })
+                .join("|"),
+        };
+    }
+
+    if (type === LEADERBOARD_TYPES.NOITU) {
+        const ranked = await buildNoiTuRanking(client);
+
+        return {
+            embed: buildNoiTuEmbed(ranked),
+            signature: ranked
+                .map((item) => {
+                    return `${item.userId}:${item.correct}:${item.wins}:${item.botStuckWins}:${item.forfeitWins}`;
                 })
                 .join("|"),
         };
@@ -901,6 +1006,9 @@ async function handleButton(interaction) {
 
     if (interaction.customId === "leaderboard_tower") {
         type = LEADERBOARD_TYPES.TOWER;
+    }
+    if (interaction.customId === "leaderboard_noitu") {
+        type = LEADERBOARD_TYPES.NOITU;
     }
 
     const oldState = getSystemValue(STATE_KEY) || {};

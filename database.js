@@ -295,6 +295,127 @@ function addWin(userId) {
     });
 }
 
+function ensureNoiTuStats(user) {
+    if (!user.noituStats) {
+        user.noituStats = {
+            correct: 0,
+            wins: 0,
+            botStuckWins: 0,
+            forfeitWins: 0,
+            totalMoney: 0,
+            updatedAt: 0,
+        };
+    }
+
+    if (user.noituStats.correct === undefined) {
+        user.noituStats.correct = 0;
+    }
+
+    if (user.noituStats.wins === undefined) {
+        user.noituStats.wins = 0;
+    }
+
+    if (user.noituStats.botStuckWins === undefined) {
+        user.noituStats.botStuckWins = 0;
+    }
+
+    if (user.noituStats.forfeitWins === undefined) {
+        user.noituStats.forfeitWins = 0;
+    }
+
+    if (user.noituStats.totalMoney === undefined) {
+        user.noituStats.totalMoney = 0;
+    }
+
+    if (user.noituStats.updatedAt === undefined) {
+        user.noituStats.updatedAt = 0;
+    }
+
+    return user.noituStats;
+}
+
+function recordNoiTuCorrect(userId, reward = 0) {
+    return withData((data) => {
+        const user = ensureUser(data, userId);
+        const stats = ensureNoiTuStats(user);
+
+        stats.correct += 1;
+        stats.totalMoney += Math.max(0, Math.floor(Number(reward || 0)));
+        stats.updatedAt = Date.now();
+
+        return stats;
+    });
+}
+
+function recordNoiTuWin(userId, reward = 0, type = "normal") {
+    return withData((data) => {
+        const user = ensureUser(data, userId);
+        const stats = ensureNoiTuStats(user);
+
+        stats.wins += 1;
+
+        if (type === "bot_stuck") {
+            stats.botStuckWins += 1;
+        }
+
+        if (type === "forfeit") {
+            stats.forfeitWins += 1;
+        }
+
+        stats.totalMoney += Math.max(0, Math.floor(Number(reward || 0)));
+        stats.updatedAt = Date.now();
+
+        return stats;
+    });
+}
+
+function recordNoiTuReward(userId, reward = 0) {
+    return withData((data) => {
+        const user = ensureUser(data, userId);
+        const stats = ensureNoiTuStats(user);
+
+        stats.totalMoney += Math.max(0, Math.floor(Number(reward || 0)));
+        stats.updatedAt = Date.now();
+
+        return stats;
+    });
+}
+
+function getNoiTuLeaderboard(limit = 10) {
+    return withData((data) => {
+        const users = Object.entries(data.users || {}).map(([userId, user]) => {
+            const stats = ensureNoiTuStats(user);
+
+            return {
+                userId,
+                correct: Number(stats.correct || 0),
+                wins: Number(stats.wins || 0),
+                botStuckWins: Number(stats.botStuckWins || 0),
+                forfeitWins: Number(stats.forfeitWins || 0),
+                totalMoney: Number(stats.totalMoney || 0),
+                updatedAt: Number(stats.updatedAt || 0),
+            };
+        });
+
+        return users
+            .filter((user) => {
+                return user.correct > 0 || user.wins > 0 || user.totalMoney > 0;
+            })
+            .sort((a, b) => {
+                if (b.correct !== a.correct) {
+                    return b.correct - a.correct;
+                }
+
+                if (b.wins !== a.wins) {
+                    return b.wins - a.wins;
+                }
+
+                return b.totalMoney - a.totalMoney;
+            })
+            .slice(0, limit);
+    });
+}
+
 function addLoss(userId) {
     return withData((data) => {
         ensureUser(data, userId).losses += 1;
@@ -368,7 +489,14 @@ function getMsUntilVietnamMidnight() {
     const month = Number(parts.find((p) => p.type === "month")?.value);
     const day = Number(parts.find((p) => p.type === "day")?.value);
 
-    const nextMidnightVietnamAsUtc = Date.UTC(year, month - 1, day + 1, -7, 0, 0);
+    const nextMidnightVietnamAsUtc = Date.UTC(
+        year,
+        month - 1,
+        day + 1,
+        -7,
+        0,
+        0,
+    );
 
     return Math.max(0, nextMidnightVietnamAsUtc - Date.now());
 }
@@ -383,8 +511,10 @@ function claimDaily(userId) {
         const todayNumber = getVietnamDayNumber(now);
 
         const lastDaily = Number(user.lastDaily || 0);
-        const lastDailyDate = user.lastDailyDate || getVietnamDateKey(lastDaily);
-        const lastDailyNumber = lastDaily > 0 ? getVietnamDayNumber(lastDaily) : 0;
+        const lastDailyDate =
+            user.lastDailyDate || getVietnamDateKey(lastDaily);
+        const lastDailyNumber =
+            lastDaily > 0 ? getVietnamDayNumber(lastDaily) : 0;
 
         if (lastDailyDate === todayKey) {
             return {
@@ -699,6 +829,55 @@ function sellAllIphones(userId) {
             return {
                 success: false,
                 message: "Bạn không có iPhone nào có thể bán.",
+            };
+        }
+
+        user.inventoryItems = keptItems;
+        user.money = Number(user.money || 0) + totalPrice;
+
+        return {
+            success: true,
+            quantity: soldItems.length,
+            totalPrice,
+            soldItems,
+        };
+    });
+}
+
+function sellAllDoThachUnder360k(userId) {
+    return withData((data) => {
+        const user = ensureUser(data, userId);
+
+        const keptItems = [];
+        const soldItems = [];
+
+        let totalPrice = 0;
+
+        for (const item of user.inventoryItems) {
+            const value = Math.max(0, Math.floor(Number(item.value || 0)));
+
+            if (item.type !== "dothach") {
+                keptItems.push(item);
+                continue;
+            }
+
+            if (value <= 0) {
+                keptItems.push(item);
+                continue;
+            }
+
+            if (value >= 360000) {
+                keptItems.push(item);
+                continue;
+            }
+
+            soldItems.push(item);
+            totalPrice += value;
+        }
+        if (soldItems.length <= 0) {
+            return {
+                success: false,
+                message: "Bạn không có đá dưới 360k",
             };
         }
 
@@ -1174,6 +1353,8 @@ module.exports = {
     removeMoney,
     addWin,
     addLoss,
+    recordNoiTuCorrect,
+    recordNoiTuWin,
     claimDaily,
     claimWorkCooldown,
     formatMoney,
@@ -1186,6 +1367,8 @@ module.exports = {
     consumeShopItem,
     sellItem,
     sellAllDogs,
+    sellAllIphones,
+    sellAllDoThachUnder360k,
     ensureTuTienProfile,
     updateTuTienProfile,
     ensureTowerProfile,
@@ -1204,5 +1387,4 @@ module.exports = {
     updateSecretRealmState,
     getSecretRealmFatigue,
     updateSecretRealmFatigue,
-    sellAllIphones,
 };

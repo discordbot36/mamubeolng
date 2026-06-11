@@ -1,4 +1,10 @@
-const { addMoney, addWin, formatMoney } = require("./database");
+const {
+    addMoney,
+    addWin,
+    formatMoney,
+    recordNoiTuCorrect,
+    recordNoiTuWin,
+} = require("./database");
 
 const noituConfig = require("./config/noitu");
 
@@ -281,6 +287,7 @@ class NoiTuManager {
             if (winnerId && forfeitWinReward > 0) {
                 addMoney(winnerId, forfeitWinReward);
                 addWin(winnerId);
+                recordNoiTuWin(winnerId, "forfeit");
 
                 winnerText =
                     `🏆 Người thắng: <@${winnerId}>\n` +
@@ -381,6 +388,8 @@ class NoiTuManager {
             addMoney(message.author.id, correctReward);
         }
 
+        recordNoiTuCorrect(message.author.id);
+
         await safeReact(message, "✅");
 
         const nextWord = findNextValidWord(playerWord, game.usedWords);
@@ -395,6 +404,7 @@ class NoiTuManager {
             }
 
             addWin(message.author.id);
+            recordNoiTuWin(message.author.id, "bot_stuck");
 
             await message.channel.send(
                 `🏆 ${message.author} làm bot bí từ và thắng nối từ!\n\n` +

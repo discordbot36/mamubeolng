@@ -18,8 +18,7 @@ const blackjack = require("../blackjack");
 const pigRoad = require("../pigRoad");
 const flip = require("../flip");
 const quest = require("../quest");
-const bicanh =
-    require("../bicanh");
+const bicanh = require("../bicanh");
 
 const modules = {
     economy,
@@ -114,6 +113,7 @@ async function runInteractionHandler(handler, interaction) {
 }
 async function handleButton(interaction) {
     const handlers = [
+        admin.handleButton.bind(admin),
         economy.handleButton.bind(economy),
         race.handleButton.bind(race),
         work.handleButton.bind(work),
@@ -161,6 +161,8 @@ async function handleModal(interaction) {
     return undefined;
 }
 async function handleMessage(message) {
+    await admin.handleMessage(message);
+
     return noitu.handleMessage(message);
 }
 

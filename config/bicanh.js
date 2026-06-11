@@ -87,6 +87,21 @@ module.exports = {
     },
 
     rewards: {
+        economy: {
+            hostMin: 3000,
+            hostMax: 8000,
+
+            guestMin: 2000,
+            guestMax: 5000,
+        },
+
+        tuVi: {
+            hostMin: 80,
+            hostMax: 160,
+
+            guestMin: 40,
+            guestMax: 100,
+        },
         guaranteedFeed: {
             itemId: "cam_lon_nam_dinh",
 
