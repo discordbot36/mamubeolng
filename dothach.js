@@ -1,9 +1,6 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 
-const {
-    announceRareDrop,
-    isRareGem,
-} = require("./utils/rareDrop");
+const { announceRareDrop, isRareGem } = require("./utils/rareDrop");
 
 const {
     getInventory,
@@ -191,7 +188,10 @@ class DoThachManager {
             });
         }
 
-        if (!inventory.shopItems[stoneId] || inventory.shopItems[stoneId] <= 0) {
+        if (
+            !inventory.shopItems[stoneId] ||
+            inventory.shopItems[stoneId] <= 0
+        ) {
             return interaction.reply({
                 content: dothachConfig.messages.noStone,
                 ephemeral: true,
@@ -199,7 +199,10 @@ class DoThachManager {
         }
 
         const sessionId = createSessionId();
-        const blackMachineIndex = randomInt(0, dothachConfig.machines.length - 1);
+        const blackMachineIndex = randomInt(
+            0,
+            dothachConfig.machines.length - 1,
+        );
 
         sessions.set(sessionId, {
             userId: interaction.user.id,
@@ -217,7 +220,15 @@ class DoThachManager {
             components: [createMachineButtons(sessionId)],
         });
     }
+    rollTemporaryResult(stoneId = "da_mamu") {
+        const stone = getStoneConfig(stoneId);
 
+        if (!stone) {
+            return null;
+        }
+
+        return createResult(stone);
+    }
     async handleButton(interaction) {
         if (!interaction.customId.startsWith("dothach_pick_")) {
             return undefined;

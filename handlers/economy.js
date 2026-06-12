@@ -181,16 +181,16 @@ async function autocompleteInventory(interaction) {
         return item.type === "dothach" && value > 0 && value < 360000;
     });
 
-    if (cheapDoThachItems.length > 0 ){
+    if (cheapDoThachItems.length > 0) {
         const totalDoThachValue = cheapDoThachItems.reduce((sum, item) => {
-            return sum+Math.max(0, Math.floor(Number(item.value || 0 )));
+            return sum + Math.max(0, Math.floor(Number(item.value || 0)));
         }, 0);
         choices.push({
             name: cutAutocompleteName(
-                `Bán đá dưới 360k` + 
-                `(${cheapDoThachItems.length} viên - ${formatMoney(totalDoThachValue)})`, 
+                `Bán đá dưới 360k` +
+                    `(${cheapDoThachItems.length} viên - ${formatMoney(totalDoThachValue)})`,
             ),
-            value:"all_dothach_under360k",
+            value: "all_dothach_under_360k",
         });
     }
 
@@ -819,7 +819,7 @@ async function sell(interaction) {
         });
     }
 
-    if (itemId === "all_dothach_under_360k"){
+    if (itemId === "all_dothach_under_360k") {
         const result = sellAllDoThachUnder360k(interaction.user.id);
 
         if (!result.success) {
@@ -830,7 +830,7 @@ async function sell(interaction) {
         }
 
         return interaction.reply({
-            content: 
+            content:
                 `Đã bán **${result.quantity} đá dưới 360k**\n` +
                 `${coin} Tổng nhận **${formatMoney(result.totalPrice)}**`,
         });

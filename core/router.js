@@ -19,13 +19,14 @@ const pigRoad = require("../pigRoad");
 const flip = require("../flip");
 const quest = require("../quest");
 const bicanh = require("../bicanh");
-
+const dothachTournament = require("../dothachTournament");
 const modules = {
     economy,
     race,
     work,
     noitu,
     dothach,
+    dothachTournament,
     baucua,
     taixiu,
     admin,
@@ -117,6 +118,7 @@ async function handleButton(interaction) {
         economy.handleButton.bind(economy),
         race.handleButton.bind(race),
         work.handleButton.bind(work),
+        dothachTournament.handleButton.bind(dothachTournament),
         dothach.handleButton.bind(dothach),
         baucua.handleButton.bind(baucua),
         taixiu.handleButton.bind(taixiu),
