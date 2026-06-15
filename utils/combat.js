@@ -15,6 +15,28 @@ const MAX_REALM_FLOOR = 10;
 
 const DEFAULT_CRIT_DAMAGE_MULTIPLIER = 1.5;
 
+const DEFAULT_WEAPON_BONUS = {
+    atkPercent: 0,
+    hpPercent: 0,
+    defensePercent: 0,
+    speedPercent: 0,
+
+    critChance: 0,
+    critDamage: 0,
+    defenseIgnore: 0,
+    lifeSteal: 0,
+    dodgeChance: 0,
+    counterChance: 0,
+    damageReduction: 0,
+
+    bossDamage: 0,
+    dropRate: 0,
+
+    powerPercent: 0,
+    sealFactor: 1,
+    isSealed: false,
+};
+
 function clamp(value, min, max) {
     const safeValue = Number(value);
 
@@ -83,6 +105,43 @@ function ensureEquippedSkillData(profile) {
     }
 
     return profile.equippedSkills;
+}
+
+function getEquippedWeaponBonus(profile) {
+    const source =
+        profile && typeof profile.equippedWeaponBonus === "object"
+            ? profile.equippedWeaponBonus
+            : {};
+
+    return {
+        ...DEFAULT_WEAPON_BONUS,
+
+        atkPercent: clamp(source.atkPercent, 0, 3),
+        hpPercent: clamp(source.hpPercent, 0, 5),
+        defensePercent: clamp(source.defensePercent, 0, 3),
+        speedPercent: clamp(source.speedPercent, 0, 2),
+
+        critChance: clamp(source.critChance, 0, 0.4),
+        critDamage: clamp(source.critDamage, 0, 2),
+        defenseIgnore: clamp(source.defenseIgnore, 0, 0.5),
+        lifeSteal: clamp(source.lifeSteal, 0, 0.35),
+        dodgeChance: clamp(source.dodgeChance, 0, 0.35),
+        counterChance: clamp(source.counterChance, 0, 0.35),
+        damageReduction: clamp(source.damageReduction, 0, 0.35),
+
+        bossDamage: clamp(source.bossDamage, 0, 3),
+        dropRate: clamp(source.dropRate, 0, 1),
+
+        powerPercent: clamp(source.powerPercent, 0, 5),
+        sealFactor: clamp(source.sealFactor ?? 1, 0, 1),
+        isSealed: Boolean(source.isSealed),
+
+        weaponUid: source.weaponUid || null,
+        weaponName: source.weaponName || null,
+        weaponRarity: source.weaponRarity || null,
+        requiredRealmIndex: Number(source.requiredRealmIndex || 0),
+        currentRealmIndex: Number(source.currentRealmIndex || 0),
+    };
 }
 
 function getEquippedPassiveSkillBonuses(profile) {
@@ -311,29 +370,56 @@ function calculateCombatStats(profile) {
 
     const passiveBonus = getEquippedPassiveSkillBonuses(profile);
 
+    const weaponBonus = getEquippedWeaponBonus(profile);
+
     const activePowerBonus = calculateActiveSkillPowerBonus(profile);
 
-    const atk = Math.floor(baseAtk * (1 + passiveBonus.atkBonus));
+    const atk = Math.floor(
+        baseAtk * (1 + passiveBonus.atkBonus + weaponBonus.atkPercent),
+    );
 
-    const defense = Math.floor(baseDefense * (1 + passiveBonus.defenseBonus));
+    const defense = Math.floor(
+        baseDefense *
+            (1 + passiveBonus.defenseBonus + weaponBonus.defensePercent),
+    );
 
-    const hp = Math.floor(baseHp * (1 + passiveBonus.hpBonus));
+    const hp = Math.floor(
+        baseHp * (1 + passiveBonus.hpBonus + weaponBonus.hpPercent),
+    );
 
-    const speed = Math.floor(baseSpeed * (1 + passiveBonus.speedBonus));
+    const speed = Math.floor(
+        baseSpeed * (1 + passiveBonus.speedBonus + weaponBonus.speedPercent),
+    );
 
-    const critChance = Math.min(0.65, 0.05 + passiveBonus.critChanceBonus);
+    const critChance = Math.min(
+        0.75,
+        0.05 + passiveBonus.critChanceBonus + weaponBonus.critChance,
+    );
 
-    const dodgeChance = Math.min(0.5, passiveBonus.dodgeChance);
+    const critDamageMultiplier =
+        DEFAULT_CRIT_DAMAGE_MULTIPLIER + weaponBonus.critDamage;
 
-    const counterChance = Math.min(0.45, passiveBonus.counterChance);
+    const dodgeChance = Math.min(
+        0.55,
+        passiveBonus.dodgeChance + weaponBonus.dodgeChance,
+    );
 
-    const damageReduction = Math.min(0.35, passiveBonus.damageReduction);
+    const counterChance = Math.min(
+        0.5,
+        passiveBonus.counterChance + weaponBonus.counterChance,
+    );
+
+    const damageReduction = Math.min(
+        0.5,
+        passiveBonus.damageReduction + weaponBonus.damageReduction,
+    );
 
     const rawCombatPower = atk * 1.2 + defense + hp * 0.18 + speed * 8;
 
     const combatPower = Math.floor(
-        rawCombatPower * (1 + activePowerBonus) +
-            atk * critChance * 0.45 +
+        rawCombatPower *
+            (1 + activePowerBonus + weaponBonus.powerPercent * 0.18) +
+            atk * critChance * critDamageMultiplier * 0.18 +
             hp * dodgeChance * 0.035 +
             hp * damageReduction * 0.045 +
             atk * counterChance * 0.25,
@@ -353,13 +439,17 @@ function calculateCombatStats(profile) {
         baseSpeed,
 
         passiveBonus,
+        weaponBonus,
         activePowerBonus,
 
         critChance,
+        critDamageMultiplier,
         dodgeChance,
         counterChance,
 
-        counterDamageMultiplier: passiveBonus.counterDamageMultiplier,
+        counterDamageMultiplier:
+            passiveBonus.counterDamageMultiplier +
+            weaponBonus.counterChance * 0.5,
 
         damageReduction,
 
@@ -403,7 +493,15 @@ function createCombatant(profile, options = {}) {
 
             speed: Math.max(1, toSafeInteger(stats.speed, 1)),
 
-            critChance: clamp(stats.critChance, 0, 0.65),
+            critChance: clamp(stats.critChance, 0, 0.75),
+
+            critDamageMultiplier: Math.max(
+                DEFAULT_CRIT_DAMAGE_MULTIPLIER,
+                toSafeNumber(
+                    stats.critDamageMultiplier,
+                    DEFAULT_CRIT_DAMAGE_MULTIPLIER,
+                ),
+            ),
 
             dodgeChance: clamp(stats.dodgeChance, 0, 0.5),
 
@@ -2412,6 +2510,7 @@ module.exports = {
 
     ensureEquippedSkillData,
     getEquippedPassiveSkillBonuses,
+    getEquippedWeaponBonus,
     getEquippedActiveSkills,
 
     calculateActiveSkillPowerBonus,

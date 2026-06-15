@@ -20,6 +20,69 @@ const {
     getInventory,
 } = require("../database");
 
+function isTowerChestItem(item) {
+    return item && item.type === "tower_chest";
+}
+
+function isPhapBaoChestItem(item) {
+    return item && item.type === "phap_bao_chest";
+}
+
+function getSpecialInventoryItemKey(item) {
+    if (!item) {
+        return "unknown";
+    }
+
+    return [
+        item.type || "item",
+        item.id || item.name || "unknown",
+        item.tier || "",
+    ].join(":");
+}
+
+function groupSpecialInventoryItems(items) {
+    const map = new Map();
+
+    for (const item of items || []) {
+        const key = getSpecialInventoryItemKey(item);
+
+        if (!map.has(key)) {
+            map.set(key, {
+                item,
+                amount: 0,
+            });
+        }
+
+        map.get(key).amount += 1;
+    }
+
+    return [...map.values()];
+}
+
+function formatSpecialInventoryItemLine(entry) {
+    const item = entry.item;
+    const amount = entry.amount;
+
+    const emoji = item.emoji || "🎁";
+    const name = item.name || item.id || "Vật phẩm đặc biệt";
+
+    if (isTowerChestItem(item)) {
+        return [
+            `${emoji} **${name}** x${amount}`,
+            "└ Có thể mở bằng `/mophapbao` để nhận mảnh/phôi pháp bảo.",
+        ].join("\n");
+    }
+
+    if (isPhapBaoChestItem(item)) {
+        return [
+            `${emoji} **${name}** x${amount}`,
+            "└ Rương pháp bảo, mở bằng `/mophapbao`.",
+        ].join("\n");
+    }
+
+    return `${emoji} **${name}** x${amount}`;
+}
+
 const economyConfig = require("../config/economy");
 
 function isIphoneItem(item) {
@@ -54,7 +117,13 @@ function formatShopItemAutocompleteDetail(item) {
     if (item.type === "root_gacha_pill") {
         return `Giá ${price} | Tẩy linh căn`;
     }
+    if (item.type === "phap_bao_chest") {
+        return `Giá ${price} | Rương pháp bảo`;
+    }
 
+    if (item.type === "phap_bao_fragment") {
+        return "Mảnh pháp bảo";
+    }
     if (item.type === "skill_scroll") {
         const typeText =
             item.skillScrollType === "active"
@@ -314,15 +383,79 @@ async function daily(interaction) {
 
 const SHOP_PAGE_SIZE = 10;
 const INVENTORY_PAGE_SIZE = 10;
+const SHOP_CATEGORIES = {
+    all: {
+        name: "Tất cả",
+        emoji: "🛒",
+    },
+
+    phapbao: {
+        name: "Pháp bảo",
+        emoji: "🐷",
+    },
+
+    tutien: {
+        name: "Tu tiên",
+        emoji: "✨",
+    },
+
+    normal: {
+        name: "Vật phẩm thường",
+        emoji: "🎁",
+    },
+};
+
+function normalizeShopCategory(category) {
+    const value = String(category || "all").toLowerCase();
+
+    return SHOP_CATEGORIES[value] ? value : "all";
+}
+
+function getShopCategoryLabel(category) {
+    const safeCategory = normalizeShopCategory(category);
+    const config = SHOP_CATEGORIES[safeCategory];
+
+    return `${config.emoji} ${config.name}`;
+}
+
+function getItemShopCategory(item) {
+    if (item.shopCategory) {
+        return item.shopCategory;
+    }
+
+    if (
+        item.type === "tu_tien_exp" ||
+        item.type === "breakthrough_pill" ||
+        item.type === "root_gacha_pill"
+    ) {
+        return "tutien";
+    }
+
+    if (item.type === "phap_bao_chest" || item.type === "phap_bao_fragment") {
+        return "phapbao";
+    }
+
+    return "normal";
+}
 
 function clampPage(page, totalPages) {
     return Math.max(0, Math.min(page, totalPages - 1));
 }
 
-function getShopPageData(page = 0) {
+function getShopPageData(page = 0, category = "all") {
+    const safeCategory = normalizeShopCategory(category);
     const shopData = getShop();
+
     const items = Object.entries(shopData).filter(([, item]) => {
-        return !item.hidden && item.shopCategory !== "skill";
+        if (item.hidden || item.shopCategory === "skill") {
+            return false;
+        }
+
+        if (safeCategory === "all") {
+            return true;
+        }
+
+        return getItemShopCategory(item) === safeCategory;
     });
 
     const totalPages = Math.max(1, Math.ceil(items.length / SHOP_PAGE_SIZE));
@@ -336,10 +469,11 @@ function getShopPageData(page = 0) {
         page: safePage,
         totalPages,
         startIndex,
+        category: safeCategory,
     };
 }
 
-function buildShopEmbed(interaction, page = 0) {
+function buildShopEmbed(interaction, page = 0, category = "all") {
     const coin = getCurrencyEmoji();
     const {
         items,
@@ -347,13 +481,15 @@ function buildShopEmbed(interaction, page = 0) {
         page: safePage,
         totalPages,
         startIndex,
-    } = getShopPageData(page);
+        category: safeCategory,
+    } = getShopPageData(page, category);
 
     const embed = new EmbedBuilder()
         .setTitle("🛒 SHOP CỦA MAMU")
         .setDescription(
             `Muốn mua thì dùng:\n` +
                 `\`/mua vatpham:<món> soluong:<số lượng>\`\n\n` +
+                `📂 Mục: **${getShopCategoryLabel(safeCategory)}**\n` +
                 `📄 Trang **${safePage + 1}/${totalPages}**`,
         )
         .setColor(0xf7a8c8)
@@ -388,6 +524,15 @@ function buildShopEmbed(interaction, page = 0) {
             detail += `🌱 Linh căn: **Gacha lại linh căn, mỗi viên giảm 5% tỉ lệ linh căn rác**\n`;
         }
 
+        if (item.type === "phap_bao_chest") {
+            detail += "🐷 Rương pháp bảo: **mở bằng `/mophapbao`**\n";
+            detail += "🎲 Có thể ra mảnh hoặc phôi pháp bảo chưa giám định\n";
+        }
+
+        if (item.type === "phap_bao_fragment") {
+            detail += "🧩 Dùng để ghép phôi pháp bảo bằng `/ghep`\n";
+        }
+
         embed.addFields({
             name: `${startIndex + index + 1}. ${item.emoji || "🎁"} ${item.name}`,
             value: detail,
@@ -398,26 +543,27 @@ function buildShopEmbed(interaction, page = 0) {
     return embed;
 }
 
-function buildShopButtons(userId, page = 0) {
-    const { totalPages } = getShopPageData(page);
+function buildShopButtons(userId, page = 0, category = "all") {
+    const safeCategory = normalizeShopCategory(category);
+    const { totalPages } = getShopPageData(page, safeCategory);
     const safePage = clampPage(page, totalPages);
 
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`shop_prev_${userId}_${safePage}`)
+            .setCustomId(`shop_prev_${userId}_${safePage}_${safeCategory}`)
             .setLabel("Trang trước")
             .setEmoji("⬅️")
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(safePage <= 0),
 
         new ButtonBuilder()
-            .setCustomId(`shop_page_${userId}_${safePage}`)
+            .setCustomId(`shop_page_${userId}_${safePage}_${safeCategory}`)
             .setLabel(`${safePage + 1}/${totalPages}`)
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(true),
 
         new ButtonBuilder()
-            .setCustomId(`shop_next_${userId}_${safePage}`)
+            .setCustomId(`shop_next_${userId}_${safePage}_${safeCategory}`)
             .setLabel("Trang sau")
             .setEmoji("➡️")
             .setStyle(ButtonStyle.Primary)
@@ -426,9 +572,13 @@ function buildShopButtons(userId, page = 0) {
 }
 
 async function shop(interaction) {
+    const category = normalizeShopCategory(
+        interaction.options.getString("muc") || "all",
+    );
+
     return interaction.reply({
-        embeds: [buildShopEmbed(interaction, 0)],
-        components: [buildShopButtons(interaction.user.id, 0)],
+        embeds: [buildShopEmbed(interaction, 0, category)],
+        components: [buildShopButtons(interaction.user.id, 0, category)],
     });
 }
 
@@ -441,6 +591,7 @@ async function handleButton(interaction) {
         const action = parts[1];
         const userId = parts[2];
         const currentPage = Number.parseInt(parts[3], 10) || 0;
+        const category = normalizeShopCategory(parts[4] || "all");
 
         if (interaction.user.id !== userId) {
             return interaction.reply({
@@ -451,11 +602,11 @@ async function handleButton(interaction) {
         }
 
         const nextPage = action === "next" ? currentPage + 1 : currentPage - 1;
-        const { page } = getShopPageData(nextPage);
+        const { page } = getShopPageData(nextPage, category);
 
         return interaction.update({
-            embeds: [buildShopEmbed(interaction, page)],
-            components: [buildShopButtons(interaction.user.id, page)],
+            embeds: [buildShopEmbed(interaction, page, category)],
+            components: [buildShopButtons(interaction.user.id, page, category)],
         });
     }
 
@@ -479,83 +630,7 @@ async function handleButton(interaction) {
         const shopData = getShop();
         const coin = getCurrencyEmoji();
 
-        const allItems = [];
-
-        for (const [itemId, amount] of Object.entries(
-            inventoryData.shopItems,
-        )) {
-            if (amount > 0 && shopData[itemId]) {
-                const item = shopData[itemId];
-                let value = `📦 x${amount}`;
-
-                if (item.exp) {
-                    value += `\n✨ Tu vi: +${formatMoney(item.exp)} exp mỗi cái`;
-                    value += `\n🍖 Dùng: \`/dung vatpham:${itemId}\``;
-                }
-
-                if (item.type === "breakthrough_pill") {
-                    value += `\n🌩️ Đột phá: +${Math.floor(item.bonusChance * 100)}% tỉ lệ thành công`;
-                    value += `\n🧪 Dùng: \`/dung vatpham:${itemId}\``;
-                }
-
-                if (item.type === "root_gacha_pill") {
-                    value += "\n🌱 Gacha lại linh căn";
-                    value += `\n🧪 Dùng: \`/dung vatpham:${itemId}\``;
-                }
-
-                if (item.type === "skill_scroll") {
-                    const typeText =
-                        item.skillScrollType === "active"
-                            ? "Chủ động"
-                            : "Bị động";
-
-                    value += `\n📚 Bí tịch kỹ năng: **${typeText}**`;
-                    value += "\n📖 Mở bí tịch: chưa mở tính năng";
-                }
-
-                allItems.push({
-                    name: `${item.emoji || "🎁"} ${item.name}`,
-                    value,
-                });
-            }
-        }
-
-        for (const item of inventoryData.specialItems) {
-            let value = "";
-
-            if (item.weightKg) {
-                value += `⚖️ ${item.weightKg}kg\n`;
-            }
-
-            if (item.gemName) {
-                value += `💎 Ngọc: ${item.gemName}\n`;
-            }
-
-            if (item.gradeName) {
-                value += `🏷️ Phẩm: ${item.gradeName}\n`;
-            }
-
-            if (item.purity !== undefined) {
-                value += `✨ Độ tinh khiết: ${item.purity}%\n`;
-            }
-
-            if (item.sourceStoneName) {
-                value += `🪨 Đá gốc: ${item.sourceStoneName}\n`;
-            }
-
-            if (item.value) {
-                value += `${coin} Giá trị: ${formatMoney(item.value)}\n`;
-            }
-
-            if (!value) {
-                value = "📦 x1";
-            }
-
-            allItems.push({
-                name: `${item.emoji || "🎁"} ${item.name}`,
-                value,
-            });
-        }
+        const allItems = buildInventoryItems(inventoryData, shopData, coin);
 
         const totalPages = Math.max(
             1,
@@ -631,79 +706,7 @@ async function inventory(interaction) {
     const shopData = getShop();
     const coin = getCurrencyEmoji();
 
-    const allItems = [];
-
-    for (const [itemId, amount] of Object.entries(inventoryData.shopItems)) {
-        if (amount > 0 && shopData[itemId]) {
-            const item = shopData[itemId];
-            let value = `📦 x${amount}`;
-
-            if (item.exp) {
-                value += `\n✨ Tu vi: +${formatMoney(item.exp)} exp mỗi cái`;
-                value += `\n🍖 Dùng: \`/dung vatpham:${itemId}\``;
-            }
-
-            if (item.type === "breakthrough_pill") {
-                value += `\n🌩️ Đột phá: +${Math.floor(item.bonusChance * 100)}% tỉ lệ thành công`;
-                value += `\n🧪 Dùng: \`/dung vatpham:${itemId}\``;
-            }
-
-            if (item.type === "root_gacha_pill") {
-                value += "\n🌱 Gacha lại linh căn";
-                value += `\n🧪 Dùng: \`/dung vatpham:${itemId}\``;
-            }
-
-            if (item.type === "skill_scroll") {
-                const typeText =
-                    item.skillScrollType === "active" ? "Chủ động" : "Bị động";
-
-                value += `\n📚 Bí tịch kỹ năng: **${typeText}**`;
-                value += "\n📖 Mở bí tịch: chưa mở tính năng";
-            }
-
-            allItems.push({
-                name: `${item.emoji || "🎁"} ${item.name}`,
-                value,
-            });
-        }
-    }
-
-    for (const item of inventoryData.specialItems) {
-        let value = "";
-
-        if (item.weightKg) {
-            value += `⚖️ ${item.weightKg}kg\n`;
-        }
-
-        if (item.gemName) {
-            value += `💎 Ngọc: ${item.gemName}\n`;
-        }
-
-        if (item.gradeName) {
-            value += `🏷️ Phẩm: ${item.gradeName}\n`;
-        }
-
-        if (item.purity !== undefined) {
-            value += `✨ Độ tinh khiết: ${item.purity}%\n`;
-        }
-
-        if (item.sourceStoneName) {
-            value += `🪨 Đá gốc: ${item.sourceStoneName}\n`;
-        }
-
-        if (item.value) {
-            value += `${coin} Giá trị: ${formatMoney(item.value)}\n`;
-        }
-
-        if (!value) {
-            value = "📦 x1";
-        }
-
-        allItems.push({
-            name: `${item.emoji || "🎁"} ${item.name}`,
-            value,
-        });
-    }
+    const allItems = buildInventoryItems(inventoryData, shopData, coin);
 
     const totalPages = Math.max(
         1,
@@ -719,6 +722,116 @@ async function inventory(interaction) {
                 ? [buildInventoryButtons(interaction.user.id, 0, totalPages)]
                 : [],
     });
+}
+
+function buildShopInventoryItemValue(item, itemId, amount, coin) {
+    let value = `📦 x${amount}`;
+
+    if (item.exp) {
+        value += `\n✨ Tu vi: +${formatMoney(item.exp)} exp mỗi cái`;
+        value += `\n🍖 Dùng: \`/dung vatpham:${itemId}\``;
+    }
+
+    if (item.type === "breakthrough_pill") {
+        value += `\n🌩️ Đột phá: +${Math.floor(item.bonusChance * 100)}% tỉ lệ thành công`;
+        value += `\n🧪 Dùng: \`/dung vatpham:${itemId}\``;
+    }
+
+    if (item.type === "root_gacha_pill") {
+        value += "\n🌱 Gacha lại linh căn";
+        value += `\n🧪 Dùng: \`/dung vatpham:${itemId}\``;
+    }
+
+    if (item.type === "skill_scroll") {
+        const typeText =
+            item.skillScrollType === "active" ? "Chủ động" : "Bị động";
+
+        value += `\n📚 Bí tịch kỹ năng: **${typeText}**`;
+        value += "\n📖 Mở bí tịch: chưa mở tính năng";
+    }
+
+    if (item.type === "phap_bao_chest") {
+        value += "\n🐷 Rương pháp bảo";
+        value += "\n📦 Mở bằng `/mophapbao`";
+    }
+
+    if (item.type === "phap_bao_fragment") {
+        value += "\n🧩 Dùng để `/ghep` phôi pháp bảo";
+    }
+
+    return value;
+}
+
+function buildNormalSpecialItemValue(item, coin) {
+    let value = "";
+
+    if (item.weightKg) {
+        value += `⚖️ ${item.weightKg}kg\n`;
+    }
+
+    if (item.gemName) {
+        value += `💎 Ngọc: ${item.gemName}\n`;
+    }
+
+    if (item.gradeName) {
+        value += `🏷️ Phẩm: ${item.gradeName}\n`;
+    }
+
+    if (item.purity !== undefined) {
+        value += `✨ Độ tinh khiết: ${item.purity}%\n`;
+    }
+
+    if (item.sourceStoneName) {
+        value += `🪨 Đá gốc: ${item.sourceStoneName}\n`;
+    }
+
+    if (item.value) {
+        value += `${coin} Giá trị: ${formatMoney(item.value)}\n`;
+    }
+
+    return value || "📦 x1";
+}
+
+function buildInventoryItems(inventoryData, shopData, coin) {
+    const allItems = [];
+
+    for (const [itemId, amount] of Object.entries(inventoryData.shopItems)) {
+        if (amount > 0 && shopData[itemId]) {
+            const item = shopData[itemId];
+
+            allItems.push({
+                name: `${item.emoji || "🎁"} ${item.name}`,
+                value: buildShopInventoryItemValue(item, itemId, amount, coin),
+            });
+        }
+    }
+
+    const groupedSpecialItems = groupSpecialInventoryItems(
+        inventoryData.specialItems || [],
+    );
+
+    for (const entry of groupedSpecialItems) {
+        const item = entry.item;
+
+        if (isTowerChestItem(item) || isPhapBaoChestItem(item)) {
+            allItems.push({
+                name: `${item.emoji || "🎁"} ${item.name}`,
+                value: formatSpecialInventoryItemLine(entry),
+            });
+
+            continue;
+        }
+
+        allItems.push({
+            name:
+                entry.amount > 1
+                    ? `${item.emoji || "🎁"} ${item.name} x${entry.amount}`
+                    : `${item.emoji || "🎁"} ${item.name}`,
+            value: buildNormalSpecialItemValue(item, coin),
+        });
+    }
+
+    return allItems;
 }
 
 function buildInventoryEmbed(interaction, allItems, page = 0, totalPages = 1) {

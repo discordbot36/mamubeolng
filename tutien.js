@@ -46,7 +46,32 @@ function containsPigKeyword(text) {
         normalized.includes("heo")
     );
 }
+function formatBonusPercent(value) {
+    return `${(Number(value || 0) * 100).toFixed(2)}%`;
+}
 
+function formatWeaponBonusForTuTien(stats) {
+    const bonus = stats?.weaponBonus;
+
+    if (!bonus || !bonus.weaponUid) {
+        return "Chưa trang bị pháp bảo.";
+    }
+
+    return [
+        `🐷 **${bonus.weaponName || "Pháp bảo không rõ tên"}**`,
+        `🎲 Rarity: **${bonus.weaponRarity || "?"}**`,
+        `⚔️ ATK +${formatBonusPercent(bonus.atkPercent)} | ❤️ HP +${formatBonusPercent(bonus.hpPercent)} | 🛡️ DEF +${formatBonusPercent(bonus.defensePercent)}`,
+        Number(bonus.critChance || 0) > 0
+            ? `🎯 Crit +${formatBonusPercent(bonus.critChance)}`
+            : null,
+        Number(bonus.bossDamage || 0) > 0
+            ? `👹 Boss DMG +${formatBonusPercent(bonus.bossDamage)}`
+            : null,
+        bonus.isSealed ? "🔒 Phong ấn: chỉ mở **30% sức mạnh**." : null,
+    ]
+        .filter(Boolean)
+        .join("\n");
+}
 function formatNumber(number) {
     return Number(number || 0).toLocaleString("vi-VN");
 }
@@ -749,6 +774,8 @@ function buildProfileEmbed(user, profile) {
                 `(${formatNumber(combatStats.baseHp)} + ${formatPercent(passiveBonus.hpBonus)})\n` +
                 `💨 **Speed:** **${formatNumber(combatStats.speed)}** ` +
                 `(${formatNumber(combatStats.baseSpeed)} + ${formatPercent(passiveBonus.speedBonus)})\n\n` +
+                `⚔️ **Pháp Bảo Đang Trang Bị**\n` +
+                `${formatWeaponBonusForTuTien(combatStats)}\n\n` +
                 `📚 **Kỹ Năng Đang Trang Bị**\n` +
                 `⚔️ **Chủ động:**\n${equippedSkills.activeText}\n\n` +
                 `🧘 **Bị động:**\n${equippedSkills.passiveText}\n\n` +

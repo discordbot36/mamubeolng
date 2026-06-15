@@ -18,6 +18,10 @@ const {
 const towerConfig = require("./config/tower");
 const quest = require("./quest");
 const combat = require("./utils/combat");
+const {
+    givePhapBaoFarmReward,
+    formatPhapBaoFarmReward,
+} = require("./utils/phapbaoFarmDrops");
 const activeTowerBattles = new Map();
 const TOWER_TURN_DELAY_MS = 500;
 const TOWER_LOG_LIMIT = 5;
@@ -859,8 +863,16 @@ async function fight(interaction) {
             tier: chest.tier,
             value: 0,
             floor: nextFloor,
-            description: "Rương nhận được khi leo tháp. Chưa thể mở.",
+            description: "Rương nhận được khi leo tháp. Mở bằng /mophapbao.",
         });
+        const phapBaoRewards = givePhapBaoFarmReward(userId, "tower", {
+            rolls: 1,
+        });
+
+        const phapBaoRewardText = phapBaoRewards
+            .map(formatPhapBaoFarmReward)
+            .filter(Boolean)
+            .join("\n");
 
         updatedTower = updateTowerProfile(userId, (data) => {
             data.floor = nextFloor;
@@ -873,7 +885,8 @@ async function fight(interaction) {
         rewardText =
             `${coin} Nhận: **${formatMoney(reward)}**\n` +
             `${chest.emoji} **${chest.name}**\n` +
-            `📦 Đã cất rương vào kho đồ.`;
+            `📦 Đã cất rương vào kho đồ. Mở bằng \`/mophapbao\`.` +
+            `${phapBaoRewardText ? `\n${phapBaoRewardText}` : ""}`;
     } else {
         const reward = getMoneyReward(nextFloor);
         const coin = getCurrencyEmoji();

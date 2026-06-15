@@ -16,8 +16,34 @@ module.exports = [
     },
     {
         name: "shop",
-        description: "Xem cửa hàng",
+        description: "Xem shop",
         handler: "economy.shop",
+        options: [
+            {
+                type: "string",
+                name: "muc",
+                description: "Chọn mục shop muốn xem",
+                required: false,
+                choices: [
+                    {
+                        name: "Tất cả",
+                        value: "all",
+                    },
+                    {
+                        name: "Pháp bảo",
+                        value: "phapbao",
+                    },
+                    {
+                        name: "Tu tiên",
+                        value: "tutien",
+                    },
+                    {
+                        name: "Vật phẩm thường",
+                        value: "normal",
+                    },
+                ],
+            },
+        ],
     },
     {
         name: "mua",
@@ -67,6 +93,249 @@ module.exports = [
         name: "khodo",
         description: "Xem kho đồ",
         handler: "economy.inventory",
+    },
+    {
+        name: "mophapbao",
+        description: "Mở rương pháp bảo",
+        handler: "phapbao.openChest",
+        autocomplete: "phapbao.autocompleteChest",
+        options: [
+            {
+                type: "string",
+                name: "ruong",
+                description: "Chọn rương pháp bảo muốn mở",
+                required: true,
+                autocomplete: true,
+            },
+            {
+                type: "integer",
+                name: "soluong",
+                description: "Số lượng muốn mở, tối đa 10",
+                required: false,
+                minValue: 1,
+                maxValue: 10,
+            },
+        ],
+    },
+    {
+        name: "phapbao",
+        description: "Xem kho pháp bảo của bạn",
+        handler: "phapbao.listWeapons",
+        options: [
+            {
+                type: "integer",
+                name: "trang",
+                description: "Trang muốn xem",
+                required: false,
+                minValue: 1,
+            },
+        ],
+    },
+    {
+        name: "giamdinh",
+        description:
+            "Giám định pháp bảo chưa mở để roll rarity thật, phẩm định và dòng phụ",
+        handler: "phapbao.appraiseWeapon",
+        autocomplete: "phapbao.autocompleteUnidentifiedWeapon",
+        options: [
+            {
+                type: "string",
+                name: "phapbao",
+                description: "Chọn pháp bảo chưa giám định",
+                required: true,
+                autocomplete: true,
+            },
+        ],
+    },
+    {
+        name: "trangbi",
+        description: "Trang bị pháp bảo đã giám định",
+        handler: "phapbao.equipWeapon",
+        autocomplete: "phapbao.autocompleteIdentifiedWeapon",
+        options: [
+            {
+                type: "string",
+                name: "phapbao",
+                description: "Chọn pháp bảo đã giám định",
+                required: true,
+                autocomplete: true,
+            },
+        ],
+    },
+    {
+        name: "phangiai",
+        description: "Phân giải pháp bảo để nhận mảnh pháp bảo",
+        handler: "phapbao.dismantleWeapon",
+        autocomplete: "phapbao.autocompleteAnyWeapon",
+        options: [
+            {
+                type: "string",
+                name: "phapbao",
+                description: "Chọn pháp bảo muốn phân giải",
+                required: true,
+                autocomplete: true,
+            },
+        ],
+    },
+    {
+        name: "nangsao",
+        description: "Nâng sao pháp bảo bằng các bản trùng đã giám định",
+        handler: "phapbao.upgradeWeaponStars",
+        autocomplete: "phapbao.autocompleteUpgradeableWeapon",
+        options: [
+            {
+                type: "string",
+                name: "phapbao",
+                description: "Chọn pháp bảo chính muốn nâng sao",
+                required: true,
+                autocomplete: true,
+            },
+        ],
+    },
+    {
+        name: "rollphapbao",
+        description:
+            "Roll lại dòng phụ pháp bảo, có thể khóa dòng bằng số thứ tự",
+        handler: "phapbao.rerollWeaponSubStats",
+        autocomplete: "phapbao.autocompleteIdentifiedWeapon",
+        options: [
+            {
+                type: "string",
+                name: "phapbao",
+                description: "Chọn pháp bảo đã giám định",
+                required: true,
+                autocomplete: true,
+            },
+            {
+                type: "string",
+                name: "khoa",
+                description:
+                    "Dòng muốn khóa, ví dụ: 1,3 hoặc 1 3. Bỏ trống nếu không khóa",
+                required: false,
+            },
+        ],
+    },
+    {
+        name: "phapbao_info",
+        description: "Xem hướng dẫn hệ thống pháp bảo",
+        handler: "phapbao.phapBaoInfo",
+        options: [
+            {
+                type: "string",
+                name: "muc",
+                description: "Chọn mục hướng dẫn",
+                required: false,
+                choices: [
+                    {
+                        name: "Tổng quan",
+                        value: "tongquan",
+                    },
+                    {
+                        name: "Rương",
+                        value: "ruong",
+                    },
+                    {
+                        name: "Giám định",
+                        value: "giamdinh",
+                    },
+                    {
+                        name: "Nâng cấp",
+                        value: "nangcap",
+                    },
+                    {
+                        name: "EX",
+                        value: "ex",
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        name: "ghep",
+        description: "Dùng Mảnh Pháp Bảo để ghép phôi pháp bảo chưa giám định",
+        handler: "phapbao.mergeWeapon",
+        options: [
+            {
+                type: "string",
+                name: "rarity",
+                description: "Chọn cấp phôi muốn ghép",
+                required: true,
+                choices: [
+                    {
+                        name: "F - 30 mảnh",
+                        value: "F",
+                    },
+                    {
+                        name: "E - 80 mảnh",
+                        value: "E",
+                    },
+                    {
+                        name: "D - 200 mảnh",
+                        value: "D",
+                    },
+                    {
+                        name: "C - 600 mảnh",
+                        value: "C",
+                    },
+                    {
+                        name: "B - 1,800 mảnh",
+                        value: "B",
+                    },
+                    {
+                        name: "A - 6,000 mảnh",
+                        value: "A",
+                    },
+                    {
+                        name: "S - 22,000 mảnh",
+                        value: "S",
+                    },
+                    {
+                        name: "SS - 90,000 mảnh",
+                        value: "SS",
+                    },
+                    {
+                        name: "SSS - 400,000 mảnh",
+                        value: "SSS",
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        name: "khoaphapbao",
+        description: "Khóa hoặc mở khóa pháp bảo để tránh phân giải nhầm",
+        handler: "phapbao.lockWeapon",
+        autocomplete: "phapbao.autocompleteAnyWeapon",
+        options: [
+            {
+                type: "string",
+                name: "phapbao",
+                description: "Chọn pháp bảo",
+                required: true,
+                autocomplete: true,
+            },
+            {
+                type: "string",
+                name: "hanhdong",
+                description: "Khóa hoặc mở khóa pháp bảo",
+                required: true,
+                choices: [
+                    {
+                        name: "Khóa",
+                        value: "khoa",
+                    },
+                    {
+                        name: "Mở khóa",
+                        value: "mokhoa",
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        name: "thaophapbao",
+        description: "Tháo pháp bảo đang trang bị",
+        handler: "phapbao.unequipWeapon",
     },
     {
         name: "tuthien",

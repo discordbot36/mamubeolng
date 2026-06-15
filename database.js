@@ -192,6 +192,87 @@ function claimQuestReward(userId, type = "daily", questId) {
     });
 }
 
+function ensurePhapBaoData(user) {
+    if (!Array.isArray(user.weapons)) {
+        user.weapons = [];
+    }
+
+    if (user.equippedWeaponUid === undefined) {
+        user.equippedWeaponUid = null;
+    }
+
+    if (!user.phapBaoStats) {
+        user.phapBaoStats = {
+            openedChests: 0,
+            appraised: 0,
+            dismantled: 0,
+            merged: 0,
+            upgradedStars: 0,
+            rerolled: 0,
+            totalFragmentsEarned: 0,
+            totalFragmentsSpent: 0,
+            totalMoneySpent: 0,
+            bestRarityFound: null,
+            bestWeaponName: null,
+            updatedAt: 0,
+        };
+    }
+
+    if (user.phapBaoStats.openedChests === undefined) {
+        user.phapBaoStats.openedChests = 0;
+    }
+
+    if (user.phapBaoStats.appraised === undefined) {
+        user.phapBaoStats.appraised = 0;
+    }
+
+    if (user.phapBaoStats.dismantled === undefined) {
+        user.phapBaoStats.dismantled = 0;
+    }
+
+    if (user.phapBaoStats.merged === undefined) {
+        user.phapBaoStats.merged = 0;
+    }
+
+    if (user.phapBaoStats.upgradedStars === undefined) {
+        user.phapBaoStats.upgradedStars = 0;
+    }
+
+    if (user.phapBaoStats.rerolled === undefined) {
+        user.phapBaoStats.rerolled = 0;
+    }
+
+    if (user.phapBaoStats.totalFragmentsEarned === undefined) {
+        user.phapBaoStats.totalFragmentsEarned = 0;
+    }
+
+    if (user.phapBaoStats.totalFragmentsSpent === undefined) {
+        user.phapBaoStats.totalFragmentsSpent = 0;
+    }
+
+    if (user.phapBaoStats.totalMoneySpent === undefined) {
+        user.phapBaoStats.totalMoneySpent = 0;
+    }
+
+    if (user.phapBaoStats.bestRarityFound === undefined) {
+        user.phapBaoStats.bestRarityFound = null;
+    }
+
+    if (user.phapBaoStats.bestWeaponName === undefined) {
+        user.phapBaoStats.bestWeaponName = null;
+    }
+
+    if (user.phapBaoStats.updatedAt === undefined) {
+        user.phapBaoStats.updatedAt = 0;
+    }
+
+    return {
+        weapons: user.weapons,
+        equippedWeaponUid: user.equippedWeaponUid,
+        stats: user.phapBaoStats,
+    };
+}
+
 function ensureUser(data, userId) {
     if (!data.users[userId]) {
         data.users[userId] = createDefaultUser();
@@ -202,17 +283,11 @@ function ensureUser(data, userId) {
     if (!user.inventory) {
         user.inventory = {};
     }
-
     if (!Array.isArray(user.inventoryItems)) {
         user.inventoryItems = [];
     }
-    if (!Array.isArray(user.weapons)) {
-        user.weapons = [];
-    }
 
-    if (user.equippedWeaponUid === undefined) {
-        user.equippedWeaponUid = null;
-    }
+    ensurePhapBaoData(user);
 
     return user;
 }
@@ -240,6 +315,14 @@ function createUser(userId) {
 
 function getUser(userId) {
     return withData((data) => ensureUser(data, userId));
+}
+
+function updateUser(userId, updater) {
+    return withData((data) => {
+        const user = ensureUser(data, userId);
+
+        return updater(user, data);
+    });
 }
 
 function addMoney(userId, amount) {
@@ -1348,6 +1431,7 @@ function updateSecretRealmFatigue(userId, updater) {
 module.exports = {
     createUser,
     getUser,
+    updateUser,
     getBalance,
     addMoney,
     removeMoney,

@@ -23,6 +23,10 @@ const shopConfig = require("./config/shop");
 const config = require("./config/bicanh");
 
 const combat = require("./utils/combat");
+const {
+    givePhapBaoFarmReward,
+    formatPhapBaoFarmReward,
+} = require("./utils/phapbaoFarmDrops");
 
 const activeTimers = new Map();
 function clearRealmTimer(realmId) {
@@ -1248,10 +1252,12 @@ function giveSecretRealmReward(realm, userId) {
     );
 
     const items = {};
+    const phapBaoRewards = [];
 
     if (finalMultiplier <= 0) {
         return {
             items,
+            phapBaoRewards,
             moneyReward: 0,
             expReward: 0,
             participationMultiplier,
@@ -1259,48 +1265,16 @@ function giveSecretRealmReward(realm, userId) {
             rollsGranted: 0,
         };
     }
-
-    /*
-     * Quà cám bảo hiểm.
-     */
-    const guaranteed = config.rewards?.guaranteedFeed || {};
-
-    const guaranteedMin = isHost
-        ? Number(guaranteed.hostMin || 1)
-        : Number(guaranteed.guestMin || 1);
-
-    const guaranteedMax = isHost
-        ? Number(guaranteed.hostMax || guaranteedMin)
-        : Number(guaranteed.guestMax || guaranteedMin);
-
-    const baseGuaranteed = randomInt(guaranteedMin, guaranteedMax);
-
-    const guaranteedAmount = Math.max(
-        1,
-        Math.floor(baseGuaranteed * finalMultiplier),
-    );
-
-    mergeRewardItem(items, guaranteed.itemId, guaranteedAmount);
-
-    /*
-     * Số lượt random item.
-     */
-    const baseRolls = isHost
-        ? Number(config.rewards.hostRolls || 3)
-        : Number(config.rewards.guestRolls || 2);
+    const baseRolls = isHost ? 2 : 1;
 
     const rollsGranted = Math.max(1, Math.ceil(baseRolls * finalMultiplier));
 
-    for (let rollIndex = 0; rollIndex < rollsGranted; rollIndex += 1) {
-        const reward = rollSecretRealmReward();
-
-        if (!reward) {
-            continue;
-        }
-
-        mergeRewardItem(items, reward.itemId, reward.amount);
-    }
-
+    phapBaoRewards.push(
+        ...givePhapBaoFarmReward(userId, "bicanh", {
+            rolls: rollsGranted,
+            amountMultiplier: finalMultiplier,
+        }),
+    );
     /*
      * Buff nhẹ economy.
      */
@@ -1345,15 +1319,9 @@ function giveSecretRealmReward(realm, userId) {
         });
     }
 
-    /*
-     * Phát toàn bộ item đã gộp.
-     */
-    for (const [itemId, amount] of Object.entries(items)) {
-        addShopItem(userId, itemId, amount);
-    }
-
     return {
         items,
+        phapBaoRewards,
         moneyReward,
         expReward,
         participationMultiplier,
@@ -1443,6 +1411,13 @@ async function finishBattle(channel, realm, success) {
                         `**${item.name || itemId}** ` +
                         `x${formatNumber(amount)}`,
                 );
+            }
+            for (const phapBaoReward of reward.phapBaoRewards || []) {
+                const line = formatPhapBaoFarmReward(phapBaoReward);
+
+                if (line) {
+                    rewardParts.push(line);
+                }
             }
 
             if (rewardParts.length === 0) {

@@ -12,12 +12,15 @@ const {
     getSystemValue,
     setSystemValue,
     deleteSystemValue,
-    addShopItem,
 } = require("./database");
 
 const worldBossConfig = require("./config/worldboss");
 const tuTienConfig = require("./config/tutien");
 const combat = require("./utils/combat");
+const {
+    givePhapBaoFarmReward,
+    formatPhapBaoFarmReward,
+} = require("./utils/phapbaoFarmDrops");
 
 const STATE_KEY = "worldBoss";
 const RESPAWN_KEY = "worldBossRespawn";
@@ -92,10 +95,10 @@ function buildFinishBossContent({
 }) {
     const header =
         `☠️ **Boss ${boss.name} đã bị hạ gục!**\n\n` +
-        `🎁 **Luật chia rương:**\n` +
-        `🥇 Top dame **1-2-3**: mỗi người nhận **1 rương**.\n` +
-        `🎲 Top dame **4-20**: random **3 người**, mỗi người nhận **1 rương**.\n` +
-        `🔥 Top **3 người đánh nhiều lượt nhất**: mỗi người nhận **1 rương**.\n\n` +
+        `🎁 **Luật chia thưởng pháp bảo:**\n` +
+        `🥇 Top dame **1-2-3**: mỗi người nhận **1 lượt thưởng pháp bảo**.\n` +
+        `🎲 Top dame **4-20**: random **3 người**, mỗi người nhận **1 lượt thưởng pháp bảo**.\n` +
+        `🔥 Top **3 người đánh nhiều lượt nhất**: mỗi người nhận **1 lượt thưởng pháp bảo**.\n\n` +
         `🎲 **Người trúng random top 4-20:**\n` +
         `${randomWinnerNames.length > 0 ? randomWinnerNames.join(", ") : "Không đủ người trong top 4-20 để random."}\n\n` +
         `🔥 **Top lượt đánh nhiều nhất:**\n` +
@@ -760,7 +763,6 @@ async function finishBoss(client, reason = "killed") {
         : [];
 
     const consolationReward = Number(worldBossConfig.consolationReward || 500);
-    const chestItemId = worldBossConfig.chestItemId || "tu_luyen_chest";
     const maxRankDisplay = Number(worldBossConfig.maxRankDisplay || 36);
 
     const topDameChestUserIds = ranking.slice(0, 3).map((item) => item.userId);
@@ -812,10 +814,17 @@ async function finishBoss(client, reason = "killed") {
             addMoney(item.userId, moneyReward);
         }
 
-        if (chestReward > 0) {
-            addShopItem(item.userId, chestItemId, chestReward);
-        }
+        const phapBaoRewards =
+            chestReward > 0
+                ? givePhapBaoFarmReward(item.userId, "worldboss", {
+                      rolls: chestReward,
+                  })
+                : [];
 
+        const phapBaoRewardText = phapBaoRewards
+            .map(formatPhapBaoFarmReward)
+            .filter(Boolean)
+            .join(" | ");
         if (rank <= maxRankDisplay) {
             const tags = [];
 
@@ -835,7 +844,7 @@ async function finishBoss(client, reason = "killed") {
                 `#${rank} **${name}** — ${formatNumber(item.damage)} dame | ` +
                     `⚔️ ${formatNumber(item.hits)} lượt | ` +
                     `💰 ${formatMoney(moneyReward)}` +
-                    `${chestReward > 0 ? ` | 🎁 x${chestReward} Rương Tu Luyện` : ""}` +
+                    `${phapBaoRewardText ? ` | ${phapBaoRewardText}` : ""}` +
                     `${tags.length > 0 ? ` | ${tags.join(", ")}` : ""}`,
             );
         } else {

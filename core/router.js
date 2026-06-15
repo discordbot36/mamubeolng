@@ -20,6 +20,7 @@ const flip = require("../flip");
 const quest = require("../quest");
 const bicanh = require("../bicanh");
 const dothachTournament = require("../dothachTournament");
+const phapbao = require("../phapbao");
 const modules = {
     economy,
     race,
@@ -40,6 +41,7 @@ const modules = {
     pigRoad,
     flip,
     bicanh,
+    phapbao,
     quest,
 };
 

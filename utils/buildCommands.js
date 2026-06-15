@@ -3,27 +3,67 @@ const { SlashCommandBuilder } = require("discord.js");
 const optionBuilders = {
     string: "addStringOption",
     integer: "addIntegerOption",
-    user: "addUserOption",
-    boolean: "addBooleanOption",
     number: "addNumberOption",
+    boolean: "addBooleanOption",
+    user: "addUserOption",
     channel: "addChannelOption",
     role: "addRoleOption",
 };
 
 function readMinValue(optionConfig) {
-    if (optionConfig.minValue !== undefined) {
-        return optionConfig.minValue;
-    }
-
-    return optionConfig.min_value;
+    return optionConfig.minValue ?? optionConfig.min_value;
 }
 
 function readMaxValue(optionConfig) {
-    if (optionConfig.maxValue !== undefined) {
-        return optionConfig.maxValue;
+    return optionConfig.maxValue ?? optionConfig.max_value;
+}
+
+function applyChoices(option, optionConfig) {
+    if (
+        !Array.isArray(optionConfig.choices) ||
+        optionConfig.choices.length <= 0
+    ) {
+        return option;
     }
 
-    return optionConfig.max_value;
+    option.addChoices(
+        ...optionConfig.choices.map((choice) => {
+            return {
+                name: choice.name,
+                value: choice.value,
+            };
+        }),
+    );
+
+    return option;
+}
+
+function applyMinMax(option, optionConfig) {
+    const minValue = readMinValue(optionConfig);
+    const maxValue = readMaxValue(optionConfig);
+
+    if (minValue !== undefined && typeof option.setMinValue === "function") {
+        option.setMinValue(minValue);
+    }
+
+    if (maxValue !== undefined && typeof option.setMaxValue === "function") {
+        option.setMaxValue(maxValue);
+    }
+
+    return option;
+}
+
+function applyChannelTypes(option, optionConfig) {
+    if (
+        optionConfig.type === "channel" &&
+        Array.isArray(optionConfig.channelTypes) &&
+        optionConfig.channelTypes.length > 0 &&
+        typeof option.addChannelTypes === "function"
+    ) {
+        option.addChannelTypes(...optionConfig.channelTypes);
+    }
+
+    return option;
 }
 
 function applyOption(builder, optionConfig) {
@@ -36,27 +76,19 @@ function applyOption(builder, optionConfig) {
     return builder[method]((option) => {
         option
             .setName(optionConfig.name)
-            .setDescription(optionConfig.description)
+            .setDescription(optionConfig.description || "Không có mô tả")
             .setRequired(Boolean(optionConfig.required));
 
-        if (optionConfig.autocomplete && option.setAutocomplete) {
+        if (
+            optionConfig.autocomplete &&
+            typeof option.setAutocomplete === "function"
+        ) {
             option.setAutocomplete(true);
         }
 
-        const minValue = readMinValue(optionConfig);
-        const maxValue = readMaxValue(optionConfig);
-
-        if (minValue !== undefined && option.setMinValue) {
-            option.setMinValue(minValue);
-        }
-
-        if (maxValue !== undefined && option.setMaxValue) {
-            option.setMaxValue(maxValue);
-        }
-
-        if (Array.isArray(optionConfig.choices) && optionConfig.choices.length > 0) {
-            option.addChoices(...optionConfig.choices);
-        }
+        applyMinMax(option, optionConfig);
+        applyChoices(option, optionConfig);
+        applyChannelTypes(option, optionConfig);
 
         return option;
     });
@@ -65,10 +97,16 @@ function applyOption(builder, optionConfig) {
 function buildCommand(commandConfig) {
     const builder = new SlashCommandBuilder()
         .setName(commandConfig.name)
-        .setDescription(commandConfig.description);
+        .setDescription(commandConfig.description || "Không có mô tả");
 
     if (commandConfig.defaultMemberPermissions !== undefined) {
-        builder.setDefaultMemberPermissions(commandConfig.defaultMemberPermissions);
+        builder.setDefaultMemberPermissions(
+            commandConfig.defaultMemberPermissions,
+        );
+    }
+
+    if (commandConfig.dmPermission !== undefined) {
+        builder.setDMPermission(Boolean(commandConfig.dmPermission));
     }
 
     for (const option of commandConfig.options || []) {
@@ -84,4 +122,7 @@ function buildCommands(commandConfigs) {
         .map(buildCommand);
 }
 
-module.exports = { buildCommands };
+module.exports = {
+    buildCommand,
+    buildCommands,
+};

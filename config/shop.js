@@ -371,6 +371,223 @@ module.exports = {
         },
     },
 
+    manh_phap_bao: {
+        name: "Mảnh Pháp Bảo",
+        emoji: "🧩",
+        price: 0,
+        type: "phap_bao_fragment",
+        sellable: false,
+        buyable: false,
+        description:
+            "Dùng để ghép pháp bảo chưa giám định hoặc nâng cấp hệ thống pháp bảo.",
+    },
+
+    ruong_phap_bao_rach: {
+        name: "Rương Pháp Bảo Rách",
+        emoji: "📦",
+        price: 80000,
+        type: "phap_bao_chest",
+        shopCategory: "phapbao",
+        sellable: false,
+        description:
+            "Rương pháp bảo cấp thấp. Có thể mở ra mảnh hoặc phôi pháp bảo chưa giám định.",
+        phapBaoDrops: [
+            {
+                type: "fragment",
+                weight: 60,
+                min: 1,
+                max: 8,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "F",
+                weight: 28,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "E",
+                weight: 9,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "D",
+                weight: 2.7,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "C",
+                weight: 0.3,
+            },
+        ],
+    },
+
+    ruong_phap_bao_thuong: {
+        name: "Rương Pháp Bảo Thường",
+        emoji: "🧰",
+        price: 350000,
+        type: "phap_bao_chest",
+        shopCategory: "phapbao",
+        sellable: false,
+        description:
+            "Rương pháp bảo phổ thông. Có thể mở ra mảnh hoặc phôi pháp bảo chưa giám định.",
+        phapBaoDrops: [
+            {
+                type: "fragment",
+                weight: 55,
+                min: 5,
+                max: 25,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "F",
+                weight: 20,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "E",
+                weight: 12,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "D",
+                weight: 7,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "C",
+                weight: 4,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "B",
+                weight: 1.5,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "A",
+                weight: 0.45,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "S",
+                weight: 0.05,
+            },
+        ],
+    },
+
+    ruong_phap_bao_tinh_anh: {
+        name: "Rương Pháp Bảo Tinh Anh",
+        emoji: "🎁",
+        price: 1500000,
+        type: "phap_bao_chest",
+        shopCategory: "phapbao",
+        sellable: false,
+        description:
+            "Rương pháp bảo cao cấp hơn. Vẫn có thể ra mảnh, nhưng tỉ lệ phôi ngon cao hơn.",
+        phapBaoDrops: [
+            {
+                type: "fragment",
+                weight: 45,
+                min: 20,
+                max: 90,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "E",
+                weight: 18,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "D",
+                weight: 14,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "C",
+                weight: 10,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "B",
+                weight: 7,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "A",
+                weight: 4.5,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "S",
+                weight: 1.2,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "SS",
+                weight: 0.28,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "SSS",
+                weight: 0.02,
+            },
+        ],
+    },
+
+    ruong_phap_bao_mamu: {
+        name: "Rương Pháp Bảo Mamu",
+        emoji: "🐷",
+        price: 8000000,
+        type: "phap_bao_chest",
+        shopCategory: "phapbao",
+        sellable: false,
+        description:
+            "Rương pháp bảo siêu gacha. Có cơ hội ra phôi SSS, nhưng khi giám định vẫn có thể tụt rarity.",
+        phapBaoDrops: [
+            {
+                type: "fragment",
+                weight: 35,
+                min: 80,
+                max: 260,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "D",
+                weight: 10,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "C",
+                weight: 14,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "B",
+                weight: 17,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "A",
+                weight: 14,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "S",
+                weight: 7,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "SS",
+                weight: 2.5,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "SSS",
+                weight: 0.5,
+            },
+        ],
+    },
+
     tu_luyen_chest: {
         name: "Rương Tu Luyện",
         emoji: "🎁",
