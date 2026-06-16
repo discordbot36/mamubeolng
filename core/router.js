@@ -136,6 +136,7 @@ async function handleButton(interaction) {
         pigRoad.handleButton.bind(pigRoad),
         quest.handleButton.bind(quest),
         bicanh.handleButton.bind(bicanh),
+        phapbao.handleButton.bind(phapbao),
         sanyeuthu.handleButton.bind(sanyeuthu),
         flip.handleButton.bind(flip),
     ];

@@ -110,6 +110,7 @@ function ensureUserHuntStats(user) {
     if (!user.beastHuntStats) {
         user.beastHuntStats = {
             resetDate: getTodayKey(),
+            dailyRuns: 0,
             soloRuns: 0,
             partyRuns: 0,
             lastSoloAt: 0,
@@ -124,10 +125,24 @@ function ensureUserHuntStats(user) {
 
     if (stats.resetDate !== todayKey) {
         stats.resetDate = todayKey;
+        stats.dailyRuns = 0;
         stats.soloRuns = 0;
         stats.partyRuns = 0;
         stats.lastSoloAt = 0;
         stats.lastPartyAt = 0;
+    }
+
+    if (stats.dailyRuns === undefined) {
+        stats.dailyRuns =
+            Number(stats.soloRuns || 0) + Number(stats.partyRuns || 0);
+    }
+
+    if (stats.soloRuns === undefined) {
+        stats.soloRuns = 0;
+    }
+
+    if (stats.partyRuns === undefined) {
+        stats.partyRuns = 0;
     }
 
     if (stats.wins === undefined) {
@@ -140,7 +155,6 @@ function ensureUserHuntStats(user) {
 
     return stats;
 }
-
 function getTimeLeftText(ms) {
     const totalSeconds = Math.ceil(Math.max(0, Number(ms || 0)) / 1000);
     const minutes = Math.floor(totalSeconds / 60);
@@ -158,6 +172,13 @@ function checkRunAvailable(userId, mode) {
     const stats = ensureUserHuntStats(user);
     const now = Date.now();
 
+    if (Number(stats.dailyRuns || 0) >= config.cooldown.maxRunsPerDay) {
+        return {
+            ok: false,
+            message: `Bạn đã hết lượt săn yêu thú hôm nay (**${stats.dailyRuns}/${config.cooldown.maxRunsPerDay}**). Solo và tổ đội tính chung lượt.`,
+        };
+    }
+
     if (mode === "solo") {
         const cooldownLeft =
             Number(stats.lastSoloAt || 0) + config.cooldown.soloMs - now;
@@ -166,13 +187,6 @@ function checkRunAvailable(userId, mode) {
             return {
                 ok: false,
                 message: `Bạn cần nghỉ thêm **${getTimeLeftText(cooldownLeft)}** mới có thể săn solo tiếp.`,
-            };
-        }
-
-        if (Number(stats.soloRuns || 0) >= config.cooldown.maxSoloPerDay) {
-            return {
-                ok: false,
-                message: `Bạn đã hết lượt săn solo hôm nay (**${config.cooldown.maxSoloPerDay}/${config.cooldown.maxSoloPerDay}**).`,
             };
         }
 
@@ -189,13 +203,6 @@ function checkRunAvailable(userId, mode) {
         };
     }
 
-    if (Number(stats.partyRuns || 0) >= config.cooldown.maxPartyPerDay) {
-        return {
-            ok: false,
-            message: `Bạn đã hết lượt nhận thưởng săn tổ đội hôm nay (**${config.cooldown.maxPartyPerDay}/${config.cooldown.maxPartyPerDay}**).`,
-        };
-    }
-
     return { ok: true };
 }
 
@@ -203,6 +210,8 @@ function consumeRun(userId, mode) {
     return updateUser(userId, (user) => {
         const stats = ensureUserHuntStats(user);
         const now = Date.now();
+
+        stats.dailyRuns = Number(stats.dailyRuns || 0) + 1;
 
         if (mode === "solo") {
             stats.soloRuns = Number(stats.soloRuns || 0) + 1;

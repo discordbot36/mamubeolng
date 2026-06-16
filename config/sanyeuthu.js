@@ -9,10 +9,9 @@ module.exports = {
     },
 
     cooldown: {
-        soloMs: 20 * 60 * 1000,
-        partyMs: 30 * 60 * 1000,
-        maxSoloPerDay: 10,
-        maxPartyPerDay: 6,
+        soloMs: 45 * 60 * 1000,
+        partyMs: 60 * 60 * 1000,
+        maxRunsPerDay: 5,
     },
 
     channel: {
@@ -89,7 +88,7 @@ module.exports = {
             maxTurns: 4,
             hpMultiplier: 1,
             damageMultiplier: 1,
-            rewardMultiplier: 1.18,
+            rewardMultiplier: 1.12,
             materials: [
                 { id: "da_yeu_thu", weight: 32, min: 1, max: 2 },
                 { id: "nanh_yeu_thu", weight: 26, min: 1, max: 2 },
@@ -108,7 +107,7 @@ module.exports = {
             maxTurns: 4,
             hpMultiplier: 1.18,
             damageMultiplier: 1.15,
-            rewardMultiplier: 1.42,
+            rewardMultiplier: 1.28,
             materials: [
                 { id: "nanh_yeu_thu", weight: 28, min: 1, max: 2 },
                 { id: "yeu_dan_thuong", weight: 24, min: 1, max: 2 },
@@ -127,7 +126,7 @@ module.exports = {
             maxTurns: 5,
             hpMultiplier: 1.42,
             damageMultiplier: 1.35,
-            rewardMultiplier: 1.8,
+            rewardMultiplier: 1.55,
             materials: [
                 { id: "xuong_yeu_thu", weight: 24, min: 2, max: 3 },
                 { id: "yeu_dan_tinh_anh", weight: 18, min: 1, max: 1 },
@@ -146,7 +145,7 @@ module.exports = {
             maxTurns: 5,
             hpMultiplier: 1.72,
             damageMultiplier: 1.58,
-            rewardMultiplier: 2.35,
+            rewardMultiplier: 1.9,
             materials: [
                 { id: "yeu_dan_tinh_anh", weight: 24, min: 1, max: 2 },
                 { id: "linh_huyet", weight: 20, min: 1, max: 2 },
@@ -194,12 +193,12 @@ module.exports = {
     ],
 
     rewards: {
-        soloMoneyMin: 28000,
-        soloMoneyMax: 85000,
-        partyMoneyMin: 32000,
-        partyMoneyMax: 95000,
-        partyBonusMultiplier: 1.12,
-        mvpMoneyMin: 12000,
-        mvpMoneyMax: 35000,
+        soloMoneyMin: 8000,
+        soloMoneyMax: 28000,
+        partyMoneyMin: 10000,
+        partyMoneyMax: 35000,
+        partyBonusMultiplier: 1.06,
+        mvpMoneyMin: 3000,
+        mvpMoneyMax: 10000,
     },
 };

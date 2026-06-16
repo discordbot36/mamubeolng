@@ -132,13 +132,17 @@ function createUid(prefix = "pb") {
     return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function getDropWeight(item) {
+    return Number(item.weight ?? item.chance ?? 0);
+}
+
 function rollWeightedFromArray(items) {
     const validItems = Array.isArray(items)
-        ? items.filter((item) => Number(item.weight || 0) > 0)
+        ? items.filter((item) => getDropWeight(item) > 0)
         : [];
 
     const totalWeight = validItems.reduce((sum, item) => {
-        return sum + Number(item.weight || 0);
+        return sum + getDropWeight(item);
     }, 0);
 
     if (totalWeight <= 0) {
@@ -148,7 +152,7 @@ function rollWeightedFromArray(items) {
     let random = Math.random() * totalWeight;
 
     for (const item of validItems) {
-        random -= Number(item.weight || 0);
+        random -= getDropWeight(item);
 
         if (random <= 0) {
             return item;
@@ -2935,22 +2939,22 @@ function formatInfoDropLine(drop) {
         const min = Number(drop.minAmount || drop.min || 1);
         const max = Number(drop.maxAmount || drop.max || min);
 
-        return `🧩 **Mảnh Pháp Bảo** x${formatNumber(min)}-${formatNumber(max)} — **${formatChancePercent(drop.chance)}**`;
+        return `🧩 **Mảnh Pháp Bảo** x${formatNumber(min)}-${formatNumber(max)} — **${formatChancePercent(drop.chance ?? drop.weight)}**`;
     }
 
     if (drop.type === "unidentified_weapon") {
         const rarity = weaponConfig.getRarity(drop.rarity || "F");
 
-        return `${rarity.emoji} **Phôi ${rarity.id} chưa giám định** — **${formatChancePercent(drop.chance)}**`;
+        return `${rarity.emoji} **Phôi ${rarity.id} chưa giám định** — **${formatChancePercent(drop.chance ?? drop.weight)}**`;
     }
 
     if (drop.type === "chest") {
         const chest = shop[drop.itemId] || {};
 
-        return `${chest.emoji || "🎁"} **${chest.name || drop.itemId}** — **${formatChancePercent(drop.chance)}**`;
+        return `${chest.emoji || "🎁"} **${chest.name || drop.itemId}** — **${formatChancePercent(drop.chance ?? drop.weight)}**`;
     }
 
-    return `🎁 **${drop.itemId || drop.type || "Vật phẩm"}** — **${formatChancePercent(drop.chance)}**`;
+    return `🎁 **${drop.itemId || drop.type || "Vật phẩm"}** — **${formatChancePercent(drop.chance ?? drop.weight)}**`;
 }
 
 function getPhapBaoInfoChestItems() {
