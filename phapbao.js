@@ -1,10 +1,16 @@
-const { EmbedBuilder } = require("discord.js");
+const {
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+} = require("discord.js");
 
 const database = require("./database");
 const shop = require("./config/shop");
 const weaponConfig = require("./weapon");
 
 const FRAGMENT_ITEM_ID = "manh_phap_bao";
+const BULK_DISMANTLE_MAX_AMOUNT = 50;
 const MAX_OPEN_AMOUNT = 10;
 const REMOVED_WEAPON_SUB_STATS = new Set(["expBonus", "moneyBonus"]);
 const TOWER_CHEST_PHAPBAO_DROPS = {
@@ -93,26 +99,26 @@ const MERGE_FRAGMENT_COSTS = {
     EX: null,
 };
 const REROLL_BASE_COSTS = {
-    F: 2000,
-    E: 5000,
-    D: 15000,
-    C: 50000,
-    B: 150000,
-    A: 500000,
-    S: 2000000,
-    SS: 8000000,
-    SSS: 30000000,
+    F: 500,
+    E: 1500,
+    D: 5000,
+    C: 15000,
+    B: 50000,
+    A: 150000,
+    S: 600000,
+    SS: 2500000,
+    SSS: 10000000,
 
     EX: null,
 };
 
 const REROLL_LOCK_MULTIPLIERS = {
     0: 1,
-    1: 2.5,
-    2: 7,
-    3: 18,
-    4: 45,
-    5: 100,
+    1: 1.8,
+    2: 4,
+    3: 9,
+    4: 20,
+    5: 45,
 };
 function formatNumber(number) {
     return Number(number || 0).toLocaleString("vi-VN");
@@ -1323,7 +1329,232 @@ function rollDismantleFragments(weapon) {
 
     return randomInt(min, max);
 }
+function getBulkDismantleRarityRank(rarityId) {
+    const rarity = weaponConfig.getRarity(rarityId);
 
+    if (!rarity) {
+        return -1;
+    }
+
+    return Number(rarity.rank || 0);
+}
+
+function canBulkDismantleWeapon(user, weapon, maxRarityId) {
+    if (!weapon || weapon.state !== "identified") {
+        return false;
+    }
+
+    if (weapon.locked) {
+        return false;
+    }
+
+    if (user.equippedWeaponUid && weapon.uid === user.equippedWeaponUid) {
+        return false;
+    }
+
+    const rarityId = getDismantleRarityId(weapon);
+
+    if (!rarityId || rarityId === "EX") {
+        return false;
+    }
+
+    const weaponRank = getBulkDismantleRarityRank(rarityId);
+    const maxRank = getBulkDismantleRarityRank(maxRarityId);
+
+    if (weaponRank < 0 || maxRank < 0) {
+        return false;
+    }
+
+    return weaponRank <= maxRank;
+}
+
+function getBulkDismantleCandidates(user, maxRarityId) {
+    const weapons = Array.isArray(user.weapons) ? user.weapons : [];
+
+    return weapons
+        .filter((weapon) => {
+            return canBulkDismantleWeapon(user, weapon, maxRarityId);
+        })
+        .sort((a, b) => {
+            const rankA = getBulkDismantleRarityRank(getDismantleRarityId(a));
+            const rankB = getBulkDismantleRarityRank(getDismantleRarityId(b));
+
+            if (rankA !== rankB) {
+                return rankA - rankB;
+            }
+
+            const starsA = Number(a.stars || 0);
+            const starsB = Number(b.stars || 0);
+
+            if (starsA !== starsB) {
+                return starsA - starsB;
+            }
+
+            return Number(a.createdAt || 0) - Number(b.createdAt || 0);
+        });
+}
+
+function formatBulkDismantleScope(maxRarityId) {
+    if (maxRarityId === "A") {
+        return "A trở xuống";
+    }
+
+    if (maxRarityId === "C") {
+        return "C trở xuống";
+    }
+
+    return `${maxRarityId} trở xuống`;
+}
+
+function buildBulkDismantleEmbed(interaction, result) {
+    const maxLines = 15;
+
+    const lines = result.dismantledWeapons
+        .slice(0, maxLines)
+        .map((item, index) => {
+            const rarity = weaponConfig.getRarity(item.rarityId) || {};
+            const stars = Number(item.stars || 0);
+
+            return (
+                `${index + 1}. ${rarity.emoji || "⚔️"} **${item.name}**` +
+                `${stars > 0 ? ` ${stars}⭐` : ""}` +
+                ` → 🧩 x${formatNumber(item.fragments)}`
+            );
+        });
+
+    if (result.dismantledWeapons.length > maxLines) {
+        lines.push(
+            `...và **${formatNumber(result.dismantledWeapons.length - maxLines)}** món khác.`,
+        );
+    }
+
+    const summaryLines = Object.entries(result.raritySummary)
+        .map(([rarityId, amount]) => {
+            const rarity = weaponConfig.getRarity(rarityId) || {};
+
+            return `${rarity.emoji || "⚔️"} ${rarityId}: **${formatNumber(amount)}**`;
+        })
+        .join(" | ");
+
+    return new EmbedBuilder()
+        .setTitle("🧩 Phân Giải Hàng Loạt Pháp Bảo")
+        .setColor(0xe67e22)
+        .setDescription(
+            `${interaction.user} đã phân giải pháp bảo theo phạm vi **${formatBulkDismantleScope(result.maxRarityId)}**.\n\n` +
+                `🧹 Số món đã phân giải: **${formatNumber(result.dismantledWeapons.length)}**\n` +
+                `🧩 Tổng mảnh nhận: **${formatNumber(result.totalFragments)} Mảnh Pháp Bảo**\n\n` +
+                `📊 Theo rarity:\n${summaryLines || "Không có dữ liệu."}\n\n` +
+                `### Danh sách đã phân giải\n` +
+                `${lines.length > 0 ? lines.join("\n") : "Không có món nào."}`,
+        )
+        .setFooter({
+            text: "Đồ đang trang bị, đồ đã khóa, EX và phôi chưa giám định sẽ không bị phân giải.",
+        })
+        .setTimestamp();
+}
+
+function bulkDismantleWeapons(interaction) {
+    const maxRarityId = interaction.options.getString("phamvi");
+    const amount = Math.min(
+        BULK_DISMANTLE_MAX_AMOUNT,
+        Math.max(1, interaction.options.getInteger("soluong") || 10),
+    );
+
+    const confirm = interaction.options.getString("xacnhan");
+
+    if (!["C", "A"].includes(maxRarityId)) {
+        return interaction.reply({
+            content: "❌ Phạm vi phân giải không hợp lệ.",
+            ephemeral: true,
+        });
+    }
+
+    if (confirm !== "dongy") {
+        return interaction.reply({
+            content:
+                `⚠️ Bạn đang dùng phân giải hàng loạt **${formatBulkDismantleScope(maxRarityId)}**.\n\n` +
+                `Để tránh bay đồ nhầm, hãy chọn option:\n` +
+                `\`xacnhan: Đồng ý\``,
+            ephemeral: true,
+        });
+    }
+
+    const result = database.updateUser(interaction.user.id, (user) => {
+        const candidates = getBulkDismantleCandidates(user, maxRarityId);
+        const selectedWeapons = candidates.slice(0, amount);
+
+        if (selectedWeapons.length <= 0) {
+            return {
+                success: false,
+                message:
+                    `Không có pháp bảo hợp lệ để phân giải trong phạm vi **${formatBulkDismantleScope(maxRarityId)}**.\n\n` +
+                    `Đồ đã khóa, đang trang bị, EX và phôi chưa giám định sẽ được bỏ qua.`,
+            };
+        }
+
+        const selectedUidSet = new Set(
+            selectedWeapons.map((weapon) => weapon.uid),
+        );
+
+        let totalFragments = 0;
+        const dismantledWeapons = [];
+        const raritySummary = {};
+
+        for (const weapon of selectedWeapons) {
+            const rarityId = getDismantleRarityId(weapon);
+            const fragments = rollDismantleFragments(weapon);
+
+            totalFragments += fragments;
+            raritySummary[rarityId] = Number(raritySummary[rarityId] || 0) + 1;
+
+            dismantledWeapons.push({
+                uid: weapon.uid,
+                name: weapon.name || "Pháp bảo không rõ tên",
+                rarityId,
+                stars: Number(weapon.stars || 0),
+                fragments,
+            });
+        }
+
+        user.weapons = (user.weapons || []).filter((weapon) => {
+            return !selectedUidSet.has(weapon.uid);
+        });
+
+        addInventoryAmount(user, FRAGMENT_ITEM_ID, totalFragments);
+
+        if (user.phapBaoStats) {
+            user.phapBaoStats.dismantled =
+                Number(user.phapBaoStats.dismantled || 0) +
+                dismantledWeapons.length;
+
+            user.phapBaoStats.totalFragmentsEarned =
+                Number(user.phapBaoStats.totalFragmentsEarned || 0) +
+                totalFragments;
+
+            user.phapBaoStats.updatedAt = Date.now();
+        }
+
+        return {
+            success: true,
+            maxRarityId,
+            amount,
+            totalFragments,
+            dismantledWeapons,
+            raritySummary,
+        };
+    });
+
+    if (!result.success) {
+        return interaction.reply({
+            content: `❌ ${result.message}`,
+            ephemeral: true,
+        });
+    }
+
+    return interaction.reply({
+        embeds: [buildBulkDismantleEmbed(interaction, result)],
+    });
+}
 function canDismantleWeapon(user, weapon) {
     if (!weapon) {
         return {
@@ -1572,8 +1803,21 @@ function unequipWeapon(interaction) {
     });
 }
 function dismantleWeapon(interaction) {
+    const bulkRange = interaction.options.getString("phamvi");
+
+    if (bulkRange) {
+        return bulkDismantleWeapons(interaction);
+    }
     const userId = interaction.user.id;
-    const query = interaction.options.getString("phapbao", true);
+    const query = interaction.options.getString("phapbao");
+    if (!query) {
+        return interaction.reply({
+            content:
+                "❌ Bạn cần chọn 1 pháp bảo để phân giải, hoặc dùng phân giải hàng loạt:\n" +
+                "`/phangiai phamvi:Từ C trở xuống soluong:10 xacnhan:Đồng ý`",
+            ephemeral: true,
+        });
+    }
 
     if (query === "none") {
         return interaction.reply({
@@ -2672,167 +2916,438 @@ async function autocompleteChest(interaction) {
     return interaction.respond(choices);
 }
 
-function phapBaoInfo(interaction) {
-    const topic = interaction.options.getString("muc") || "tongquan";
+function formatChancePercent(value) {
+    const number = Number(value || 0);
 
-    const embed = new EmbedBuilder()
+    if (number % 1 === 0) {
+        return `${number}%`;
+    }
+
+    return `${number.toFixed(2)}%`;
+}
+
+function formatInfoDropLine(drop) {
+    if (!drop) {
+        return null;
+    }
+
+    if (drop.type === "fragment") {
+        const min = Number(drop.minAmount || drop.min || 1);
+        const max = Number(drop.maxAmount || drop.max || min);
+
+        return `🧩 **Mảnh Pháp Bảo** x${formatNumber(min)}-${formatNumber(max)} — **${formatChancePercent(drop.chance)}**`;
+    }
+
+    if (drop.type === "unidentified_weapon") {
+        const rarity = weaponConfig.getRarity(drop.rarity || "F");
+
+        return `${rarity.emoji} **Phôi ${rarity.id} chưa giám định** — **${formatChancePercent(drop.chance)}**`;
+    }
+
+    if (drop.type === "chest") {
+        const chest = shop[drop.itemId] || {};
+
+        return `${chest.emoji || "🎁"} **${chest.name || drop.itemId}** — **${formatChancePercent(drop.chance)}**`;
+    }
+
+    return `🎁 **${drop.itemId || drop.type || "Vật phẩm"}** — **${formatChancePercent(drop.chance)}**`;
+}
+
+function getPhapBaoInfoChestItems() {
+    return Object.entries(shop).filter(([, item]) => {
+        return item && item.type === "phap_bao_chest";
+    });
+}
+
+function buildPhapBaoInfoButtons(userId, active = "home") {
+    function makeButton(topic, label, emoji) {
+        return new ButtonBuilder()
+            .setCustomId(`phapbaoinfo_${topic}_${userId}`)
+            .setLabel(label)
+            .setEmoji(emoji)
+            .setStyle(
+                active === topic ? ButtonStyle.Primary : ButtonStyle.Secondary,
+            );
+    }
+
+    return [
+        new ActionRowBuilder().addComponents(
+            makeButton("home", "Tổng quan", "🏠"),
+            makeButton("chests", "% các rương", "📦"),
+            makeButton("substats", "Dòng phụ", "✨"),
+            makeButton("appraise", "Giám định", "🔍"),
+            makeButton("upgrade", "Nâng cấp", "⭐"),
+        ),
+        new ActionRowBuilder().addComponents(makeButton("ex", "EX", "🌈")),
+    ];
+}
+
+function buildPhapBaoInfoHomeEmbed() {
+    return new EmbedBuilder()
         .setTitle("🐷 Hướng Dẫn Pháp Bảo 3.0")
         .setColor(0xf1c40f)
-        .setTimestamp();
-
-    if (topic === "tongquan") {
-        embed.setDescription(
+        .setDescription(
             [
-                "Hệ thống pháp bảo là core endgame của bot.",
+                "Pháp bảo là hệ thống trang bị endgame.",
                 "",
-                "Flow chính:",
-                "`/mophapbao` → nhận phôi/mảnh",
-                "`/giamdinh` → roll vũ khí thật",
-                "`/trangbi` → tăng lực chiến",
-                "`/phangiai` → lấy mảnh",
-                "`/ghep` → ghép phôi mới",
+                "**Flow chính:**",
+                "`/mophapbao` → mở rương lấy mảnh/phôi",
+                "`/giamdinh` → biến phôi thành pháp bảo thật",
+                "`/trangbi` → cộng chỉ số combat",
+                "`/phangiai` → đổi pháp bảo rác thành mảnh",
+                "`/ghep` → ghép phôi mới bằng mảnh",
                 "`/nangsao` → dùng bản trùng nâng sao",
                 "`/rollphapbao` → roll lại dòng phụ",
+                "",
+                "Bấm các nút bên dưới để xem chi tiết.",
+            ].join("\n"),
+        )
+        .addFields(
+            {
+                name: "⚠️ Lưu ý quan trọng",
+                value: [
+                    "Rarity khi mở rương chỉ là **cấp phôi**.",
+                    "Rarity thật chỉ lộ ra sau khi `/giamdinh`.",
+                    "Ví dụ: phôi SSS vẫn có thể giám định ra A/S/SS/SSS.",
+                ].join("\n"),
+                inline: false,
+            },
+            {
+                name: "📦 Muốn xem tỉ lệ rương?",
+                value: "Bấm nút **📦 % các rương**.",
+                inline: true,
+            },
+            {
+                name: "✨ Muốn xem dòng phụ?",
+                value: "Bấm nút **✨ Dòng phụ**.",
+                inline: true,
+            },
+        )
+        .setFooter({
+            text: "Mamu pháp bảo: càng roll càng cay, càng cay càng nghiện.",
+        })
+        .setTimestamp();
+}
+
+function buildPhapBaoInfoChestRatesEmbed() {
+    const chestEntries = getPhapBaoInfoChestItems();
+
+    const embed = new EmbedBuilder()
+        .setTitle("📦 Tỉ Lệ Rương Pháp Bảo")
+        .setColor(0x3498db)
+        .setDescription(
+            [
+                "Đây là tỉ lệ **mở rương pháp bảo trong shop**.",
+                "",
+                "Rương có thể ra:",
+                "🧩 Mảnh Pháp Bảo",
+                "⚫ Phôi pháp bảo chưa giám định",
+                "",
+                "Phôi càng cao thì cơ hội giám định ra đồ ngon càng cao, nhưng **không đảm bảo chắc chắn**.",
             ].join("\n"),
         );
 
+    if (chestEntries.length <= 0) {
         embed.addFields({
-            name: "⚠️ Điều quan trọng",
-            value: [
-                "Rarity khi mở rương chỉ là **cấp phôi**.",
-                "Rarity thật chỉ lộ ra sau khi `/giamdinh`.",
-                "Ví dụ: phôi SSS vẫn có thể giám định ra A/S/SS/SSS.",
-            ].join("\n"),
+            name: "Chưa có rương",
+            value: "Không tìm thấy item `phap_bao_chest` trong shop.",
+            inline: false,
+        });
+
+        return embed;
+    }
+
+    for (const [, chest] of chestEntries) {
+        const drops = Array.isArray(chest.phapBaoDrops)
+            ? chest.phapBaoDrops
+            : [];
+
+        const dropText =
+            drops.length > 0
+                ? drops.map(formatInfoDropLine).filter(Boolean).join("\n")
+                : "Rương này chưa có bảng tỉ lệ.";
+
+        embed.addFields({
+            name: `${chest.emoji || "🎁"} ${chest.name}`,
+            value: dropText.slice(0, 1024),
+            inline: false,
         });
     }
 
-    if (topic === "ruong") {
-        embed.setDescription("📦 **Rương pháp bảo / rương leo tháp**");
+    return embed
+        .setFooter({
+            text: "Tỉ lệ này là tỉ lệ ra phôi/mảnh, không phải tỉ lệ ra vũ khí cuối.",
+        })
+        .setTimestamp();
+}
 
-        embed.addFields(
+function buildPhapBaoInfoSubStatsEmbed() {
+    return new EmbedBuilder()
+        .setTitle("✨ Giải Thích Dòng Phụ Pháp Bảo")
+        .setColor(0x9b59b6)
+        .setDescription(
+            [
+                "Dòng phụ là chỉ số random sau khi `/giamdinh` hoặc `/rollphapbao`.",
+                "",
+                "Đã bỏ các dòng dễ phá economy như:",
+                "❌ Tu vi +%",
+                "❌ Tiền +%",
+                "",
+                "Dòng phụ hiện tập trung vào combat, boss, drop và một ít dòng troll.",
+            ].join("\n"),
+        )
+        .addFields(
             {
-                name: "📦 Nguồn rương",
+                name: "⚔️ Dòng combat chính",
                 value: [
-                    "Rương pháp bảo mua trong `/shop`.",
-                    "Rương leo tháp cũ cũng mở được bằng `/mophapbao`.",
-                    "Rương có thể ra **mảnh** hoặc **phôi pháp bảo chưa giám định**.",
+                    "`atkPercent` — tăng ATK",
+                    "`hpPercent` — tăng HP",
+                    "`defensePercent` — tăng DEF",
+                    "`speedPercent` — tăng tốc độ",
+                    "`critChance` — tăng tỉ lệ chí mạng",
+                    "`critDamage` — tăng sát thương chí mạng",
+                    "`defenseIgnore` — xuyên thủ",
                 ].join("\n"),
+                inline: false,
             },
             {
-                name: "🎲 Lưu ý",
+                name: "🛡️ Dòng sinh tồn",
                 value: [
-                    "Mở được phôi cao không có nghĩa là chắc chắn ra vũ khí cao.",
-                    "Phôi càng cao thì cơ hội ra vũ khí ngon càng cao, nhưng vẫn có thể tụt.",
+                    "`lifeSteal` — hút máu",
+                    "`dodgeChance` — né đòn",
+                    "`counterChance` — phản công",
+                    "`badLuckResist` — kháng xui/troll nhẹ",
                 ].join("\n"),
-            },
-        );
-    }
-
-    if (topic === "giamdinh") {
-        embed.setDescription("🔍 **Giám định pháp bảo**");
-
-        embed.addFields(
-            {
-                name: "Cách dùng",
-                value: "`/giamdinh phapbao:<chọn phôi>`",
+                inline: false,
             },
             {
-                name: "Khi giám định sẽ roll",
+                name: "👹 Dòng farm/boss",
                 value: [
-                    "1. Rarity thật",
-                    "2. Tên vũ khí",
-                    "3. Phẩm định",
-                    "4. Dòng phụ",
+                    "`bossDamage` — tăng sát thương khi đánh boss",
+                    "`dropRate` — tăng may mắn rơi đồ nếu sau này bạn gắn vào farm",
                 ].join("\n"),
+                inline: false,
             },
             {
-                name: "Ví dụ phôi SSS",
+                name: "🐷 Dòng troll / vui",
                 value: [
-                    "Có thể ra:",
-                    "🔵 A",
-                    "🟣 S",
-                    "🟠 SS",
-                    "🔴 SSS",
+                    "`trashTalkPower` — sức mạnh mõm",
+                    "`pigAura` — hào quang lợn",
+                    "`sleepPower` — sức mạnh ngủ",
                     "",
-                    "Nên phôi SSS ra A là đúng luật, không phải bug.",
+                    "Các dòng này vô dụng .",
                 ].join("\n"),
+                inline: false,
             },
-        );
-    }
+            {
+                name: "🎲 Roll dòng",
+                value: [
+                    "Dùng `/rollphapbao` để roll lại dòng phụ.",
+                    "Có thể khóa dòng bằng số thứ tự.",
+                    "Ví dụ: `/rollphapbao khoa:1,3`",
+                    "Khóa càng nhiều dòng thì càng tốn tiền.",
+                ].join("\n"),
+                inline: false,
+            },
+        )
+        .setTimestamp();
+}
 
-    if (topic === "nangcap") {
-        embed.setDescription("⭐ **Nâng cấp pháp bảo**");
+function buildPhapBaoInfoAppraiseEmbed() {
+    return new EmbedBuilder()
+        .setTitle("🔍 Giám Định Pháp Bảo")
+        .setColor(0xe67e22)
+        .setDescription(
+            [
+                "`/giamdinh` dùng để mở phôi pháp bảo.",
+                "",
+                "Khi giám định sẽ roll:",
+                "1. Rarity thật",
+                "2. Tên pháp bảo",
+                "3. Phẩm định",
+                "4. Dòng phụ",
+            ].join("\n"),
+        )
+        .addFields(
+            {
+                name: "⚠️ Phôi không phải đồ cuối",
+                value: [
+                    "Khi `/mophapbao`, bạn nhận được **phôi**.",
+                    "Phôi chỉ là cấp nguyên liệu ban đầu.",
+                    "Đồ thật chỉ quyết định sau khi `/giamdinh`.",
+                ].join("\n"),
+                inline: false,
+            },
+            {
+                name: "Ví dụ",
+                value: [
+                    "Phôi SSS không có nghĩa là chắc chắn ra SSS.",
+                    "Phôi SSS có thể ra A/S/SS/SSS tùy bảng tỉ lệ.",
+                    "Phôi F/E/D là phôi cùi, chủ yếu dùng cho farm thường.",
+                ].join("\n"),
+                inline: false,
+            },
+        )
+        .setTimestamp();
+}
 
-        embed.addFields(
+function buildPhapBaoInfoUpgradeEmbed() {
+    return new EmbedBuilder()
+        .setTitle("⭐ Nâng Cấp Pháp Bảo")
+        .setColor(0x2ecc71)
+        .setDescription("Các cách xử lý pháp bảo sau khi đã giám định.")
+        .addFields(
             {
                 name: "🧩 Phân giải",
                 value: [
-                    "`/phangiai` để đổi pháp bảo rác thành Mảnh Pháp Bảo.",
+                    "`/phangiai` đổi pháp bảo rác thành Mảnh Pháp Bảo.",
                     "Không phân giải được đồ đang trang bị.",
                     "Không phân giải được đồ đã khóa.",
                 ].join("\n"),
+                inline: false,
             },
             {
-                name: "🧩 Ghép",
+                name: "🔒 Khóa pháp bảo",
                 value: [
-                    "`/ghep` dùng mảnh để ghép phôi mới.",
+                    "`/khoaphapbao` để khóa/mở khóa.",
+                    "Nên khóa đồ ngon để tránh phân giải nhầm.",
+                ].join("\n"),
+                inline: false,
+            },
+            {
+                name: "🧬 Ghép phôi",
+                value: [
+                    "`/ghep` dùng Mảnh Pháp Bảo để ghép phôi mới.",
                     "Ghép ra **phôi chưa giám định**.",
                     "Không ghép được EX.",
                 ].join("\n"),
+                inline: false,
             },
             {
                 name: "⭐ Nâng sao",
                 value: [
-                    "`/nangsao` dùng pháp bảo trùng làm nguyên liệu.",
+                    "`/nangsao` dùng bản trùng để nâng sao.",
                     "Phải cùng vũ khí thật.",
                     "Nguyên liệu không được khóa và không được đang trang bị.",
                 ].join("\n"),
+                inline: false,
             },
-            {
-                name: "🎲 Roll dòng phụ",
-                value: [
-                    "`/rollphapbao` để roll lại dòng phụ.",
-                    "Có thể khóa dòng bằng số thứ tự.",
-                    "Ví dụ: `/rollphapbao khoa:1,3`",
-                    "Khóa càng nhiều dòng càng tốn tiền.",
-                ].join("\n"),
-            },
-        );
+        )
+        .setTimestamp();
+}
+
+function buildPhapBaoInfoExEmbed() {
+    return new EmbedBuilder()
+        .setTitle("🌈 EX - Chí Tôn Thần Khí")
+        .setColor(0xff4fd8)
+        .setDescription(
+            [
+                "EX là cấp pháp bảo cực hiếm, dùng cho endgame/event.",
+                "",
+                "Bản hiện tại:",
+                "❌ Không rơi từ shop thường",
+                "❌ Không rơi từ Bí Cảnh thường",
+                "❌ Không rơi từ Tower thường",
+                "❌ Không ghép bằng mảnh thường",
+                "❌ Không phân giải EX",
+            ].join("\n"),
+        )
+        .addFields({
+            name: "Nguồn EX tương lai",
+            value: [
+                "Raid Server",
+                "Event giới hạn",
+                "Boss event",
+                "Rương EX đặc biệt do admin mở theo mùa",
+            ].join("\n"),
+            inline: false,
+        })
+        .setTimestamp();
+}
+
+function buildPhapBaoInfoEmbed(topic = "home") {
+    if (topic === "chests") {
+        return buildPhapBaoInfoChestRatesEmbed();
+    }
+
+    if (topic === "substats") {
+        return buildPhapBaoInfoSubStatsEmbed();
+    }
+
+    if (topic === "appraise") {
+        return buildPhapBaoInfoAppraiseEmbed();
+    }
+
+    if (topic === "upgrade") {
+        return buildPhapBaoInfoUpgradeEmbed();
     }
 
     if (topic === "ex") {
-        embed.setDescription("🌈 **EX - Chí Tôn Thần Khí**");
-
-        embed.addFields(
-            {
-                name: "Trạng thái hiện tại",
-                value: [
-                    "EX đã có trong hệ thống để nhá hàng.",
-                    "Nhưng bản 3.0 chưa cho mở từ shop.",
-                    "Không ghép được EX.",
-                    "Không phân giải EX.",
-                    "Không roll EX bằng tiền thường.",
-                ].join("\n"),
-            },
-            {
-                name: "Nguồn EX tương lai",
-                value: [
-                    "Raid Server",
-                    "Event giới hạn",
-                    "Rương EX đặc biệt",
-                    "Boss/event admin mở theo mùa",
-                ].join("\n"),
-            },
-        );
+        return buildPhapBaoInfoExEmbed();
     }
 
-    embed.setFooter({
-        text: "Cay, càng cay càng nghiện.",
-    });
+    return buildPhapBaoInfoHomeEmbed();
+}
+
+function normalizeInfoTopic(rawTopic) {
+    const topic = String(rawTopic || "home").toLowerCase();
+
+    const map = {
+        tongquan: "home",
+        home: "home",
+
+        ruong: "chests",
+        chests: "chests",
+
+        dongphu: "substats",
+        substats: "substats",
+
+        giamdinh: "appraise",
+        appraise: "appraise",
+
+        nangcap: "upgrade",
+        upgrade: "upgrade",
+
+        ex: "ex",
+    };
+
+    return map[topic] || "home";
+}
+
+function phapBaoInfo(interaction) {
+    const topic = normalizeInfoTopic(
+        interaction.options?.getString("muc") || "home",
+    );
 
     return interaction.reply({
-        embeds: [embed],
+        embeds: [buildPhapBaoInfoEmbed(topic)],
+        components: buildPhapBaoInfoButtons(interaction.user.id, topic),
         ephemeral: true,
+    });
+}
+
+async function handleButton(interaction) {
+    if (!interaction.customId.startsWith("phapbaoinfo_")) {
+        return undefined;
+    }
+
+    const parts = interaction.customId.split("_");
+    const topic = parts[1] || "home";
+    const ownerId = parts[2];
+
+    if (String(interaction.user.id) !== String(ownerId)) {
+        return interaction.reply({
+            content:
+                "❌ Đây không phải bảng pháp bảo của bạn. Tự dùng `/phapbaoinfo` đi anh bạn.",
+            ephemeral: true,
+        });
+    }
+
+    const safeTopic = normalizeInfoTopic(topic);
+
+    return interaction.update({
+        embeds: [buildPhapBaoInfoEmbed(safeTopic)],
+        components: buildPhapBaoInfoButtons(ownerId, safeTopic),
     });
 }
 
@@ -2851,7 +3366,7 @@ module.exports = {
 
     equipWeapon,
     unequipWeapon,
-
+    handleButton,
     dismantleWeapon,
     lockWeapon,
 

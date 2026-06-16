@@ -210,7 +210,7 @@ async function autocompleteInventory(interaction) {
     const choices = [];
 
     const dogItems = inventoryData.specialItems.filter((item) => {
-        return item.type === "dog";
+        return item.type === "dog" && item.id !== "cho_do";
     });
 
     if (dogItems.length > 0) {

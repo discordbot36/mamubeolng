@@ -81,29 +81,134 @@ const ACTIONS = {
 const ROUND_MECHANICS = [
     {
         id: "break_gate",
+        minLevel: 1,
         name: "Phá Vỡ Thạch Môn",
-        description: "Cần Công kích phá cửa và Hộ pháp chống phản chấn.",
+        description:
+            "Thạch môn rung chuyển dữ dội, vừa có khe nứt vừa có phản chấn dội ngược.",
         roles: ["attack", "guard"],
     },
     {
         id: "find_core",
+        minLevel: 1,
         name: "Truy Tìm Trận Nhãn",
-        description: "Cần Thăm dò tìm lõi và Công kích phá trận.",
+        description:
+            "Trận văn đổi hướng liên tục, phải có người soi trận nhãn trước khi phá điểm yếu.",
         roles: ["explore", "attack"],
     },
     {
         id: "spirit_storm",
+        minLevel: 1,
         name: "Linh Khí Bạo Loạn",
-        description: "Cần Hộ pháp bảo vệ và Trợ lực ổn định linh khí.",
+        description:
+            "Linh khí cuộn thành lốc, đội hình dễ vỡ nếu không giữ trận và điều tức kịp.",
         roles: ["guard", "support"],
     },
     {
         id: "boss_shield",
+        minLevel: 2,
         name: "Huyết Khiên Ma Tôn",
-        description: "Cần Công kích, Trợ lực và Thăm dò để phá khiên.",
-        roles: ["attack", "support", "explore"],
+        description:
+            "Huyết khiên che kín bản thể, cần tìm mạch khiên rồi dồn lực phá vỡ.",
+        roles: ["explore", "support", "attack"],
+    },
+    {
+        id: "poison_mist",
+        minLevel: 3,
+        name: "Độc Vụ Ăn Mòn",
+        description:
+            "Sương độc len vào kinh mạch, nếu chỉ ham đánh sẽ tự làm loạn linh khí.",
+        roles: ["support", "guard"],
+    },
+    {
+        id: "false_path",
+        minLevel: 3,
+        name: "Mê Lộ Huyễn Ảnh",
+        description:
+            "Đường đi phân thành nhiều ảo ảnh, ra tay vội vàng rất dễ đánh nhầm trận giả.",
+        roles: ["explore", "support"],
+    },
+    {
+        id: "counter_seal",
+        minLevel: 4,
+        name: "Phản Chú Cấm Chế",
+        description:
+            "Cấm chế phản lại mọi lực thô bạo, phải ổn định trận rồi mới ép mở khe hở.",
+        roles: ["guard", "support", "explore"],
+    },
+    {
+        id: "heaven_strike",
+        minLevel: 5,
+        name: "Thiên Lôi Giáng Kiếp",
+        description:
+            "Thiên lôi khóa toàn đội, sai nhịp một bước là trận hình bị đánh tan.",
+        roles: ["guard", "support", "attack"],
     },
 ];
+
+function pickWeighted(list, weightKey = "weight") {
+    const pool = Array.isArray(list) ? list : [];
+
+    const totalWeight = pool.reduce((total, entry) => {
+        return total + Math.max(0, Number(entry?.[weightKey] || 0));
+    }, 0);
+
+    if (pool.length <= 0 || totalWeight <= 0) {
+        return null;
+    }
+
+    let rollValue = Math.random() * totalWeight;
+
+    for (const entry of pool) {
+        rollValue -= Math.max(0, Number(entry?.[weightKey] || 0));
+
+        if (rollValue <= 0) {
+            return entry;
+        }
+    }
+
+    return pool[pool.length - 1];
+}
+
+function pickSecretRealmDifficulty() {
+    return (
+        pickWeighted(config.difficultyTiers || []) || {
+            id: "default",
+            name: "Thường",
+            level: 1,
+            recommendedMembers: config.party?.minMembers || 2,
+            requiredProgressMultiplier: 1,
+            hpMultiplier: 1,
+            damageMultiplier: 1,
+            maxTurns: 8,
+            wrongActionMultiplier: 0.15,
+            failProgressMultiplier: 0.35,
+            missingMemberDifficulty: 0.2,
+            rewardMultiplier: 1,
+        }
+    );
+}
+
+function pickRoundMechanic(battle) {
+    const difficultyLevel = Number(battle?.difficulty?.level || 1);
+
+    const pool = ROUND_MECHANICS.filter((mechanic) => {
+        return Number(mechanic.minLevel || 1) <= difficultyLevel;
+    });
+
+    const nonRepeatedPool = pool.filter((mechanic) => {
+        return mechanic.id !== battle.lastMechanicId;
+    });
+
+    const finalPool = nonRepeatedPool.length > 0 ? nonRepeatedPool : pool;
+
+    const mechanic = finalPool[randomInt(0, finalPool.length - 1)] || pool[0];
+
+    if (mechanic) {
+        battle.lastMechanicId = mechanic.id;
+    }
+
+    return mechanic;
+}
 
 function formatNumber(value) {
     return Number(value || 0).toLocaleString("vi-VN");
@@ -1034,16 +1139,47 @@ function createBattleState(realm) {
         return total + Math.max(1, Number(member?.effectivePower || 1));
     }, 0);
 
-    const difficultyMultiplier = Number(
-        config.scaling?.difficulty?.[memberCount] || 1,
+    const difficulty = pickSecretRealmDifficulty();
+
+    const recommendedMembers = Math.max(
+        config.party?.minMembers || 2,
+        Number(difficulty.recommendedMembers || config.party?.minMembers || 2),
     );
+
+    const missingMembers = Math.max(0, recommendedMembers - memberCount);
+
+    const difficultyMultiplier = Number(
+        config.scaling?.difficulty?.[Math.max(2, Math.min(6, memberCount))] ||
+            1,
+    );
+
+    const missingDifficultyRate = Number(
+        difficulty.missingMemberDifficulty || 0.2,
+    );
+
+    const missingDifficultyMultiplier =
+        1 + missingMembers * missingDifficultyRate;
 
     const requiredProgress = Math.max(
-        100,
-        Math.floor(totalEffectivePower * difficultyMultiplier * 0.055),
+        120,
+        Math.floor(
+            totalEffectivePower *
+                difficultyMultiplier *
+                0.072 *
+                Number(difficulty.requiredProgressMultiplier || 1) *
+                missingDifficultyMultiplier,
+        ),
     );
 
-    const maxTeamHp = Math.max(100, Math.floor(totalEffectivePower * 0.12));
+    const maxTeamHp = Math.max(
+        100,
+        Math.floor(
+            totalEffectivePower *
+                0.105 *
+                Number(difficulty.hpMultiplier || 1) *
+                Math.max(0.72, 1 - missingMembers * 0.06),
+        ),
+    );
 
     const contributions = {};
 
@@ -1056,13 +1192,17 @@ function createBattleState(realm) {
 
             totalScore: 0,
             successfulTurns: 0,
+            wrongTurns: 0,
             afkTurns: 0,
         };
     }
 
     return {
         turn: 1,
-        maxTurns: 8,
+        maxTurns: Math.max(
+            6,
+            Number(difficulty.maxTurns || 8) + missingMembers,
+        ),
 
         progress: 0,
         requiredProgress,
@@ -1075,6 +1215,27 @@ function createBattleState(realm) {
 
         totalEffectivePower,
         difficultyMultiplier,
+
+        difficulty: {
+            id: difficulty.id,
+            name: difficulty.name,
+            level: Number(difficulty.level || 1),
+            recommendedMembers,
+            missingMembers,
+            damageMultiplier: Number(difficulty.damageMultiplier || 1),
+            wrongActionMultiplier: Number(
+                difficulty.wrongActionMultiplier ?? 0.12,
+            ),
+            failProgressMultiplier: Number(
+                difficulty.failProgressMultiplier ?? 0.3,
+            ),
+            rewardMultiplier: Number(difficulty.rewardMultiplier || 1),
+        },
+
+        perfectTurns: 0,
+        failedMechanics: 0,
+        wrongActions: 0,
+        lastMechanicId: null,
 
         actions: {},
         contributions,
@@ -1138,7 +1299,12 @@ function calculateActionResult(realm, userId, action) {
 
     const baseValue = Math.max(1, memberPower * 0.012);
 
-    const randomMultiplier = combat.randomBetween(0.9, 1.1);
+    const randomMultiplier = combat.randomBetween(0.94, 1.06);
+
+    const wrongActionMultiplier = Math.max(
+        0,
+        Number(battle.difficulty?.wrongActionMultiplier ?? 0.12),
+    );
 
     let progress = 0;
     let protection = 0;
@@ -1147,33 +1313,39 @@ function calculateActionResult(realm, userId, action) {
 
     switch (action) {
         case "attack": {
-            progress = baseValue * (isRequiredAction ? 1.35 : 0.75);
+            progress =
+                baseValue * (isRequiredAction ? 1.5 : wrongActionMultiplier);
 
             break;
         }
 
         case "guard": {
-            protection = baseValue * (isRequiredAction ? 1.4 : 0.8);
+            protection =
+                baseValue * (isRequiredAction ? 1.55 : wrongActionMultiplier);
 
-            stability = 4 * (isRequiredAction ? 1.25 : 0.75);
+            stability = isRequiredAction ? 7 : -4;
 
             break;
         }
 
         case "support": {
-            energy = 8 * (isRequiredAction ? 1.3 : 0.8);
+            energy = isRequiredAction ? 10 : -5;
 
-            stability = 7 * (isRequiredAction ? 1.25 : 0.75);
+            stability = isRequiredAction ? 9 : -5;
 
-            progress = baseValue * (isRequiredAction ? 0.65 : 0.3);
+            progress =
+                baseValue *
+                (isRequiredAction ? 0.78 : wrongActionMultiplier * 0.45);
 
             break;
         }
 
         case "explore": {
-            progress = baseValue * (isRequiredAction ? 1.15 : 0.55);
+            progress =
+                baseValue *
+                (isRequiredAction ? 1.28 : wrongActionMultiplier * 0.5);
 
-            energy = 4 * (isRequiredAction ? 1.2 : 0.7);
+            energy = isRequiredAction ? 5 : -4;
 
             break;
         }
@@ -1184,15 +1356,21 @@ function calculateActionResult(realm, userId, action) {
 
         protection: Math.max(0, Math.floor(protection * randomMultiplier)),
 
-        energy: Math.max(0, Math.floor(energy * randomMultiplier)),
+        energy: Math.floor(energy * randomMultiplier),
 
-        stability: Math.max(0, Math.floor(stability * randomMultiplier)),
+        stability: Math.floor(stability * randomMultiplier),
 
         matchedMechanic: isRequiredAction,
+        wrongAction: !isRequiredAction,
     };
 }
 
-function calculateRealmDamage(realm, matchedRoleCount, totalProtection) {
+function calculateRealmDamage(
+    realm,
+    matchedRoleCount,
+    totalProtection,
+    wrongActionCount = 0,
+) {
     const battle = realm.battle;
 
     const mechanicRoleCount = Math.max(
@@ -1202,17 +1380,40 @@ function calculateRealmDamage(realm, matchedRoleCount, totalProtection) {
 
     const missingRoles = Math.max(0, mechanicRoleCount - matchedRoleCount);
 
-    const baseDamage = battle.maxTeamHp * combat.randomBetween(0.07, 0.12);
+    const cleanSolved = missingRoles <= 0 && Number(wrongActionCount || 0) <= 0;
 
-    const missingRolePenalty = battle.maxTeamHp * 0.045 * missingRoles;
+    const damageMultiplier = Math.max(
+        0.1,
+        Number(battle.difficulty?.damageMultiplier || 1),
+    );
+
+    const baseDamageRate = cleanSolved
+        ? combat.randomBetween(0.012, 0.026)
+        : combat.randomBetween(0.085, 0.145);
+
+    const baseDamage = battle.maxTeamHp * baseDamageRate * damageMultiplier;
+
+    const missingRolePenalty =
+        battle.maxTeamHp * 0.075 * missingRoles * damageMultiplier;
+
+    const wrongActionPenalty =
+        battle.maxTeamHp *
+        0.045 *
+        Number(wrongActionCount || 0) *
+        damageMultiplier;
 
     const instabilityPenalty =
-        battle.stability < 30 ? battle.maxTeamHp * 0.06 : 0;
+        battle.stability < 30 ? battle.maxTeamHp * 0.075 * damageMultiplier : 0;
 
-    const energyPenalty = battle.energy < 20 ? battle.maxTeamHp * 0.04 : 0;
+    const energyPenalty =
+        battle.energy < 20 ? battle.maxTeamHp * 0.055 * damageMultiplier : 0;
 
     const rawDamage =
-        baseDamage + missingRolePenalty + instabilityPenalty + energyPenalty;
+        baseDamage +
+        missingRolePenalty +
+        wrongActionPenalty +
+        instabilityPenalty +
+        energyPenalty;
 
     return Math.max(0, Math.floor(rawDamage - totalProtection));
 }
@@ -1246,9 +1447,26 @@ function giveSecretRealmReward(realm, userId) {
 
     const participationMultiplier = getParticipationMultiplier(realm, userId);
 
+    const difficultyRewardMultiplier = Math.max(
+        1,
+        Number(realm.battle?.difficulty?.rewardMultiplier || 1),
+    );
+
+    const perfectBonus =
+        Number(realm.battle?.failedMechanics || 0) <= 0 &&
+        Number(realm.battle?.wrongActions || 0) <= 0
+            ? 1.18
+            : 1;
+
     const finalMultiplier = Math.max(
         0,
-        Math.min(1, fatigueMultiplier * participationMultiplier),
+        Math.min(
+            5,
+            fatigueMultiplier *
+                participationMultiplier *
+                difficultyRewardMultiplier *
+                perfectBonus,
+        ),
     );
 
     const items = {};
@@ -1265,8 +1483,9 @@ function giveSecretRealmReward(realm, userId) {
             rollsGranted: 0,
         };
     }
-    const baseRolls = isHost ? 2 : 1;
-
+    const baseRolls = isHost
+        ? Number(config.rewards?.hostRolls || 4)
+        : Number(config.rewards?.guestRolls || 2);
     const rollsGranted = Math.max(1, Math.ceil(baseRolls * finalMultiplier));
 
     phapBaoRewards.push(
@@ -1275,6 +1494,45 @@ function giveSecretRealmReward(realm, userId) {
             amountMultiplier: finalMultiplier,
         }),
     );
+    const guaranteedFeed = config.rewards?.guaranteedFeed || null;
+
+    if (guaranteedFeed?.itemId) {
+        const minAmount = isHost
+            ? Number(guaranteedFeed.hostMin || 0)
+            : Number(guaranteedFeed.guestMin || 0);
+
+        const maxAmount = isHost
+            ? Number(guaranteedFeed.hostMax || minAmount)
+            : Number(guaranteedFeed.guestMax || minAmount);
+
+        const amount = Math.max(
+            0,
+            Math.floor(randomInt(minAmount, maxAmount) * finalMultiplier),
+        );
+
+        if (amount > 0) {
+            addShopItem(userId, guaranteedFeed.itemId, amount);
+            mergeRewardItem(items, guaranteedFeed.itemId, amount);
+        }
+    }
+
+    const rewardRolls = Math.max(
+        1,
+        Math.ceil((isHost ? 3 : 2) * finalMultiplier),
+    );
+
+    for (let index = 0; index < rewardRolls; index += 1) {
+        const rewardItem = rollSecretRealmReward();
+
+        if (!rewardItem) {
+            continue;
+        }
+
+        const amount = Math.max(1, Math.floor(rewardItem.amount));
+
+        addShopItem(userId, rewardItem.itemId, amount);
+        mergeRewardItem(items, rewardItem.itemId, amount);
+    }
     /*
      * Buff nhẹ economy.
      */
@@ -1490,6 +1748,10 @@ async function finishBattle(channel, realm, success) {
                 ? `Đội đã hoàn thành Bí Cảnh trong **${battle.turn}/${battle.maxTurns} lượt**.`
                 : `Đội đã không thể vượt qua Bí Cảnh.`) +
                 `\n\n` +
+                `🔥 Độ khó: **${battle.difficulty?.name || "Thường"}**\n` +
+                `✅ Lượt hoàn hảo: **${formatNumber(battle.perfectTurns || 0)}**\n` +
+                `⚠️ Cơ chế thất bại: **${formatNumber(battle.failedMechanics || 0)}**\n` +
+                `❌ Hành động lệch nhịp: **${formatNumber(battle.wrongActions || 0)}**\n` +
                 `📈 Tiến độ: **${formatNumber(battle.progress)}/${formatNumber(
                     battle.requiredProgress,
                 )}**\n` +
@@ -1577,6 +1839,7 @@ async function resolveBattleRound(channel, realmId) {
     let totalStability = 0;
 
     const matchedRoles = new Set();
+    let wrongActionCount = 0;
 
     for (const userId of realm.memberIds) {
         const action = battle.actions[userId];
@@ -1625,6 +1888,9 @@ async function resolveBattleRound(channel, realmId) {
                 Number(contribution.successfulTurns || 0) + 1;
 
             matchedRoles.add(action);
+        } else {
+            contribution.wrongTurns = Number(contribution.wrongTurns || 0) + 1;
+            wrongActionCount += 1;
         }
 
         totalProgress += actionResult.progress;
@@ -1646,16 +1912,29 @@ async function resolveBattleRound(channel, realmId) {
 
     const completedMechanic = matchedRoleCount >= requiredRoles.length;
 
+    const cleanSolved = completedMechanic && wrongActionCount <= 0;
+
     if (completedMechanic) {
-        totalProgress = Math.floor(totalProgress * 1.25);
+        totalProgress = Math.floor(totalProgress * (cleanSolved ? 1.35 : 1.12));
 
-        totalStability += 8;
-        totalEnergy += 5;
+        totalStability += cleanSolved ? 11 : 5;
+        totalEnergy += cleanSolved ? 7 : 3;
+        battle.perfectTurns =
+            Number(battle.perfectTurns || 0) + (cleanSolved ? 1 : 0);
     } else {
-        totalProgress = Math.floor(totalProgress * 0.72);
+        totalProgress = Math.floor(
+            totalProgress *
+                Number(battle.difficulty?.failProgressMultiplier ?? 0.3),
+        );
 
-        battle.stability = Math.max(0, battle.stability - 8);
+        battle.failedMechanics = Number(battle.failedMechanics || 0) + 1;
+        battle.stability = Math.max(
+            0,
+            battle.stability - 12 - wrongActionCount * 4,
+        );
     }
+
+    battle.wrongActions = Number(battle.wrongActions || 0) + wrongActionCount;
 
     battle.progress = Math.min(
         battle.requiredProgress,
@@ -1673,6 +1952,7 @@ async function resolveBattleRound(channel, realmId) {
         realm,
         matchedRoleCount,
         totalProtection,
+        wrongActionCount,
     );
 
     battle.teamHp = Math.max(0, battle.teamHp - receivedDamage);
@@ -1775,8 +2055,7 @@ async function openBattleRound(channel, realm) {
 
     battle.actions = {};
 
-    battle.currentMechanic =
-        ROUND_MECHANICS[(battle.turn - 1) % ROUND_MECHANICS.length];
+    battle.currentMechanic = pickRoundMechanic(battle);
 
     saveRealm(realm);
 
@@ -1831,6 +2110,12 @@ function buildBattleEmbed(realm) {
         .setDescription(
             `### ${mechanic.name}\n` +
                 `${mechanic.description}\n\n` +
+                `🔥 Độ khó: **${battle.difficulty?.name || "Thường"}**\n` +
+                `👥 Khuyến nghị: **${battle.difficulty?.recommendedMembers || realm.minMembers} người**` +
+                (Number(battle.difficulty?.missingMembers || 0) > 0
+                    ? ` — thiếu **${battle.difficulty.missingMembers}**, bí cảnh bị tăng áp lực`
+                    : "") +
+                `\n\n` +
                 `📈 Tiến độ: **${battle.progress}/${battle.requiredProgress}**\n` +
                 `${makeBar(battle.progress, battle.requiredProgress)}\n\n` +
                 `❤️ Sinh lực đội: **${battle.teamHp}/${battle.maxTeamHp}**\n` +

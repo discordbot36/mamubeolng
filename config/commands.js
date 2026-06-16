@@ -171,9 +171,46 @@ module.exports = [
             {
                 type: "string",
                 name: "phapbao",
-                description: "Chọn pháp bảo muốn phân giải",
-                required: true,
+                description: "Chọn 1 pháp bảo muốn phân giải",
+                required: false,
                 autocomplete: true,
+            },
+            {
+                type: "string",
+                name: "phamvi",
+                description: "Phân giải hàng loạt theo rarity",
+                required: false,
+                choices: [
+                    {
+                        name: "Từ C trở xuống",
+                        value: "C",
+                    },
+                    {
+                        name: "Từ A trở xuống",
+                        value: "A",
+                    },
+                ],
+            },
+            {
+                type: "integer",
+                name: "soluong",
+                description:
+                    "Số lượng tối đa muốn phân giải, mặc định 10, tối đa 50",
+                required: false,
+                minValue: 1,
+                maxValue: 50,
+            },
+            {
+                type: "string",
+                name: "xacnhan",
+                description: "Xác nhận phân giải hàng loạt",
+                required: false,
+                choices: [
+                    {
+                        name: "Đồng ý",
+                        value: "dongy",
+                    },
+                ],
             },
         ],
     },

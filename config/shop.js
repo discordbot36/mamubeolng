@@ -382,6 +382,69 @@ module.exports = {
             "Dùng để ghép pháp bảo chưa giám định hoặc nâng cấp hệ thống pháp bảo.",
     },
 
+    ruong_phap_bao_cau_may: {
+        name: "Rương Pháp Bảo Cầu May",
+        emoji: "🎲",
+        price: 360000,
+
+        type: "phap_bao_chest",
+        shopCategory: "phapbao",
+
+        buyable: true,
+        sellable: false,
+        hidden: false,
+
+        description: "Rương pháp bảo bình dân. Có tỉ lệ ra phôi từ F tới SSS.",
+
+        phapBaoDrops: [
+            {
+                type: "unidentified_weapon",
+                rarity: "F",
+                chance: 62,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "E",
+                chance: 22,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "D",
+                chance: 9,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "C",
+                chance: 4.5,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "B",
+                chance: 1.7,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "A",
+                chance: 0.65,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "S",
+                chance: 0.13,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "SS",
+                chance: 0.019,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "SSS",
+                chance: 0.001,
+            },
+        ],
+    },
+
     ruong_phap_bao_rach: {
         name: "Rương Pháp Bảo Rách",
         emoji: "📦",
@@ -487,19 +550,19 @@ module.exports = {
         phapBaoDrops: [
             {
                 type: "fragment",
-                weight: 45,
-                min: 20,
-                max: 90,
+                weight: 48,
+                min: 30,
+                max: 120,
             },
             {
                 type: "unidentified_weapon",
                 rarity: "E",
-                weight: 18,
+                weight: 15,
             },
             {
                 type: "unidentified_weapon",
                 rarity: "D",
-                weight: 14,
+                weight: 13,
             },
             {
                 type: "unidentified_weapon",
@@ -514,22 +577,22 @@ module.exports = {
             {
                 type: "unidentified_weapon",
                 rarity: "A",
-                weight: 4.5,
+                weight: 4,
             },
             {
                 type: "unidentified_weapon",
                 rarity: "S",
-                weight: 1.2,
+                weight: 2,
             },
             {
                 type: "unidentified_weapon",
                 rarity: "SS",
-                weight: 0.28,
+                weight: 0.8,
             },
             {
                 type: "unidentified_weapon",
                 rarity: "SSS",
-                weight: 0.02,
+                weight: 0.2,
             },
         ],
     },

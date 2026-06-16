@@ -36,29 +36,24 @@ const PHAP_BAO_FARM_POOLS = {
 
     worldboss: [
         {
-            type: "chest",
-            weight: 50,
-            itemId: "ruong_phap_bao_rach",
-        },
-        {
             type: "fragment",
-            weight: 30,
-            min: 10,
-            max: 60,
+            weight: 78,
+            min: 3,
+            max: 15,
         },
         {
             type: "unidentified_weapon",
-            weight: 12,
+            weight: 16,
             rarity: "F",
         },
         {
             type: "unidentified_weapon",
-            weight: 6,
+            weight: 5,
             rarity: "E",
         },
         {
             type: "unidentified_weapon",
-            weight: 2,
+            weight: 1,
             rarity: "D",
         },
     ],
@@ -135,7 +130,8 @@ function rollWeighted(pool) {
 }
 
 function createUnidentifiedWeapon(rarityId, source = "farm") {
-    const rarity = weaponConfig.getRarity(rarityId) || weaponConfig.getRarity("F");
+    const rarity =
+        weaponConfig.getRarity(rarityId) || weaponConfig.getRarity("F");
     const now = Date.now();
 
     return {
@@ -183,7 +179,10 @@ function getPool(poolId) {
 function givePhapBaoFarmReward(userId, poolId = "bicanh", options = {}) {
     const pool = getPool(poolId);
     const rolls = Math.max(1, Math.floor(Number(options.rolls || 1)));
-    const amountMultiplier = Math.max(0.1, Number(options.amountMultiplier ?? 1));
+    const amountMultiplier = Math.max(
+        0.1,
+        Number(options.amountMultiplier ?? 1),
+    );
 
     const rewards = [];
 
@@ -196,7 +195,10 @@ function givePhapBaoFarmReward(userId, poolId = "bicanh", options = {}) {
 
         if (drop.type === "fragment") {
             const baseAmount = randomInt(drop.min, drop.max);
-            const amount = Math.max(1, Math.floor(baseAmount * amountMultiplier));
+            const amount = Math.max(
+                1,
+                Math.floor(baseAmount * amountMultiplier),
+            );
 
             addShopItem(userId, FRAGMENT_ITEM_ID, amount);
 

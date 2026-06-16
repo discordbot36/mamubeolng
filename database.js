@@ -976,6 +976,10 @@ function sellAllDoThachUnder360k(userId) {
     });
 }
 
+function isProtectedDog(item) {
+    return item?.type === "dog" && item?.id === "cho_do";
+}
+
 function sellAllDogs(userId) {
     return withData((data) => {
         const user = ensureUser(data, userId);
@@ -1001,6 +1005,10 @@ function sellAllDogs(userId) {
                 continue;
             }
 
+            if (isProtectedDog(item)) {
+                keptItems.push(item);
+                continue;
+            }
             const dogValue = Math.max(0, Math.floor(Number(item.value || 0)));
             if (!item.dogStatsCounted) {
                 user.dogStats.totalCaught =
