@@ -172,14 +172,14 @@ function checkRunAvailable(userId, mode) {
     const stats = ensureUserHuntStats(user);
     const now = Date.now();
 
-    if (Number(stats.dailyRuns || 0) >= config.cooldown.maxRunsPerDay) {
-        return {
-            ok: false,
-            message: `Bạn đã hết lượt săn yêu thú hôm nay (**${stats.dailyRuns}/${config.cooldown.maxRunsPerDay}**). Solo và tổ đội tính chung lượt.`,
-        };
-    }
-
     if (mode === "solo") {
+        if (Number(stats.dailyRuns || 0) >= config.cooldown.maxRunsPerDay) {
+            return {
+                ok: false,
+                message: `Bạn đã hết lượt săn yêu thú hôm nay (**${stats.dailyRuns}/${config.cooldown.maxRunsPerDay}**). Solo không có chế độ hỗ trợ.`,
+            };
+        }
+
         const cooldownLeft =
             Number(stats.lastSoloAt || 0) + config.cooldown.soloMs - now;
 
@@ -190,7 +190,10 @@ function checkRunAvailable(userId, mode) {
             };
         }
 
-        return { ok: true };
+        return {
+            ok: true,
+            supportOnly: false,
+        };
     }
 
     const cooldownLeft =
@@ -203,21 +206,37 @@ function checkRunAvailable(userId, mode) {
         };
     }
 
-    return { ok: true };
+    if (Number(stats.dailyRuns || 0) >= config.cooldown.maxRunsPerDay) {
+        return {
+            ok: true,
+            supportOnly: true,
+            message: `Bạn đã hết lượt thưởng chính hôm nay. Bạn vẫn có thể hỗ trợ tổ đội nhưng chỉ nhận **10% quà**.`,
+        };
+    }
+
+    return {
+        ok: true,
+        supportOnly: false,
+    };
 }
 
-function consumeRun(userId, mode) {
+function consumeRun(userId, mode, supportOnly = false) {
     return updateUser(userId, (user) => {
         const stats = ensureUserHuntStats(user);
         const now = Date.now();
 
-        stats.dailyRuns = Number(stats.dailyRuns || 0) + 1;
+        if (!supportOnly) {
+            stats.dailyRuns = Number(stats.dailyRuns || 0) + 1;
+        }
 
         if (mode === "solo") {
             stats.soloRuns = Number(stats.soloRuns || 0) + 1;
             stats.lastSoloAt = now;
         } else {
-            stats.partyRuns = Number(stats.partyRuns || 0) + 1;
+            if (!supportOnly) {
+                stats.partyRuns = Number(stats.partyRuns || 0) + 1;
+            }
+
             stats.lastPartyAt = now;
         }
 
@@ -269,6 +288,42 @@ function getHunt(huntId) {
     const state = getBeastHuntState();
 
     return state.hunts[huntId] || null;
+}
+
+async function getBlockingActiveHunt(userId, client) {
+    const state = getBeastHuntState();
+    const activeHuntId = state.activeUserHunts[String(userId)];
+
+    if (!activeHuntId) {
+        return null;
+    }
+
+    const activeHunt = state.hunts[activeHuntId];
+
+    if (!activeHunt || ["finished", "cancelled"].includes(activeHunt.status)) {
+        updateBeastHuntState((latestState) => {
+            delete latestState.activeUserHunts[String(userId)];
+        });
+
+        return null;
+    }
+
+    if (activeHunt.channelId && client) {
+        const channel = await client.channels
+            .fetch(activeHunt.channelId)
+            .catch(() => null);
+
+        if (!channel) {
+            activeHunt.status = "cancelled";
+            activeHunt.cancelledAt = Date.now();
+            clearHuntUsers(activeHunt);
+            saveHunt(activeHunt);
+
+            return null;
+        }
+    }
+
+    return activeHunt;
 }
 
 function saveHunt(hunt) {
@@ -972,6 +1027,33 @@ function splitMaterials(materials, memberIds) {
 
     return result;
 }
+
+function getMemberRewardRate(hunt, userId) {
+    if (hunt.members?.[userId]?.supportOnly === true) {
+        return Number(config.cooldown.supportRewardRate || 0.1);
+    }
+
+    return 1;
+}
+
+function scaleMaterialsByRewardRate(materials, rewardRate) {
+    const result = {};
+    const safeRate = Math.max(0, Math.min(1, Number(rewardRate || 0)));
+
+    if (safeRate >= 1) {
+        return { ...(materials || {}) };
+    }
+
+    for (const [materialId, amount] of Object.entries(materials || {})) {
+        for (let i = 0; i < Number(amount || 0); i++) {
+            if (Math.random() <= safeRate) {
+                mergeMaterial(result, materialId, 1);
+            }
+        }
+    }
+
+    return result;
+}
 async function finishBattle(channel, hunt, success) {
     hunt = getHunt(hunt.id) || hunt;
 
@@ -1030,15 +1112,33 @@ async function finishBattle(channel, hunt, success) {
         );
     }
 
-    const moneyShare = splitMoney(finalMoney, hunt.memberIds);
+    const rawMoneyShare = splitMoney(finalMoney, hunt.memberIds);
 
     if (success && mvpId && Number(battle.mvpBonusMoney || 0) > 0) {
-        moneyShare[mvpId] =
-            Number(moneyShare[mvpId] || 0) + Number(battle.mvpBonusMoney || 0);
-        finalMoney += Number(battle.mvpBonusMoney || 0);
+        rawMoneyShare[mvpId] =
+            Number(rawMoneyShare[mvpId] || 0) +
+            Number(battle.mvpBonusMoney || 0);
     }
 
-    const materialShare = splitMaterials(finalMaterials, hunt.memberIds);
+    const rawMaterialShare = splitMaterials(finalMaterials, hunt.memberIds);
+    const moneyShare = {};
+    const materialShare = {};
+
+    for (const userId of hunt.memberIds) {
+        const rewardRate = getMemberRewardRate(hunt, userId);
+
+        moneyShare[userId] = Math.floor(
+            Number(rawMoneyShare[userId] || 0) * rewardRate,
+        );
+        materialShare[userId] = scaleMaterialsByRewardRate(
+            rawMaterialShare[userId] || {},
+            rewardRate,
+        );
+    }
+
+    finalMoney = Object.values(moneyShare).reduce((total, money) => {
+        return total + Number(money || 0);
+    }, 0);
 
     for (const userId of hunt.memberIds) {
         const money = Number(moneyShare[userId] || 0);
@@ -1459,9 +1559,19 @@ async function startHuntDirect(channel, hunt, lobbyMessage = null) {
 
         if (!available.ok) {
             return channel.send({
-                content: `❌ <@${userId}> chưa đủ điều kiện nhận thưởng: ${available.message}`,
+                content: `❌ <@${userId}> chưa đủ điều kiện tham gia: ${available.message}`,
             });
         }
+
+        if (!hunt.members[userId]) {
+            hunt.members[userId] = {
+                userId,
+                power: getCombatPower(userId),
+                afkTurns: 0,
+            };
+        }
+
+        hunt.members[userId].supportOnly = available.supportOnly === true;
     }
 
     hunt.starting = true;
@@ -1473,7 +1583,11 @@ async function startHuntDirect(channel, hunt, lobbyMessage = null) {
     clearRoundTimer(hunt.id);
 
     for (const userId of hunt.memberIds) {
-        consumeRun(userId, hunt.mode);
+        consumeRun(
+            userId,
+            hunt.mode,
+            hunt.members[userId]?.supportOnly === true,
+        );
     }
 
     await lockHuntChannel(channel, hunt);
@@ -1574,9 +1688,12 @@ async function createHunt(interaction, mode) {
     }
 
     const userId = String(interaction.user.id);
-    const state = getBeastHuntState();
+    const blockingHunt = await getBlockingActiveHunt(
+        userId,
+        interaction.client,
+    );
 
-    if (state.activeUserHunts[userId]) {
+    if (blockingHunt) {
         return interaction.reply({
             content: "❌ Bạn đang ở một cuộc săn yêu thú khác.",
             ephemeral: true,
@@ -1613,6 +1730,7 @@ async function createHunt(interaction, mode) {
                 userId,
                 power,
                 afkTurns: 0,
+                supportOnly: available.supportOnly === true,
             },
         },
         beast: null,
@@ -1622,7 +1740,11 @@ async function createHunt(interaction, mode) {
     const channel = await createHuntChannel(interaction, hunt);
 
     await interaction.reply({
-        content: `✅ Đã mở kênh săn yêu thú: ${channel}`,
+        content:
+            `✅ Đã mở kênh săn yêu thú: ${channel}` +
+            (available.supportOnly
+                ? "\n⚠️ Bạn đang ở chế độ hỗ trợ, chỉ nhận 10% quà."
+                : ""),
         ephemeral: true,
     });
 
@@ -1696,9 +1818,12 @@ async function joinHunt(interaction, hunt) {
         });
     }
 
-    const state = getBeastHuntState();
+    const blockingHunt = await getBlockingActiveHunt(
+        userId,
+        interaction.client,
+    );
 
-    if (state.activeUserHunts[userId]) {
+    if (blockingHunt) {
         return interaction.reply({
             content: "❌ Bạn đang ở một cuộc săn yêu thú khác.",
             ephemeral: true,
@@ -1721,6 +1846,7 @@ async function joinHunt(interaction, hunt) {
         userId,
         power,
         afkTurns: 0,
+        supportOnly: available.supportOnly === true,
     };
 
     saveHunt(hunt);
@@ -1745,7 +1871,11 @@ async function joinHunt(interaction, hunt) {
     }
 
     return interaction.reply({
-        content: `✅ Đã tham gia tổ đội săn yêu thú. Lực chiến: **${formatNumber(power)}**`,
+        content:
+            `✅ Đã tham gia tổ đội săn yêu thú. Lực chiến: **${formatNumber(power)}**` +
+            (available.supportOnly
+                ? "\n⚠️ Bạn đã hết lượt thưởng chính, lần này chỉ nhận 10% quà hỗ trợ."
+                : ""),
         ephemeral: true,
     });
 }

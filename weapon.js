@@ -166,10 +166,8 @@ const APPRAISAL_RARITY_TABLES = {
     },
 
     SSS: {
-        A: 0.08,
-        S: 0.27,
-        SS: 0.5,
-        SSS: 0.15,
+        SS: 0.4,
+        SSS: 0.6,
     },
 
     EX: {

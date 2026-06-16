@@ -9,9 +9,10 @@ module.exports = {
     },
 
     cooldown: {
-        soloMs: 45 * 60 * 1000,
-        partyMs: 60 * 60 * 1000,
-        maxRunsPerDay: 5,
+        soloMs: 15 * 60 * 1000,
+        partyMs: 15 * 60 * 1000,
+        maxRunsPerDay: 6,
+        supportRewardRate: 0.1,
     },
 
     channel: {
