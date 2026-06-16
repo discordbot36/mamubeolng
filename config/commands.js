@@ -1,3 +1,5 @@
+const { GAMBLE_MAX_BET } = require("./gamble");
+
 module.exports = [
     {
         name: "race",
@@ -763,7 +765,7 @@ module.exports = [
                 description: "Số tiền cược",
                 required: true,
                 minValue: 100,
-                maxValue: 250000,
+                maxValue: GAMBLE_MAX_BET,
             },
         ],
     },
@@ -778,6 +780,7 @@ module.exports = [
                 description: "Số tiền muốn cược",
                 required: true,
                 minValue: 100,
+                maxValue: GAMBLE_MAX_BET,
             },
             {
                 type: "string",
@@ -816,7 +819,7 @@ module.exports = [
                 description: "Số tiền muốn cược",
                 required: true,
                 minValue: 100,
-                maxValue: 50000,
+                maxValue: GAMBLE_MAX_BET,
             },
         ],
     },

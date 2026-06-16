@@ -12,26 +12,16 @@ const {
     getCurrencyEmoji,
     formatMoney,
 } = require("./database");
+const { GAMBLE_MAX_BET } = require("./config/gamble");
 
-/*
- * Kết quả thật sự 50/50.
- * Payout x1.96 tạo house edge khoảng 2% mỗi lần lật.
- */
 const PAYOUT_MULTIPLIER = 1.96;
 
 const MIN_BET = 100;
-const MAX_BET = 50000;
+const MAX_BET = GAMBLE_MAX_BET;
 
-/*
- * Chặn chuỗi thắng làm tiền tăng vô hạn.
- * Có thể chỉnh con số này.
- */
+
 const MAX_PAYOUT = 10000000;
 
-/*
- * Không thao tác trong 2 phút:
- * hệ thống tự rút số tiền đang giữ.
- */
 const SESSION_TIMEOUT_MS = 2 * 60 * 1000;
 
 const activeFlipSessions = new Map();

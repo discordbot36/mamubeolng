@@ -1,4 +1,5 @@
 const { ButtonStyle } = require("discord.js");
+const { GAMBLE_MAX_BET } = require("./gamble");
 
 module.exports = {
     finishLine: 20,
@@ -8,7 +9,7 @@ module.exports = {
     maxPigs: 5,
 
     minBet: 1,
-    maxBet: 250000,
+    maxBet: GAMBLE_MAX_BET,
     payout: 4,
 
     runnerEmoji: "🐖",

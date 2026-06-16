@@ -12,7 +12,7 @@ const {
     getCurrencyEmoji,
     formatMoney,
 } = require("./database");
-
+const { GAMBLE_MAX_BET } = require("./config/gamble");
 const activeGames = new Map();
 
 const DIFFICULTIES = {
@@ -199,7 +199,12 @@ class PigRoadManager {
                 ephemeral: true,
             });
         }
-
+        if (bet > GAMBLE_MAX_BET) {
+            return interaction.reply({
+                content: `❌ Số tiền cược tối đa là **${getCurrencyEmoji()} ${formatMoney(GAMBLE_MAX_BET)}**.`,
+                ephemeral: true,
+            });
+        }
         if (activeGames.has(userId)) {
             return interaction.reply({
                 content: "❌ Bạn đang có một ván heo qua đường chưa kết thúc.",

@@ -14,9 +14,11 @@ const {
     getCurrencyEmoji,
 } = require("./database");
 
+const { GAMBLE_MAX_BET } = require("./config/gamble");
+
 const games = new Map();
 const MIN_BET = 100;
-const MAX_BET = 250000;
+const MAX_BET = GAMBLE_MAX_BET;
 
 const SUITS = ["♠️", "♥️", "♦️", "♣️"];
 const RANKS = [
