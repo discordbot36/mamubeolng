@@ -64,6 +64,14 @@ module.exports = {
         exp: 3000,
         sellable: false,
     },
+    cam_on_em_vi_tat_ca: {
+        name: "Cám ơn em vì tất cả",
+        emoji: "💔",
+        price: 36000,
+        type: "tu_tien_exp",
+        exp: 11500,
+        sellable: false,
+    },
 
     linh_tru_truc_co_dan: {
         name: "Linh Trư Trúc Cơ Đan",
