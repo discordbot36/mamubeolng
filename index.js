@@ -6,6 +6,7 @@ const router = require("./core/router");
 const leaderboard = require("./leaderboard");
 const bicanh = require("./bicanh");
 const worldboss = require("./worldboss");
+const sanyeuthu = require("./sanyeuthu");
 
 function requireEnv(name) {
     const value = process.env[name];
@@ -54,6 +55,10 @@ client.once("clientReady", () => {
 
     bicanh.recover(client).catch((error) => {
         console.error("[BiCanh Recover]", error);
+    });
+
+    sanyeuthu.recover(client).catch((error) => {
+        console.error("[SanYeuThu Recover]", error);
     });
 
     leaderboard.startAutoUpdate(client);

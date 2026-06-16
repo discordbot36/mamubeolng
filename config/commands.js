@@ -723,7 +723,34 @@ module.exports = [
         description: "Khiêu chiến và càn quét phó bản Mamu",
         handler: "dungeon.show",
     },
-
+    {
+        name: "sanyeuthu",
+        description: "Săn yêu thú solo hoặc lập tổ đội săn chung",
+        handler: "sanyeuthu.start",
+        options: [
+            {
+                type: "string",
+                name: "chedo",
+                description: "Chọn cách đi săn",
+                required: false,
+                choices: [
+                    {
+                        name: "Solo",
+                        value: "solo",
+                    },
+                    {
+                        name: "Tổ đội",
+                        value: "todoi",
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        name: "nguyenlieu",
+        description: "Xem kho nguyên liệu yêu thú tách riêng khỏi kho đồ",
+        handler: "sanyeuthu.materials",
+    },
     {
         name: "spawn",
         description: "Spawn Boss Thế Giới",

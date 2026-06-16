@@ -1354,6 +1354,83 @@ function updateDungeonProfile(userId, updater) {
     });
 }
 
+function ensureBeastMaterials(user) {
+    if (!user.beastMaterials) {
+        user.beastMaterials = {};
+    }
+
+    return user.beastMaterials;
+}
+
+function getBeastMaterials(userId) {
+    return withData((data) => {
+        const user = ensureUser(data, userId);
+
+        return ensureBeastMaterials(user);
+    });
+}
+
+function addBeastMaterials(userId, materials = {}) {
+    return withData((data) => {
+        const user = ensureUser(data, userId);
+        const beastMaterials = ensureBeastMaterials(user);
+
+        for (const [materialId, amount] of Object.entries(materials || {})) {
+            const safeAmount = Math.floor(Number(amount || 0));
+
+            if (!materialId || safeAmount <= 0) {
+                continue;
+            }
+
+            beastMaterials[materialId] =
+                Number(beastMaterials[materialId] || 0) + safeAmount;
+        }
+
+        return beastMaterials;
+    });
+}
+
+function ensureBeastHuntState(data) {
+    if (!data.system) {
+        data.system = {};
+    }
+
+    if (!data.system.beastHunts) {
+        data.system.beastHunts = {
+            hunts: {},
+            activeUserHunts: {},
+        };
+    }
+
+    const state = data.system.beastHunts;
+
+    if (!state.hunts) {
+        state.hunts = {};
+    }
+
+    if (!state.activeUserHunts) {
+        state.activeUserHunts = {};
+    }
+
+    return state;
+}
+
+function getBeastHuntState() {
+    return withData((data) => {
+        return ensureBeastHuntState(data);
+    });
+}
+
+function updateBeastHuntState(updater) {
+    return withData((data) => {
+        const state = ensureBeastHuntState(data);
+
+        updater(state, data);
+
+        return state;
+    });
+}
+
 function ensureSecretRealmState(data) {
     if (!data.system) {
         data.system = {};
@@ -1479,4 +1556,8 @@ module.exports = {
     updateSecretRealmState,
     getSecretRealmFatigue,
     updateSecretRealmFatigue,
+    getBeastMaterials,
+    addBeastMaterials,
+    getBeastHuntState,
+    updateBeastHuntState,
 };

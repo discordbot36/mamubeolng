@@ -19,6 +19,7 @@ const pigRoad = require("../pigRoad");
 const flip = require("../flip");
 const quest = require("../quest");
 const bicanh = require("../bicanh");
+const sanyeuthu = require("../sanyeuthu");
 const dothachTournament = require("../dothachTournament");
 const phapbao = require("../phapbao");
 const modules = {
@@ -41,6 +42,7 @@ const modules = {
     pigRoad,
     flip,
     bicanh,
+    sanyeuthu,
     phapbao,
     quest,
 };
@@ -134,6 +136,7 @@ async function handleButton(interaction) {
         pigRoad.handleButton.bind(pigRoad),
         quest.handleButton.bind(quest),
         bicanh.handleButton.bind(bicanh),
+        sanyeuthu.handleButton.bind(sanyeuthu),
         flip.handleButton.bind(flip),
     ];
 
