@@ -98,7 +98,13 @@ function isIphoneItem(item) {
         type === "iphone" || id.includes("iphone") || name.includes("iphone")
     );
 }
-
+function normalizeText(text) {
+    return String(text || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d");
+}
 function cutAutocompleteName(text) {
     return text.length > 100 ? `${text.slice(0, 97)}...` : text;
 }
@@ -145,21 +151,21 @@ function formatShopItemAutocompleteDetail(item) {
 
     return `Giá ${price}`;
 }
-
 function matchAutocomplete(
     entries,
     focusedValue,
     getName = (item) => item.name,
     getDetail = null,
 ) {
-    const search = focusedValue.toLowerCase();
+    const search = normalizeText(focusedValue);
 
     return entries
         .filter(([id, item]) => {
-            return (
-                id.toLowerCase().includes(search) ||
-                getName(item).toLowerCase().includes(search)
+            const searchText = normalizeText(
+                `${id} ${getName(item)} ${item.description || ""}`,
             );
+
+            return searchText.includes(search);
         })
         .slice(0, 25)
         .map(([id, item]) => {
@@ -178,14 +184,24 @@ function matchAutocomplete(
 }
 
 async function autocompleteShop(interaction) {
-    const focusedValue = interaction.options.getFocused().toLowerCase();
+    const focusedValue = interaction.options.getFocused();
+    const category = normalizeShopCategory(
+        interaction.options.getString("danhmuc") || "all",
+    );
 
-    const entries = Object.entries(getShop()).filter(([, item]) => {
+    const entries = Object.entries(getShop()).filter(([itemId, item]) => {
         if (item.hidden || item.buyable === false) {
             return false;
         }
 
         if (item.shopCategory === "skill") {
+            return false;
+        }
+
+        if (
+            category !== "all" &&
+            getItemShopCategory(item, itemId) !== category
+        ) {
             return false;
         }
 
@@ -399,6 +415,11 @@ const SHOP_CATEGORIES = {
         emoji: "✨",
     },
 
+    dothach: {
+        name: "Đổ thạch",
+        emoji: "💎",
+    },
+
     normal: {
         name: "Vật phẩm thường",
         emoji: "🎁",
@@ -418,9 +439,13 @@ function getShopCategoryLabel(category) {
     return `${config.emoji} ${config.name}`;
 }
 
-function getItemShopCategory(item) {
+function getItemShopCategory(item, itemId = "") {
     if (item.shopCategory) {
         return item.shopCategory;
+    }
+
+    if (String(itemId).startsWith("da_") || item.type === "dothach") {
+        return "dothach";
     }
 
     if (
@@ -446,7 +471,7 @@ function getShopPageData(page = 0, category = "all") {
     const safeCategory = normalizeShopCategory(category);
     const shopData = getShop();
 
-    const items = Object.entries(shopData).filter(([, item]) => {
+    const items = Object.entries(shopData).filter(([itemId, item]) => {
         if (item.hidden || item.shopCategory === "skill") {
             return false;
         }
@@ -455,7 +480,7 @@ function getShopPageData(page = 0, category = "all") {
             return true;
         }
 
-        return getItemShopCategory(item) === safeCategory;
+        return getItemShopCategory(item, itemId) === safeCategory;
     });
 
     const totalPages = Math.max(1, Math.ceil(items.length / SHOP_PAGE_SIZE));
@@ -548,7 +573,23 @@ function buildShopButtons(userId, page = 0, category = "all") {
     const { totalPages } = getShopPageData(page, safeCategory);
     const safePage = clampPage(page, totalPages);
 
-    return new ActionRowBuilder().addComponents(
+    const categoryRow = new ActionRowBuilder().addComponents(
+        ...Object.entries(SHOP_CATEGORIES).map(
+            ([categoryId, categoryConfig]) => {
+                return new ButtonBuilder()
+                    .setCustomId(`shop_cat_${userId}_${categoryId}`)
+                    .setLabel(categoryConfig.name)
+                    .setEmoji(categoryConfig.emoji)
+                    .setStyle(
+                        categoryId === safeCategory
+                            ? ButtonStyle.Primary
+                            : ButtonStyle.Secondary,
+                    );
+            },
+        ),
+    );
+
+    const pageRow = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`shop_prev_${userId}_${safePage}_${safeCategory}`)
             .setLabel("Trang trước")
@@ -569,20 +610,40 @@ function buildShopButtons(userId, page = 0, category = "all") {
             .setStyle(ButtonStyle.Primary)
             .setDisabled(safePage >= totalPages - 1),
     );
+
+    return [categoryRow, pageRow];
 }
 
 async function shop(interaction) {
     const category = normalizeShopCategory(
-        interaction.options.getString("muc") || "all",
+        interaction.options.getString("danhmuc") || "all",
     );
 
     return interaction.reply({
         embeds: [buildShopEmbed(interaction, 0, category)],
-        components: [buildShopButtons(interaction.user.id, 0, category)],
+        components: buildShopButtons(interaction.user.id, 0, category),
     });
 }
 
 async function handleButton(interaction) {
+    if (interaction.customId.startsWith("shop_cat_")) {
+        const parts = interaction.customId.split("_");
+        const userId = parts[2];
+        const category = normalizeShopCategory(parts[3] || "all");
+
+        if (interaction.user.id !== userId) {
+            return interaction.reply({
+                content:
+                    "❌ Đây không phải shop của bạn, tự mở `/shop` đi anh bạn.",
+                ephemeral: true,
+            });
+        }
+
+        return interaction.update({
+            embeds: [buildShopEmbed(interaction, 0, category)],
+            components: buildShopButtons(interaction.user.id, 0, category),
+        });
+    }
     if (
         interaction.customId.startsWith("shop_prev_") ||
         interaction.customId.startsWith("shop_next_")
@@ -606,7 +667,7 @@ async function handleButton(interaction) {
 
         return interaction.update({
             embeds: [buildShopEmbed(interaction, page, category)],
-            components: [buildShopButtons(interaction.user.id, page, category)],
+            components: buildShopButtons(interaction.user.id, page, category),
         });
     }
 
@@ -663,6 +724,9 @@ async function handleButton(interaction) {
 }
 
 async function buy(interaction) {
+    const category = normalizeShopCategory(
+        interaction.options.getString("danhmuc") || "all",
+    );
     const itemId = interaction.options.getString("vatpham");
     const quantity = interaction.options.getInteger("soluong") || 1;
     const shopData = getShop();
@@ -674,7 +738,18 @@ async function buy(interaction) {
             ephemeral: true,
         });
     }
-
+    if (
+        item &&
+        category !== "all" &&
+        getItemShopCategory(item, itemId) !== category
+    ) {
+        return interaction.reply({
+            content:
+                `❌ **${item.name}** không thuộc danh mục **${getShopCategoryLabel(category)}**. ` +
+                "Hãy chọn đúng danh mục hoặc dùng `/shop` để xem lại.",
+            ephemeral: true,
+        });
+    }
     const result = buyItem(interaction.user.id, itemId, quantity);
     const coin = getCurrencyEmoji();
 

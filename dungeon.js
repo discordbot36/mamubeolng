@@ -9,6 +9,7 @@ const {
     addMoney,
     addShopItem,
     ensureTuTienProfile,
+    updateTuTienProfile,
     getDungeonProfile,
     updateDungeonProfile,
     formatMoney,
@@ -153,15 +154,34 @@ function pickWeightedDrop(drops) {
 
     return drops[drops.length - 1];
 }
+function addTuTienExp(userId, amount) {
+    const exp = Math.max(0, Math.floor(Number(amount || 0)));
 
+    if (exp <= 0) {
+        return 0;
+    }
+
+    updateTuTienProfile(userId, (profile) => {
+        profile.exp = Number(profile.exp || 0) + exp;
+    });
+
+    return exp;
+}
 function giveReward(userId, reward) {
     const shop = getShop();
     const lines = [];
     const money = Number(reward.money || 0);
+    const exp = Number(reward.exp || 0);
 
     if (money > 0) {
         addMoney(userId, money);
         lines.push(`💰 ${formatMoney(money)}`);
+    }
+
+    const gainedExp = addTuTienExp(userId, exp);
+
+    if (gainedExp > 0) {
+        lines.push(`✨ Tu vi +${formatNumber(gainedExp)} exp`);
     }
 
     const items = Array.isArray(reward.items) ? reward.items : [];
@@ -192,6 +212,7 @@ function buildSweepReward(stage) {
 
     return {
         money,
+        exp: Number(stage.sweepReward.exp || 0),
         items: drop
             ? [
                   {

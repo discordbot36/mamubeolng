@@ -526,6 +526,7 @@ function createBattleState(hunt) {
         resolvedTurn: 0,
         roundMessageId: null,
         roundEndsAt: 0,
+        emptyRoundExtended: false,
         startedAt: Date.now(),
         finishedAt: 0,
         result: null,
@@ -1028,32 +1029,80 @@ function splitMaterials(materials, memberIds) {
     return result;
 }
 
-function getMemberRewardRate(hunt, userId) {
-    if (hunt.members?.[userId]?.supportOnly === true) {
-        return Number(config.cooldown.supportRewardRate || 0.1);
+function getSupportRewardMultiplier() {
+    const raw = Number(config.cooldown?.supportRewardMultiplier ?? 0.1);
+
+    if (!Number.isFinite(raw)) {
+        return 0.1;
     }
 
-    return 1;
+    return Math.max(0, Math.min(1, raw));
 }
 
-function scaleMaterialsByRewardRate(materials, rewardRate) {
-    const result = {};
-    const safeRate = Math.max(0, Math.min(1, Number(rewardRate || 0)));
+function getMemberRewardMultiplier(hunt, userId) {
+    const raw = hunt?.members?.[userId]?.rewardMultiplier;
 
-    if (safeRate >= 1) {
+    if (raw === undefined || raw === null) {
+        return 1;
+    }
+
+    const multiplier = Number(raw);
+
+    if (!Number.isFinite(multiplier)) {
+        return 1;
+    }
+
+    return Math.max(0, Math.min(1, multiplier));
+}
+
+function isSupportRewardMember(hunt, userId) {
+    return getMemberRewardMultiplier(hunt, userId) < 1;
+}
+
+function hasReachedDailyRunLimit(userId) {
+    const user = getUser(userId);
+    const stats = ensureUserHuntStats(user);
+
+    return (
+        Number(stats.dailyRuns || 0) >=
+        Number(config.cooldown.maxRunsPerDay || 0)
+    );
+}
+
+function scaleMoneyReward(money, multiplier) {
+    const safeMoney = Math.max(0, Math.floor(Number(money || 0)));
+    const safeMultiplier = Math.max(0, Math.min(1, Number(multiplier || 0)));
+
+    if (safeMultiplier >= 1) {
+        return safeMoney;
+    }
+
+    return Math.floor(safeMoney * safeMultiplier);
+}
+
+function scaleMaterialReward(materials, multiplier) {
+    const safeMultiplier = Math.max(0, Math.min(1, Number(multiplier || 0)));
+
+    if (safeMultiplier >= 1) {
         return { ...(materials || {}) };
     }
 
+    const result = {};
+
     for (const [materialId, amount] of Object.entries(materials || {})) {
-        for (let i = 0; i < Number(amount || 0); i++) {
-            if (Math.random() <= safeRate) {
-                mergeMaterial(result, materialId, 1);
-            }
+        const rawAmount = Math.max(0, Number(amount || 0)) * safeMultiplier;
+        const wholeAmount = Math.floor(rawAmount);
+        const extraChance = rawAmount - wholeAmount;
+        const finalAmount = wholeAmount + (combat.roll(extraChance) ? 1 : 0);
+
+        if (finalAmount > 0) {
+            mergeMaterial(result, materialId, finalAmount);
         }
     }
 
     return result;
 }
+
 async function finishBattle(channel, hunt, success) {
     hunt = getHunt(hunt.id) || hunt;
 
@@ -1125,14 +1174,16 @@ async function finishBattle(channel, hunt, success) {
     const materialShare = {};
 
     for (const userId of hunt.memberIds) {
-        const rewardRate = getMemberRewardRate(hunt, userId);
+        const rewardMultiplier = getMemberRewardMultiplier(hunt, userId);
 
-        moneyShare[userId] = Math.floor(
-            Number(rawMoneyShare[userId] || 0) * rewardRate,
+        moneyShare[userId] = scaleMoneyReward(
+            rawMoneyShare[userId] || 0,
+            rewardMultiplier,
         );
-        materialShare[userId] = scaleMaterialsByRewardRate(
+
+        materialShare[userId] = scaleMaterialReward(
             rawMaterialShare[userId] || {},
-            rewardRate,
+            rewardMultiplier,
         );
     }
 
@@ -1154,8 +1205,8 @@ async function finishBattle(channel, hunt, success) {
         recordResult(userId, success);
     }
 
-    clearHuntUsers(hunt);
     saveHunt(hunt);
+    clearHuntUsers(hunt);
 
     const memberLines = hunt.memberIds.map((userId) => {
         const contribution = battle.contributions[userId] || {};
@@ -1242,6 +1293,56 @@ async function resolveBattleRound(channel, huntId) {
         battle.resolving === true ||
         Number(battle.resolvedTurn || 0) >= Number(battle.turn || 0)
     ) {
+        return;
+    }
+
+    const selectedCount = Object.keys(battle.actions || {}).length;
+
+    if (selectedCount <= 0 && battle.emptyRoundExtended !== true) {
+        const timerKey = `round_${hunt.id}`;
+        const currentTimer = activeTimers.get(timerKey);
+
+        if (currentTimer) {
+            clearTimeout(currentTimer);
+            activeTimers.delete(timerKey);
+        }
+
+        const graceDurationMs = Math.max(
+            10 * 1000,
+            Number(config.party.graceDurationMs || 25 * 1000),
+        );
+
+        battle.emptyRoundExtended = true;
+        battle.roundEndsAt = Date.now() + graceDurationMs;
+        saveHunt(hunt);
+
+        const roundMessage = battle.roundMessageId
+            ? await channel.messages
+                  .fetch(battle.roundMessageId)
+                  .catch(() => null)
+            : null;
+
+        if (roundMessage) {
+            await roundMessage
+                .edit({
+                    embeds: [buildBattleEmbed(hunt)],
+                    components: [buildActionButtons(hunt)],
+                })
+                .catch(() => null);
+        }
+
+        await channel.send({
+            content:
+                "⏳ **Chưa ai chọn hành động.** Lượt này được gia hạn thêm vài giây, chọn nhanh kẻo bị tính AFK.",
+        });
+
+        const timer = setTimeout(() => {
+            resolveBattleRound(channel, hunt.id).catch((error) => {
+                console.error("[SanYeuThu Grace Round]", error);
+            });
+        }, graceDurationMs);
+
+        activeTimers.set(timerKey, timer);
         return;
     }
 
@@ -1486,6 +1587,7 @@ async function openBattleRound(channel, hunt) {
     const battle = hunt.battle;
 
     battle.actions = {};
+    battle.emptyRoundExtended = false;
     battle.currentMechanic = pickMechanic(hunt);
 
     saveHunt(hunt);
@@ -1497,7 +1599,12 @@ async function openBattleRound(channel, hunt) {
     });
 
     battle.roundMessageId = message.id;
-    battle.roundEndsAt = Date.now() + config.party.actionDurationMs;
+    const actionDurationMs = Math.max(
+        30 * 1000,
+        Number(config.party.actionDurationMs || 60 * 1000),
+    );
+
+    battle.roundEndsAt = Date.now() + actionDurationMs;
 
     saveHunt(hunt);
 
@@ -1511,7 +1618,7 @@ async function openBattleRound(channel, hunt) {
         resolveBattleRound(channel, hunt.id).catch((error) => {
             console.error("[SanYeuThu Resolve Round]", error);
         });
-    }, config.party.actionDurationMs);
+    }, actionDurationMs);
 
     activeTimers.set(`round_${hunt.id}`, timer);
 }
@@ -1555,6 +1662,30 @@ async function startHuntDirect(channel, hunt, lobbyMessage = null) {
     }
 
     for (const userId of hunt.memberIds) {
+        if (!hunt.members[userId]) {
+            hunt.members[userId] = {
+                userId,
+                power: getCombatPower(userId),
+                afkTurns: 0,
+                rewardMultiplier: 1,
+                supportReward: false,
+                supportOnly: false,
+            };
+        }
+
+        const alreadySupport =
+            hunt.members[userId].supportReward === true ||
+            hunt.members[userId].supportOnly === true ||
+            getMemberRewardMultiplier(hunt, userId) < 1;
+
+        if (alreadySupport) {
+            hunt.members[userId].rewardMultiplier =
+                getSupportRewardMultiplier();
+            hunt.members[userId].supportReward = true;
+            hunt.members[userId].supportOnly = true;
+            continue;
+        }
+
         const available = checkRunAvailable(userId, hunt.mode);
 
         if (!available.ok) {
@@ -1563,17 +1694,23 @@ async function startHuntDirect(channel, hunt, lobbyMessage = null) {
             });
         }
 
-        if (!hunt.members[userId]) {
-            hunt.members[userId] = {
-                userId,
-                power: getCombatPower(userId),
-                afkTurns: 0,
-            };
+        if (available.supportOnly === true) {
+            if (String(userId) === String(hunt.hostId)) {
+                return channel.send({
+                    content: `❌ <@${userId}> đã hết lượt thưởng chính hôm nay, không nên làm host. Hãy để người còn lượt làm host, bạn vào hỗ trợ 10% quà.`,
+                });
+            }
+
+            hunt.members[userId].rewardMultiplier =
+                getSupportRewardMultiplier();
+            hunt.members[userId].supportReward = true;
+            hunt.members[userId].supportOnly = true;
+        } else {
+            hunt.members[userId].rewardMultiplier = 1;
+            hunt.members[userId].supportReward = false;
+            hunt.members[userId].supportOnly = false;
         }
-
-        hunt.members[userId].supportOnly = available.supportOnly === true;
     }
-
     hunt.starting = true;
     hunt.recruitmentClosed = true;
     hunt.status = "battle";
@@ -1730,22 +1867,22 @@ async function createHunt(interaction, mode) {
                 userId,
                 power,
                 afkTurns: 0,
-                supportOnly: available.supportOnly === true,
+                rewardMultiplier: 1,
+                supportReward: false,
             },
         },
         beast: null,
         battle: null,
     };
 
+    await interaction.deferReply({
+        ephemeral: true,
+    });
+
     const channel = await createHuntChannel(interaction, hunt);
 
-    await interaction.reply({
-        content:
-            `✅ Đã mở kênh săn yêu thú: ${channel}` +
-            (available.supportOnly
-                ? "\n⚠️ Bạn đang ở chế độ hỗ trợ, chỉ nhận 10% quà."
-                : ""),
-        ephemeral: true,
+    await interaction.editReply({
+        content: `✅ Đã mở kênh săn yêu thú: ${channel}`,
     });
 
     if (mode === "solo") {
@@ -1831,8 +1968,10 @@ async function joinHunt(interaction, hunt) {
     }
 
     const available = checkRunAvailable(userId, "party");
+    const joinsAsSupport =
+        available.supportOnly === true || hasReachedDailyRunLimit(userId);
 
-    if (!available.ok) {
+    if (!available.ok && !joinsAsSupport) {
         return interaction.reply({
             content: `❌ ${available.message}`,
             ephemeral: true,
@@ -1840,13 +1979,16 @@ async function joinHunt(interaction, hunt) {
     }
 
     const power = getCombatPower(userId);
+    const rewardMultiplier = joinsAsSupport ? getSupportRewardMultiplier() : 1;
 
     hunt.memberIds.push(userId);
     hunt.members[userId] = {
         userId,
         power,
         afkTurns: 0,
-        supportOnly: available.supportOnly === true,
+        rewardMultiplier,
+        supportReward: joinsAsSupport,
+        supportOnly: joinsAsSupport,
     };
 
     saveHunt(hunt);
@@ -1982,6 +2124,24 @@ async function selectAction(interaction, hunt, action) {
     if (!ACTIONS[action]) {
         return interaction.reply({
             content: "❌ Hành động không hợp lệ.",
+            ephemeral: true,
+        });
+    }
+
+    if (
+        hunt.battle.roundMessageId &&
+        interaction.message?.id &&
+        String(interaction.message.id) !== String(hunt.battle.roundMessageId)
+    ) {
+        return interaction.reply({
+            content: "❌ Nút này thuộc lượt cũ rồi. Hãy bấm ở lượt mới nhất.",
+            ephemeral: true,
+        });
+    }
+
+    if (hunt.battle.resolving === true) {
+        return interaction.reply({
+            content: "⏳ Lượt này đang xử lý kết quả, không thể chọn nữa.",
             ephemeral: true,
         });
     }

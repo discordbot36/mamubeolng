@@ -50,7 +50,13 @@ function getFirstClearMoney(stage) {
 
     return Math.floor(stage * 650 + Math.pow(stage, 1.25) * 220);
 }
+function getFirstClearExp(stage) {
+    return Math.floor(80 + stage * 18 + Math.pow(stage, 1.08) * 10);
+}
 
+function getSweepExp(stage) {
+    return Math.floor(8 + stage * 2 + Math.pow(stage, 1.02) * 2);
+}
 function getSweepMoneyRange(stage) {
     if (stage <= 10) {
         const min = Math.floor(stage * 35 + Math.pow(stage, 1.05) * 20);
@@ -208,11 +214,13 @@ function buildStage(stage) {
             speedBase: 50 + stage * 3,
         },
         firstClearReward: {
-            money: getFirstClearMoney(stage),
+            money: Math.floor(getFirstClearMoney(stage) * 1.15),
+            exp: getFirstClearExp(stage),
             items: getFirstClearItems(stage),
         },
         sweepReward: {
             money: getSweepMoneyRange(stage),
+            exp: getSweepExp(stage),
             drops: getSweepDrops(stage),
         },
     };

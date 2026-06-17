@@ -16,59 +16,87 @@ module.exports = [
         description: "Điểm danh nhận thưởng",
         handler: "economy.daily",
     },
-    {
-        name: "shop",
-        description: "Xem shop",
-        handler: "economy.shop",
-        options: [
-            {
-                type: "string",
-                name: "muc",
-                description: "Chọn mục shop muốn xem",
-                required: false,
-                choices: [
-                    {
-                        name: "Tất cả",
-                        value: "all",
-                    },
-                    {
-                        name: "Pháp bảo",
-                        value: "phapbao",
-                    },
-                    {
-                        name: "Tu tiên",
-                        value: "tutien",
-                    },
-                    {
-                        name: "Vật phẩm thường",
-                        value: "normal",
-                    },
-                ],
-            },
-        ],
-    },
-    {
-        name: "mua",
-        description: "Mua vật phẩm",
-        handler: "economy.buy",
-        autocomplete: "economy.autocompleteShop",
-        options: [
-            {
-                type: "string",
-                name: "vatpham",
-                description: "Chọn vật phẩm",
-                required: true,
-                autocomplete: true,
-            },
-            {
-                type: "integer",
-                name: "soluong",
-                description: "Số lượng muốn mua",
-                required: false,
-                minValue: 1,
-            },
-        ],
-    },
+   {
+    name: "shop",
+    description: "Xem shop theo danh mục",
+    handler: "economy.shop",
+    options: [
+        {
+            type: "string",
+            name: "danhmuc",
+            description: "Chọn danh mục shop muốn xem",
+            required: false,
+            choices: [
+                {
+                    name: "Tất cả",
+                    value: "all",
+                },
+                {
+                    name: "Pháp bảo",
+                    value: "phapbao",
+                },
+                {
+                    name: "Tu tiên",
+                    value: "tutien",
+                },
+                {
+                    name: "Đổ thạch",
+                    value: "dothach",
+                },
+                {
+                    name: "Vật phẩm thường",
+                    value: "normal",
+                },
+            ],
+        },
+    ],
+},
+{
+    name: "mua",
+    description: "Mua vật phẩm trong shop",
+    handler: "economy.buy",
+    autocomplete: "economy.autocompleteShop",
+    options: [
+        {
+            type: "string",
+            name: "danhmuc",
+            description: "Chọn danh mục vật phẩm",
+            required: true,
+            choices: [
+                {
+                    name: "Pháp bảo",
+                    value: "phapbao",
+                },
+                {
+                    name: "Tu tiên",
+                    value: "tutien",
+                },
+                {
+                    name: "Đổ thạch",
+                    value: "dothach",
+                },
+                {
+                    name: "Vật phẩm thường",
+                    value: "normal",
+                },
+            ],
+        },
+        {
+            type: "string",
+            name: "vatpham",
+            description: "Gõ tên hoặc ID vật phẩm muốn mua",
+            required: true,
+            autocomplete: true,
+        },
+        {
+            type: "integer",
+            name: "soluong",
+            description: "Số lượng muốn mua",
+            required: false,
+            minValue: 1,
+        },
+    ],
+},
     {
         name: "ban",
         description: "Bán vật phẩm trong kho",

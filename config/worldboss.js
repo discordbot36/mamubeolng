@@ -5,13 +5,13 @@ module.exports = {
         {
             id: "lao_ga_kho",
             name: "Lão Gà Khô",
-            maxHp: 6300000,
+            maxHp: 20000000,
             imageUrl: "https://i.imgur.com/toV5hvO.jpeg",
         },
         {
             id: "huy_serum",
             name: "Huy serum",
-            maxHp: 6300000,
+            maxHp: 20000000,
             imageUrl:
                 "https://khoanhdep.com/wp-content/uploads/2025/10/huyforum-meme-2.jpg",
         },
@@ -41,14 +41,14 @@ module.exports = {
         skills: [],
     },
 
-    top10Rewards: [7000, 5000, 3500, 2000, 1700, 1500, 1200, 1000, 900, 700],
+    top10Rewards: [8050, 5750, 4025, 2300, 1955, 1725, 1380, 1150, 1035, 805],
 
     attackCooldownMinutes: 5,
 
     respawnHours: 3.6,
     autoSpawnOnStartup: true,
 
-    consolationReward: 500,
+    consolationReward: 575,
 
     chestItemId: "tu_luyen_chest",
     chestTopRanks: 3,

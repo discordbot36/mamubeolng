@@ -9,6 +9,7 @@ const {
     addMoney,
     formatMoney,
     ensureTuTienProfile,
+    updateTuTienProfile,
     getSystemValue,
     setSystemValue,
     deleteSystemValue,
@@ -71,6 +72,25 @@ function formatRespawnTime(timestamp) {
 
 function formatNumber(number) {
     return Number(number || 0).toLocaleString("vi-VN");
+}
+function addTuTienExp(userId, amount) {
+    const exp = Math.max(0, Math.floor(Number(amount || 0)));
+
+    if (exp <= 0) {
+        return 0;
+    }
+
+    updateTuTienProfile(userId, (profile) => {
+        profile.exp = Number(profile.exp || 0) + exp;
+    });
+
+    return exp;
+}
+
+function getWorldBossExpReward(moneyReward, rank) {
+    const rate = rank <= 10 ? 0.18 : 0.16;
+
+    return Math.max(25, Math.floor(Number(moneyReward || 0) * rate));
 }
 
 function limitDiscordContent(text, maxLength = 1900) {
@@ -807,11 +827,15 @@ async function finishBoss(client, reason = "killed") {
             rank <= 10
                 ? Number(top10Rewards[rank - 1] || 0)
                 : consolationReward;
-
         const chestReward = Number(chestRewards.get(item.userId) || 0);
+        const expReward = getWorldBossExpReward(moneyReward, rank);
 
         if (moneyReward > 0) {
             addMoney(item.userId, moneyReward);
+        }
+
+        if (expReward > 0) {
+            addTuTienExp(item.userId, expReward);
         }
 
         const phapBaoRewards =
@@ -844,6 +868,7 @@ async function finishBoss(client, reason = "killed") {
                 `#${rank} **${name}** — ${formatNumber(item.damage)} dame | ` +
                     `⚔️ ${formatNumber(item.hits)} lượt | ` +
                     `💰 ${formatMoney(moneyReward)}` +
+                    ` | ✨ +${formatNumber(expReward)} exp` +
                     `${phapBaoRewardText ? ` | ${phapBaoRewardText}` : ""}` +
                     `${tags.length > 0 ? ` | ${tags.join(", ")}` : ""}`,
             );

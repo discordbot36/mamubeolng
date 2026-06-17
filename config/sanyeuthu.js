@@ -5,7 +5,8 @@ module.exports = {
         minMembers: 2,
         maxMembers: 4,
         lobbyDurationMs: 3 * 60 * 1000,
-        actionDurationMs: 35 * 1000,
+        actionDurationMs: 60 * 1000,
+        graceDurationMs: 25 * 1000,
     },
 
     cooldown: {

@@ -9,6 +9,7 @@ const {
     addMoney,
     addInventoryItem,
     ensureTuTienProfile,
+    updateTuTienProfile,
     ensureTowerProfile,
     updateTowerProfile,
     formatMoney,
@@ -169,6 +170,30 @@ function isChestFloor(floor) {
     return floor % towerConfig.chestEveryFloor === 0;
 }
 
+function addTuTienExp(userId, amount) {
+    const exp = Math.max(0, Math.floor(Number(amount || 0)));
+
+    if (exp <= 0) {
+        return 0;
+    }
+
+    updateTuTienProfile(userId, (profile) => {
+        profile.exp = Number(profile.exp || 0) + exp;
+    });
+
+    return exp;
+}
+
+function getTowerExpReward(floor) {
+    const baseExp = Math.floor(35 + floor * 10 + Math.pow(floor, 1.05) * 6);
+
+    if (isChestFloor(floor)) {
+        return Math.floor(baseExp * 1.25);
+    }
+
+    return baseExp;
+}
+
 function getMoneyReward(floor) {
     const reward = Math.floor(
         Number(towerConfig.reward.base || 120) *
@@ -198,18 +223,20 @@ function getChestByFloor(floor) {
 function getRewardText(floor) {
     const coin = getCurrencyEmoji();
     const moneyReward = getMoneyReward(floor);
+    const expReward = getTowerExpReward(floor);
 
     if (isChestFloor(floor)) {
         const chest = getChestByFloor(floor);
 
         return (
             `${coin} **${formatMoney(moneyReward)}**\n` +
+            `✨ Tu vi **+${formatNumber(expReward)} exp**\n` +
             `${chest.emoji} **${chest.name}**\n` +
             `🎁 Boss.`
         );
     }
 
-    return `${coin} **${formatMoney(moneyReward)}**`;
+    return `${coin} **${formatMoney(moneyReward)}**\n✨ Tu vi **+${formatNumber(expReward)} exp**`;
 }
 
 function buildFightButton(userId, disabled = false) {
@@ -851,9 +878,11 @@ async function fight(interaction) {
     if (isChestFloor(nextFloor)) {
         const chest = getChestByFloor(nextFloor);
         const reward = getMoneyReward(nextFloor);
+        const expReward = getTowerExpReward(nextFloor);
         const coin = getCurrencyEmoji();
 
         addMoney(userId, reward);
+        addTuTienExp(userId, expReward);
 
         addInventoryItem(userId, {
             id: chest.id,
@@ -884,14 +913,17 @@ async function fight(interaction) {
 
         rewardText =
             `${coin} Nhận: **${formatMoney(reward)}**\n` +
+            `✨ Tu vi: **+${formatNumber(expReward)} exp**\n` +
             `${chest.emoji} **${chest.name}**\n` +
             `📦 Đã cất rương vào kho đồ. Mở bằng \`/mophapbao\`.` +
             `${phapBaoRewardText ? `\n${phapBaoRewardText}` : ""}`;
     } else {
         const reward = getMoneyReward(nextFloor);
+        const expReward = getTowerExpReward(nextFloor);
         const coin = getCurrencyEmoji();
 
         addMoney(userId, reward);
+        addTuTienExp(userId, expReward);
 
         updatedTower = updateTowerProfile(userId, (data) => {
             data.floor = nextFloor;
@@ -900,7 +932,7 @@ async function fight(interaction) {
             data.loseCooldownUntil = 0;
         });
 
-        rewardText = `${coin} Nhận: **${formatMoney(reward)}**`;
+        rewardText = `${coin} Nhận: **${formatMoney(reward)}**\n✨ Tu vi: **+${formatNumber(expReward)} exp**`;
     }
     const nextNextFloor = nextFloor + 1;
     const nextMonster = buildMonster(nextNextFloor);

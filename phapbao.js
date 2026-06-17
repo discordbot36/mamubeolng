@@ -1344,10 +1344,15 @@ function getBulkDismantleRarityRank(rarityId) {
 }
 
 function canBulkDismantleWeapon(user, weapon, maxRarityId) {
-    if (!weapon || weapon.state !== "identified") {
+    if (!weapon) {
         return false;
     }
 
+    const state = weapon.state || "identified";
+
+    if (!["identified", "unidentified"].includes(state)) {
+        return false;
+    }
     if (weapon.locked) {
         return false;
     }
@@ -1419,9 +1424,13 @@ function buildBulkDismantleEmbed(interaction, result) {
             const rarity = weaponConfig.getRarity(item.rarityId) || {};
             const stars = Number(item.stars || 0);
 
+            const stateText =
+                item.state === "unidentified" ? " • Phôi chưa giám định" : "";
+
             return (
                 `${index + 1}. ${rarity.emoji || "⚔️"} **${item.name}**` +
                 `${stars > 0 ? ` ${stars}⭐` : ""}` +
+                `${stateText}` +
                 ` → 🧩 x${formatNumber(item.fragments)}`
             );
         });
@@ -1514,6 +1523,7 @@ function bulkDismantleWeapons(interaction) {
             dismantledWeapons.push({
                 uid: weapon.uid,
                 name: weapon.name || "Pháp bảo không rõ tên",
+                state: weapon.state || "identified",
                 rarityId,
                 stars: Number(weapon.stars || 0),
                 fragments,
