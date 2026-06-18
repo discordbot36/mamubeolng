@@ -96,6 +96,9 @@ function getAdminIds() {
         ? adminConfig.allowedUserIds.map(String)
         : [];
 }
+function isValidDiscordId(id) {
+    return /^\d{17,20}$/.test(String(id || ""));
+}
 
 function getTodayKey() {
     return new Intl.DateTimeFormat("en-CA", {
@@ -597,6 +600,8 @@ async function createHuntChannel(interaction, hunt) {
         throw new Error("Săn yêu thú chỉ có thể mở trong server.");
     }
 
+    const botId = interaction.client.user.id;
+
     const permissionOverwrites = [
         {
             id: guild.roles.everyone.id,
@@ -607,15 +612,7 @@ async function createHuntChannel(interaction, hunt) {
             deny: [PermissionFlagsBits.SendMessages],
         },
         {
-            id: hunt.hostId,
-            allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-            ],
-        },
-        {
-            id: interaction.client.user.id,
+            id: botId,
             allow: [
                 PermissionFlagsBits.ViewChannel,
                 PermissionFlagsBits.SendMessages,
@@ -626,17 +623,6 @@ async function createHuntChannel(interaction, hunt) {
         },
     ];
 
-    for (const adminId of getAdminIds()) {
-        permissionOverwrites.push({
-            id: adminId,
-            allow: [
-                PermissionFlagsBits.ViewChannel,
-                PermissionFlagsBits.SendMessages,
-                PermissionFlagsBits.ReadMessageHistory,
-            ],
-        });
-    }
-
     const channel = await guild.channels.create({
         name: `${config.channel.namePrefix}-${hunt.id.slice(-6)}`,
         type: ChannelType.GuildText,
@@ -644,6 +630,36 @@ async function createHuntChannel(interaction, hunt) {
         permissionOverwrites,
         reason: `Mở săn yêu thú ${hunt.id}`,
     });
+
+    const hostMember = await guild.members.fetch(hunt.hostId).catch(() => null);
+
+    if (hostMember) {
+        await channel.permissionOverwrites
+            .edit(hostMember, {
+                ViewChannel: true,
+                SendMessages: true,
+                ReadMessageHistory: true,
+            })
+            .catch(() => null);
+    }
+
+    for (const adminId of getAdminIds().filter(isValidDiscordId)) {
+        const adminMember = await guild.members
+            .fetch(adminId)
+            .catch(() => null);
+
+        if (!adminMember) {
+            continue;
+        }
+
+        await channel.permissionOverwrites
+            .edit(adminMember, {
+                ViewChannel: true,
+                SendMessages: true,
+                ReadMessageHistory: true,
+            })
+            .catch(() => null);
+    }
 
     hunt.channelId = channel.id;
 
@@ -1230,6 +1246,7 @@ async function finishBattle(channel, hunt, success) {
         )
         .setDescription(
             `${hunt.beast.emoji} **${hunt.beast.name}** — ${hunt.beast.tierName}\n` +
+                `🔁 Lượt đã đánh: **${formatNumber(battle.resolvedTurn || battle.turn || 0)}/${formatNumber(battle.maxTurns || 0)}**\n` +
                 `🌀 Nhịp phối hợp cuối: **${battle.rhythm}/100**\n` +
                 `🎒 Tiền giữ lại: **${getCurrencyEmoji()} ${formatMoney(finalMoney)}**\n` +
                 `💥 Tiền đã rơi/mất: **${getCurrencyEmoji()} ${formatMoney(battle.loot.lostMoney || 0)}**\n` +

@@ -69,7 +69,7 @@ module.exports = {
             level: 1,
             soloWeight: 36,
             partyWeight: 24,
-            maxTurns: 3,
+            maxTurns: 4,
             hpMultiplier: 0.82,
             damageMultiplier: 0.8,
             rewardMultiplier: 1,

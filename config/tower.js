@@ -4,7 +4,7 @@ module.exports = {
     reward: {
         base: 145,
         power: 1.15,
-        chestFloorMultiplier: 2,
+        chestFloorMultiplier: 2.5,
     },
 
     monster: {

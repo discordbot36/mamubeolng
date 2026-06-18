@@ -895,7 +895,8 @@ async function fight(interaction) {
             description: "Rương nhận được khi leo tháp. Mở bằng /mophapbao.",
         });
         const phapBaoRewards = givePhapBaoFarmReward(userId, "tower", {
-            rolls: 1,
+            rolls: 2,
+            amountMultiplier: 1.25,
         });
 
         const phapBaoRewardText = phapBaoRewards

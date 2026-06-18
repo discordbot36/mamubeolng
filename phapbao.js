@@ -12,55 +12,53 @@ const weaponConfig = require("./weapon");
 const FRAGMENT_ITEM_ID = "manh_phap_bao";
 const BULK_DISMANTLE_MAX_AMOUNT = 50;
 const MAX_OPEN_AMOUNT = 10;
+const PHAPBAO_PAGE_SIZE = 8;
 const REMOVED_WEAPON_SUB_STATS = new Set(["expBonus", "moneyBonus"]);
 const TOWER_CHEST_PHAPBAO_DROPS = {
     dong: [
-        { type: "fragment", weight: 70, min: 1, max: 8 },
-        { type: "unidentified_weapon", rarity: "F", weight: 20 },
-        { type: "unidentified_weapon", rarity: "E", weight: 7 },
-        { type: "unidentified_weapon", rarity: "D", weight: 2.5 },
-        { type: "unidentified_weapon", rarity: "C", weight: 0.5 },
+        { type: "fragment", weight: 58, min: 5, max: 18 },
+        { type: "unidentified_weapon", rarity: "F", weight: 24 },
+        { type: "unidentified_weapon", rarity: "E", weight: 12 },
+        { type: "unidentified_weapon", rarity: "D", weight: 5 },
+        { type: "unidentified_weapon", rarity: "C", weight: 1 },
     ],
 
     bac: [
-        { type: "fragment", weight: 65, min: 5, max: 25 },
-        { type: "unidentified_weapon", rarity: "E", weight: 16 },
-        { type: "unidentified_weapon", rarity: "D", weight: 10 },
-        { type: "unidentified_weapon", rarity: "C", weight: 6 },
-        { type: "unidentified_weapon", rarity: "B", weight: 2.5 },
-        { type: "unidentified_weapon", rarity: "A", weight: 0.5 },
+        { type: "fragment", weight: 50, min: 15, max: 50 },
+        { type: "unidentified_weapon", rarity: "D", weight: 20 },
+        { type: "unidentified_weapon", rarity: "C", weight: 14 },
+        { type: "unidentified_weapon", rarity: "B", weight: 9 },
+        { type: "unidentified_weapon", rarity: "A", weight: 5 },
+        { type: "unidentified_weapon", rarity: "S", weight: 2 },
     ],
 
     vang: [
-        { type: "fragment", weight: 58, min: 20, max: 80 },
-        { type: "unidentified_weapon", rarity: "D", weight: 12 },
-        { type: "unidentified_weapon", rarity: "C", weight: 11 },
-        { type: "unidentified_weapon", rarity: "B", weight: 9 },
-        { type: "unidentified_weapon", rarity: "A", weight: 6 },
-        { type: "unidentified_weapon", rarity: "S", weight: 3 },
-        { type: "unidentified_weapon", rarity: "SS", weight: 0.8 },
-        { type: "unidentified_weapon", rarity: "SSS", weight: 0.2 },
+        { type: "fragment", weight: 42, min: 60, max: 180 },
+        { type: "unidentified_weapon", rarity: "C", weight: 18 },
+        { type: "unidentified_weapon", rarity: "B", weight: 16 },
+        { type: "unidentified_weapon", rarity: "A", weight: 12 },
+        { type: "unidentified_weapon", rarity: "S", weight: 8 },
+        { type: "unidentified_weapon", rarity: "SS", weight: 3.2 },
+        { type: "unidentified_weapon", rarity: "SSS", weight: 0.8 },
     ],
 
     kim_cuong: [
-        { type: "fragment", weight: 50, min: 60, max: 180 },
-        { type: "unidentified_weapon", rarity: "C", weight: 10 },
-        { type: "unidentified_weapon", rarity: "B", weight: 13 },
-        { type: "unidentified_weapon", rarity: "A", weight: 13 },
-        { type: "unidentified_weapon", rarity: "S", weight: 9 },
-        { type: "unidentified_weapon", rarity: "SS", weight: 4 },
-        { type: "unidentified_weapon", rarity: "SSS", weight: 1 },
+        { type: "fragment", weight: 35, min: 180, max: 450 },
+        { type: "unidentified_weapon", rarity: "B", weight: 20 },
+        { type: "unidentified_weapon", rarity: "A", weight: 20 },
+        { type: "unidentified_weapon", rarity: "S", weight: 16 },
+        { type: "unidentified_weapon", rarity: "SS", weight: 7 },
+        { type: "unidentified_weapon", rarity: "SSS", weight: 2 },
     ],
 
     mamu: [
-        { type: "fragment", weight: 40, min: 120, max: 350 },
-        { type: "unidentified_weapon", rarity: "B", weight: 10 },
-        { type: "unidentified_weapon", rarity: "A", weight: 15 },
-        { type: "unidentified_weapon", rarity: "S", weight: 20 },
-        { type: "unidentified_weapon", rarity: "SS", weight: 12 },
-        { type: "unidentified_weapon", rarity: "SSS", weight: 3 },
+        { type: "fragment", weight: 25, min: 400, max: 900 },
+        { type: "unidentified_weapon", rarity: "A", weight: 24 },
+        { type: "unidentified_weapon", rarity: "S", weight: 28 },
+        { type: "unidentified_weapon", rarity: "SS", weight: 18 },
+        { type: "unidentified_weapon", rarity: "SSS", weight: 5 },
     ],
-};
+};;
 const DISMANTLE_FRAGMENT_RANGES = {
     F: [1, 2],
     E: [2, 4],
@@ -98,6 +96,9 @@ const MERGE_FRAGMENT_COSTS = {
 
     EX: null,
 };
+
+const REROLL_CONFIRM_TTL_MS = 60 * 1000;
+const pendingRerollConfirms = new Map();
 const REROLL_BASE_COSTS = {
     F: 500,
     E: 1500,
@@ -2388,6 +2389,53 @@ function formatLockedLines(lockedIndexes) {
 
     return lockedIndexes.map((index) => `Dòng ${index + 1}`).join(", ");
 }
+function formatLockedLineDetails(weapon, lockedIndexes) {
+    const subStats = Array.isArray(weapon?.subStats) ? weapon.subStats : [];
+
+    if (!Array.isArray(lockedIndexes) || lockedIndexes.length <= 0) {
+        return "Không khóa dòng nào. Tất cả dòng phụ sẽ bị roll lại.";
+    }
+
+    return lockedIndexes
+        .map((index) => {
+            const stat = subStats[index];
+
+            if (!stat) {
+                return `**${index + 1}.** Không tìm thấy dòng`;
+            }
+
+            return `**${index + 1}.** 🔒 ${weaponConfig.formatSubStat(stat)}`;
+        })
+        .join("\n")
+        .slice(0, 1024);
+}
+
+function formatUnlockedLineDetails(weapon, lockedIndexes) {
+    const subStats = Array.isArray(weapon?.subStats) ? weapon.subStats : [];
+    const lockedSet = new Set(lockedIndexes);
+
+    const lines = subStats
+        .map((stat, index) => {
+            if (lockedSet.has(index)) {
+                return null;
+            }
+
+            return `**${index + 1}.** 🎲 ${weaponConfig.formatSubStat(stat)}`;
+        })
+        .filter(Boolean);
+
+    if (lines.length <= 0) {
+        return "Không có dòng nào sẽ roll.";
+    }
+
+    return lines.join("\n").slice(0, 1024);
+}
+
+function createRerollConfirmToken() {
+    return `${Date.now().toString(36)}${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+}
 function calculateRerollCost(weapon, lockedCount) {
     const rarity = getWeaponDisplayRarity(weapon);
     const baseCost = REROLL_BASE_COSTS[rarity.id];
@@ -2540,6 +2588,62 @@ function formatRerollCompareBlock(oldSubStats, newSubStats, lockedIndexes) {
         })
         .join("\n\n");
 }
+function buildRerollConfirmEmbed(interaction, weapon, lockedIndexes, cost) {
+    const rarity = getWeaponDisplayRarity(weapon);
+
+    return new EmbedBuilder()
+        .setTitle("⚠️ Xác Nhận Roll Dòng Phụ")
+        .setColor(0xffcc00)
+        .setDescription(
+            [
+                `${interaction.user}, hãy kiểm tra kỹ trước khi roll.`,
+                "",
+                `${rarity.emoji} ${weapon.emoji || ""} **${weapon.name}**`,
+                "",
+                "Sau khi xác nhận:",
+                "- Những dòng **không khóa** sẽ bị roll lại.",
+                "- Những dòng **đã khóa** sẽ được giữ nguyên.",
+                "- Tiền sẽ bị trừ ngay khi bấm xác nhận.",
+            ].join("\n"),
+        )
+        .addFields(
+            {
+                name: "💸 Chi phí",
+                value: `**${formatNumber(cost)}** ${getCurrencyText()}`,
+                inline: true,
+            },
+            {
+                name: "🔒 Dòng đang khóa",
+                value: formatLockedLineDetails(weapon, lockedIndexes),
+                inline: false,
+            },
+            {
+                name: "🎲 Dòng sẽ bị roll lại",
+                value: formatUnlockedLineDetails(weapon, lockedIndexes),
+                inline: false,
+            },
+        )
+        .setFooter({
+            text: "Kiểm tra kỹ dòng khóa trước khi bấm xác nhận.",
+        })
+        .setTimestamp();
+}
+
+function buildRerollConfirmButtons(userId, token) {
+    return new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`phapbao_reroll_confirm_${userId}_${token}`)
+            .setLabel("Xác nhận roll")
+            .setEmoji("✅")
+            .setStyle(ButtonStyle.Danger),
+
+        new ButtonBuilder()
+            .setCustomId(`phapbao_reroll_cancel_${userId}_${token}`)
+            .setLabel("Hủy")
+            .setEmoji("❌")
+            .setStyle(ButtonStyle.Secondary),
+    );
+}
 function buildRerollWeaponEmbed(
     interaction,
     weapon,
@@ -2592,17 +2696,8 @@ function buildRerollWeaponEmbed(
 
     return embed;
 }
-function rerollWeaponSubStats(interaction) {
+function executeConfirmedReroll(interaction, query, lockedText) {
     const userId = interaction.user.id;
-    const query = interaction.options.getString("phapbao", true);
-    const lockedText = interaction.options.getString("khoa") || "";
-
-    if (query === "none") {
-        return interaction.reply({
-            content: "❌ Bạn không có pháp bảo nào đã giám định để roll dòng.",
-            ephemeral: true,
-        });
-    }
 
     const result = database.updateUser(userId, (user) => {
         const weapon = findWeaponByQuery(user, query, (item) => {
@@ -2651,13 +2746,15 @@ function rerollWeaponSubStats(interaction) {
     });
 
     if (!result.success) {
-        return interaction.reply({
+        return interaction.update({
             content: `❌ ${result.message}`,
-            ephemeral: true,
+            embeds: [],
+            components: [],
         });
     }
 
-    return interaction.reply({
+    return interaction.update({
+        content: "✅ Đã xác nhận roll dòng phụ.",
         embeds: [
             buildRerollWeaponEmbed(
                 interaction,
@@ -2668,30 +2765,81 @@ function rerollWeaponSubStats(interaction) {
                 result.cost,
             ),
         ],
+        components: [],
     });
 }
-function listWeapons(interaction) {
-    const user = database.getUser(interaction.user.id);
-    const weapons = Array.isArray(user.weapons) ? user.weapons : [];
-    const page = Math.max(1, interaction.options.getInteger("trang") || 1);
-    const pageSize = 8;
-    const totalPages = Math.max(1, Math.ceil(weapons.length / pageSize));
+function rerollWeaponSubStats(interaction) {
+    const userId = interaction.user.id;
+    const query = interaction.options.getString("phapbao", true);
+    const lockedText = interaction.options.getString("khoa") || "";
 
-    if (weapons.length <= 0) {
+    if (query === "none") {
         return interaction.reply({
-            content: [
-                "🐷 Bạn chưa có pháp bảo nào.",
-                "",
-                "Gợi ý:",
-                "`/mua` rương pháp bảo trước, sau đó dùng `/mophapbao`.",
-            ].join("\n"),
+            content: "❌ Bạn không có pháp bảo nào đã giám định để roll dòng.",
             ephemeral: true,
         });
     }
 
-    const safePage = Math.min(page, totalPages);
-    const startIndex = (safePage - 1) * pageSize;
-    const pageWeapons = weapons.slice(startIndex, startIndex + pageSize);
+    const user = database.getUser(userId);
+
+    const weapon = findWeaponByQuery(user, query, (item) => {
+        return item.state === "identified";
+    });
+
+    const subStatCount = Array.isArray(weapon?.subStats)
+        ? weapon.subStats.length
+        : 0;
+
+    const lockedIndexes = parseLockedLineIndexes(lockedText, subStatCount);
+    const check = canRerollWeapon(user, weapon, lockedIndexes);
+
+    if (!check.ok) {
+        return interaction.reply({
+            content: `❌ ${check.message}`,
+            ephemeral: true,
+        });
+    }
+
+    const token = createRerollConfirmToken();
+
+    pendingRerollConfirms.set(token, {
+        userId,
+        weaponUid: weapon.uid,
+        lockedText: lockedIndexes.map((index) => index + 1).join(","),
+        createdAt: Date.now(),
+    });
+
+    return interaction.reply({
+        embeds: [
+            buildRerollConfirmEmbed(
+                interaction,
+                weapon,
+                lockedIndexes,
+                check.cost,
+            ),
+        ],
+        components: [buildRerollConfirmButtons(userId, token)],
+        ephemeral: true,
+    });
+}
+function clampPhapBaoPage(page, totalPages) {
+    return Math.max(1, Math.min(Number(page || 1), totalPages));
+}
+
+function buildWeaponListEmbed(user, page = 1) {
+    const weapons = Array.isArray(user.weapons) ? user.weapons : [];
+    const totalPages = Math.max(
+        1,
+        Math.ceil(weapons.length / PHAPBAO_PAGE_SIZE),
+    );
+
+    const safePage = clampPhapBaoPage(page, totalPages);
+    const startIndex = (safePage - 1) * PHAPBAO_PAGE_SIZE;
+    const pageWeapons = weapons.slice(
+        startIndex,
+        startIndex + PHAPBAO_PAGE_SIZE,
+    );
+
     const stateSummary = countWeaponsByState(weapons);
     const equippedWeapon = weapons.find((weapon) => {
         return weapon.uid === user.equippedWeaponUid;
@@ -2701,10 +2849,12 @@ function listWeapons(interaction) {
         return formatWeaponLine(weapon, startIndex + index + 1, user);
     });
 
-    const embed = new EmbedBuilder()
+    return new EmbedBuilder()
         .setTitle("🐷 Kho Pháp Bảo")
         .setColor(0x9b59b6)
-        .setDescription(weaponLines.join("\n\n"))
+        .setDescription(
+            weaponLines.join("\n\n") || "Không có pháp bảo ở trang này.",
+        )
         .addFields(
             {
                 name: "📊 Tổng quan",
@@ -2729,12 +2879,73 @@ function listWeapons(interaction) {
             },
         )
         .setFooter({
-            text: `Trang ${safePage}/${totalPages} • UID hiển thị 6 ký tự cuối để sau này chọn pháp bảo dễ hơn.`,
+            text: `Trang ${safePage}/${totalPages} • UID hiển thị 6 ký tự cuối để chọn pháp bảo dễ hơn.`,
         })
         .setTimestamp();
+}
+
+function buildWeaponListButtons(userId, page = 1, totalPages = 1) {
+    const safePage = clampPhapBaoPage(page, totalPages);
+
+    if (totalPages <= 1) {
+        return [];
+    }
+
+    return [
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`phapbao_prev_${userId}_${safePage}`)
+                .setLabel("Trang trước")
+                .setEmoji("⬅️")
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(safePage <= 1),
+
+            new ButtonBuilder()
+                .setCustomId(`phapbao_page_${userId}_${safePage}`)
+                .setLabel(`${safePage}/${totalPages}`)
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(true),
+
+            new ButtonBuilder()
+                .setCustomId(`phapbao_next_${userId}_${safePage}`)
+                .setLabel("Trang sau")
+                .setEmoji("➡️")
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(safePage >= totalPages),
+        ),
+    ];
+}
+
+function listWeapons(interaction) {
+    const user = database.getUser(interaction.user.id);
+    const weapons = Array.isArray(user.weapons) ? user.weapons : [];
+    const page = Math.max(1, interaction.options.getInteger("trang") || 1);
+    const totalPages = Math.max(
+        1,
+        Math.ceil(weapons.length / PHAPBAO_PAGE_SIZE),
+    );
+
+    if (weapons.length <= 0) {
+        return interaction.reply({
+            content: [
+                "🐷 Bạn chưa có pháp bảo nào.",
+                "",
+                "Gợi ý:",
+                "`/mua` rương pháp bảo trước, sau đó dùng `/mophapbao`.",
+            ].join("\n"),
+            ephemeral: true,
+        });
+    }
+
+    const safePage = clampPhapBaoPage(page, totalPages);
 
     return interaction.reply({
-        embeds: [embed],
+        embeds: [buildWeaponListEmbed(user, safePage)],
+        components: buildWeaponListButtons(
+            interaction.user.id,
+            safePage,
+            totalPages,
+        ),
     });
 }
 
@@ -3341,28 +3552,113 @@ function phapBaoInfo(interaction) {
 }
 
 async function handleButton(interaction) {
-    if (!interaction.customId.startsWith("phapbaoinfo_")) {
+    if (interaction.customId.startsWith("phapbao_reroll_")) {
+        const parts = interaction.customId.split("_");
+        const action = parts[2];
+        const ownerId = parts[3];
+        const token = parts[4];
+
+        if (String(interaction.user.id) !== String(ownerId)) {
+            return interaction.reply({
+                content: "❌ Đây không phải nút xác nhận roll của bạn.",
+                ephemeral: true,
+            });
+        }
+
+        const pending = pendingRerollConfirms.get(token);
+
+        if (
+            !pending ||
+            Date.now() - Number(pending.createdAt || 0) > REROLL_CONFIRM_TTL_MS
+        ) {
+            pendingRerollConfirms.delete(token);
+
+            return interaction.update({
+                content:
+                    "⏰ Xác nhận roll đã hết hạn. Hãy dùng lại `/rollphapbao`.",
+                embeds: [],
+                components: [],
+            });
+        }
+
+        if (action === "cancel") {
+            pendingRerollConfirms.delete(token);
+
+            return interaction.update({
+                content: "❌ Đã hủy roll dòng phụ.",
+                embeds: [],
+                components: [],
+            });
+        }
+
+        if (action === "confirm") {
+            pendingRerollConfirms.delete(token);
+
+            return executeConfirmedReroll(
+                interaction,
+                pending.weaponUid,
+                pending.lockedText,
+            );
+        }
+
         return undefined;
     }
+    if (
+        interaction.customId.startsWith("phapbao_prev_") ||
+        interaction.customId.startsWith("phapbao_next_")
+    ) {
+        const parts = interaction.customId.split("_");
+        const action = parts[1];
+        const ownerId = parts[2];
+        const currentPage = Number.parseInt(parts[3], 10) || 1;
 
-    const parts = interaction.customId.split("_");
-    const topic = parts[1] || "home";
-    const ownerId = parts[2];
+        if (String(interaction.user.id) !== String(ownerId)) {
+            return interaction.reply({
+                content: "❌ Đây không phải kho pháp bảo của bạn.",
+                ephemeral: true,
+            });
+        }
 
-    if (String(interaction.user.id) !== String(ownerId)) {
-        return interaction.reply({
-            content:
-                "❌ Đây không phải bảng pháp bảo của bạn. Tự dùng `/phapbaoinfo` đi anh bạn.",
-            ephemeral: true,
+        const user = database.getUser(ownerId);
+        const weapons = Array.isArray(user.weapons) ? user.weapons : [];
+
+        const totalPages = Math.max(
+            1,
+            Math.ceil(weapons.length / PHAPBAO_PAGE_SIZE),
+        );
+
+        const nextPage = action === "next" ? currentPage + 1 : currentPage - 1;
+
+        const safePage = clampPhapBaoPage(nextPage, totalPages);
+
+        return interaction.update({
+            embeds: [buildWeaponListEmbed(user, safePage)],
+            components: buildWeaponListButtons(ownerId, safePage, totalPages),
         });
     }
 
-    const safeTopic = normalizeInfoTopic(topic);
+    if (interaction.customId.startsWith("phapbaoinfo_")) {
+        const parts = interaction.customId.split("_");
+        const topic = parts[1] || "home";
+        const ownerId = parts[2];
 
-    return interaction.update({
-        embeds: [buildPhapBaoInfoEmbed(safeTopic)],
-        components: buildPhapBaoInfoButtons(ownerId, safeTopic),
-    });
+        if (String(interaction.user.id) !== String(ownerId)) {
+            return interaction.reply({
+                content:
+                    "❌ Đây không phải bảng pháp bảo của bạn. Tự dùng `/phapbaoinfo` đi anh bạn.",
+                ephemeral: true,
+            });
+        }
+
+        const safeTopic = normalizeInfoTopic(topic);
+
+        return interaction.update({
+            embeds: [buildPhapBaoInfoEmbed(safeTopic)],
+            components: buildPhapBaoInfoButtons(ownerId, safeTopic),
+        });
+    }
+
+    return undefined;
 }
 
 module.exports = {
