@@ -31,6 +31,8 @@ const LEADERBOARD_TYPES = {
 
 let isUpdating = false;
 let intervalId = null;
+const usernameCache = new Map();
+const USERNAME_CACHE_TTL_MS = 60 * 60 * 1000;
 
 function formatNumber(number) {
     return Number(number || 0).toLocaleString("vi-VN");
@@ -753,13 +755,25 @@ function getRankIcon(index) {
 }
 
 async function getUsername(client, userId) {
-    const user = await client.users.fetch(userId).catch(() => null);
+    const key = String(userId);
+    const cached = usernameCache.get(key);
 
-    if (!user) {
-        return `User ${userId}`;
+    if (cached && Date.now() - cached.time < USERNAME_CACHE_TTL_MS) {
+        return cached.name;
     }
 
-    return user.globalName || user.username;
+    const cachedUser = client.users.cache.get(key);
+    const user =
+        cachedUser ||
+        (await client.users.fetch(key, { cache: true }).catch(() => null));
+    const name = user ? user.globalName || user.username : `User ${key}`;
+
+    usernameCache.set(key, {
+        name,
+        time: Date.now(),
+    });
+
+    return name;
 }
 
 async function buildRanking(client) {
@@ -971,15 +985,19 @@ function startAutoUpdate(client) {
         return;
     }
 
-    const seconds = Number(leaderboardConfig.updateEverySeconds || 30);
-    const intervalMs = Math.max(10, seconds) * 1000;
+    const seconds = Number(leaderboardConfig.updateEverySeconds || 300);
+    const intervalMs = Math.max(300, seconds) * 1000;
 
     updateCombatPowerLeaderboard(client, {
         force: true,
+    }).catch((error) => {
+        console.error("[Leaderboard] Lỗi lần cập nhật đầu:", error);
     });
 
     intervalId = setInterval(() => {
-        updateCombatPowerLeaderboard(client);
+        updateCombatPowerLeaderboard(client).catch((error) => {
+            console.error("[Leaderboard] Lỗi auto update:", error);
+        });
     }, intervalMs);
 
     console.log(

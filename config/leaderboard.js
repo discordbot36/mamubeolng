@@ -1,7 +1,7 @@
 module.exports = {
     channelId: "1510828256234962984",
 
-    updateEverySeconds: 120,
+    updateEverySeconds: 1800,
 
     limit: 10,
 

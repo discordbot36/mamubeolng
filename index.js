@@ -50,6 +50,10 @@ process.on("uncaughtException", (error) => {
     console.error("[Uncaught Exception]", error);
 });
 
+function isIgnoredInteractionError(error) {
+    return error?.code === 10062 || error?.code === 40060;
+}
+
 client.once("clientReady", () => {
     console.log(`Logged in as ${client.user.tag}`);
 
@@ -85,6 +89,10 @@ client.on("interactionCreate", async (interaction) => {
 
         return undefined;
     } catch (error) {
+        if (isIgnoredInteractionError(error)) {
+            return undefined;
+        }
+
         console.error(error);
 
         if (!interaction.isRepliable()) {
