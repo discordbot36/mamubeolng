@@ -23,6 +23,7 @@ const {
 const adminConfig = require("./config/admin");
 const config = require("./config/sanyeuthu");
 const combat = require("./utils/combat");
+const quest = require("./quest");
 
 const activeTimers = new Map();
 
