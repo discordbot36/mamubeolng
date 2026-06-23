@@ -39,10 +39,18 @@ function buildIntents() {
 const client = new Client({ intents: buildIntents() });
 
 client.on("error", (error) => {
+    if (isIgnoredInteractionError(error)) {
+        return;
+    }
+
     console.error("[Client Error]", error);
 });
 
 process.on("unhandledRejection", (error) => {
+    if (isIgnoredInteractionError(error)) {
+        return;
+    }
+
     console.error("[Unhandled Rejection]", error);
 });
 
@@ -51,7 +59,12 @@ process.on("uncaughtException", (error) => {
 });
 
 function isIgnoredInteractionError(error) {
-    return error?.code === 10062 || error?.code === 40060;
+    return (
+        error?.code === 10062 ||
+        error?.code === 40060 ||
+        error?.rawError?.code === 10062 ||
+        error?.rawError?.code === 40060
+    );
 }
 
 client.once("clientReady", () => {
@@ -72,19 +85,23 @@ client.once("clientReady", () => {
 client.on("interactionCreate", async (interaction) => {
     try {
         if (interaction.isAutocomplete()) {
-            return router.handleAutocomplete(interaction);
+            await router.handleAutocomplete(interaction);
+            return;
         }
 
         if (interaction.isChatInputCommand()) {
-            return router.handleCommand(interaction);
+            await router.handleCommand(interaction);
+            return;
         }
 
         if (interaction.isModalSubmit()) {
-            return router.handleModal(interaction);
+            await router.handleModal(interaction);
+            return;
         }
 
         if (interaction.isButton() || interaction.isStringSelectMenu()) {
-            return router.handleButton(interaction);
+            await router.handleButton(interaction);
+            return;
         }
 
         return undefined;
