@@ -93,13 +93,29 @@ function createBetModal(gameId, pigIndex) {
         .setMaxLength(12)
         .setPlaceholder("Ví dụ: 1000");
 
-    modal.addComponents(
-        new ActionRowBuilder().addComponents(input),
-    );
+    modal.addComponents(new ActionRowBuilder().addComponents(input));
 
     return modal;
 }
+async function safeEditMessage(message, payload, label = "Race") {
+    if (!message || typeof message.edit !== "function") {
+        return false;
+    }
 
+    try {
+        await message.edit(payload);
+        return true;
+    } catch (error) {
+        if (error?.code === 10008 || error?.status === 404) {
+            console.warn(
+                `[${label}] Message đã bị xóa hoặc không còn tồn tại, bỏ qua edit.`,
+            );
+            return false;
+        }
+
+        throw error;
+    }
+}
 class RaceManager {
     buildBoard(positions) {
         const pigs = getPigs();
@@ -109,7 +125,10 @@ class RaceManager {
         return pigs
             .map((pig, index) => {
                 const name = pig.name.padEnd(maxNameLength, " ");
-                const position = Math.min(positions[index], raceConfig.finishLine);
+                const position = Math.min(
+                    positions[index],
+                    raceConfig.finishLine,
+                );
                 const beforePig = "─".repeat(position);
                 const afterPig = "─".repeat(raceConfig.finishLine - position);
 
@@ -120,7 +139,9 @@ class RaceManager {
 
     movePigs(positions) {
         return positions.map((position) => {
-            return position + Math.floor(Math.random() * (raceConfig.maxStep + 1));
+            return (
+                position + Math.floor(Math.random() * (raceConfig.maxStep + 1))
+            );
         });
     }
 
@@ -172,7 +193,9 @@ class RaceManager {
         const gameId = parts[2];
         const pigIndex = Number.parseInt(parts[3], 10);
 
-        const game = Array.from(games.values()).find((item) => item.id === gameId);
+        const game = Array.from(games.values()).find(
+            (item) => item.id === gameId,
+        );
 
         if (!game || game.closed) {
             return interaction.reply({
@@ -200,7 +223,9 @@ class RaceManager {
         const gameId = parts[2];
         const pigIndex = Number.parseInt(parts[3], 10);
 
-        const game = Array.from(games.values()).find((item) => item.id === gameId);
+        const game = Array.from(games.values()).find(
+            (item) => item.id === gameId,
+        );
 
         if (!game || game.closed) {
             return interaction.reply({
@@ -214,7 +239,11 @@ class RaceManager {
         const user = getUser(interaction.user.id);
         const pig = getPigs()[pigIndex];
 
-        if (!amount || amount < raceConfig.minBet || amount > raceConfig.maxBet) {
+        if (
+            !amount ||
+            amount < raceConfig.minBet ||
+            amount > raceConfig.maxBet
+        ) {
             return interaction.reply({
                 content: raceConfig.messages.invalidBet,
                 ephemeral: true,
@@ -248,10 +277,14 @@ class RaceManager {
             .catch(() => null);
 
         if (message) {
-            await message.edit({
-                content: buildStartContent(game),
-                components: [createPigButtons(game)],
-            });
+            await safeEditMessage(
+                message,
+                {
+                    content: buildStartContent(game),
+                    components: [createPigButtons(game)],
+                },
+                "Race Bet Update",
+            );
         }
 
         return undefined;
@@ -262,19 +295,33 @@ class RaceManager {
         games.delete(game.key);
 
         if (game.bets.length <= 0) {
-            return raceMessage.edit({
-                content: raceConfig.messages.noBet,
-                components: [createPigButtons(game, true)],
-            });
+            await safeEditMessage(
+                raceMessage,
+                {
+                    content: raceConfig.messages.noBet,
+                    components: [createPigButtons(game, true)],
+                },
+                "Race No Bet",
+            );
+
+            return undefined;
         }
 
-        await raceMessage.edit({
-            content:
-                `🐖 Bàn đua lợn đã khóa cược\n\n` +
-                `${getBetListText(game)}\n\n` +
-                `🏁 Chuẩn bị xuất phát...`,
-            components: [createPigButtons(game, true)],
-        });
+        const lockedEdited = await safeEditMessage(
+            raceMessage,
+            {
+                content:
+                    `🐖 Bàn đua lợn đã khóa cược\n\n` +
+                    `${getBetListText(game)}\n\n` +
+                    `🏁 Chuẩn bị xuất phát...`,
+                components: [createPigButtons(game, true)],
+            },
+            "Race Lock",
+        );
+
+        if (!lockedEdited) {
+            game.messageDeleted = true;
+        }
 
         let positions = getPigs().map(() => 0);
 
@@ -282,10 +329,20 @@ class RaceManager {
             try {
                 positions = this.movePigs(positions);
 
-                await raceMessage.edit({
-                    content: `\`\`\`\n${this.buildBoard(positions)}\n\`\`\``,
-                    components: [createPigButtons(game, true)],
-                });
+                if (!game.messageDeleted) {
+                    const boardEdited = await safeEditMessage(
+                        raceMessage,
+                        {
+                            content: `\`\`\`\n${this.buildBoard(positions)}\n\`\`\``,
+                            components: [createPigButtons(game, true)],
+                        },
+                        "Race Board",
+                    );
+
+                    if (!boardEdited) {
+                        game.messageDeleted = true;
+                    }
+                }
 
                 const winnerIndex = positions.findIndex((pos) => {
                     return pos >= raceConfig.finishLine;
@@ -303,7 +360,9 @@ class RaceManager {
 
                 for (const bet of game.bets) {
                     if (bet.pigIndex === winnerIndex) {
-                        const receive = Math.floor(bet.amount * raceConfig.payout);
+                        const receive = Math.floor(
+                            bet.amount * raceConfig.payout,
+                        );
                         const net = receive - bet.amount;
 
                         addMoney(bet.userId, receive);
@@ -323,12 +382,12 @@ class RaceManager {
 
                 return interaction.channel.send(
                     `🏆 **${winnerPig.name}** chiến thắng!\n\n` +
-                    `${resultLines.join("\n")}\n\n` +
-                    `🏁 Xong kèo, đời là thế thôi`,
+                        `${resultLines.join("\n")}\n\n` +
+                        `🏁 Xong kèo, đời là thế thôi`,
                 );
             } catch (error) {
                 clearInterval(interval);
-                console.error(error);
+                console.error("[Race Run Error]", error);
                 games.delete(game.key);
             }
         }, raceConfig.raceTickMs);
