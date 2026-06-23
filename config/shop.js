@@ -669,7 +669,71 @@ module.exports = {
         sellable: false,
         description: "Rương thưởng từ Boss Thế Giới.",
     },
-
+    ruong_tan_tich_ex: {
+        name: "Rương Tàn Tích EX",
+        emoji: "🌈",
+        price: 0,
+        type: "phap_bao_chest",
+        shopCategory: "phapbao",
+        hidden: true,
+        buyable: false,
+        sellable: false,
+        description:
+            "Rương thưởng Raid Server. Có 0.1% ra phôi EX chưa giám định.",
+        phapBaoDrops: [
+            {
+                type: "unidentified_weapon",
+                rarity: "EX",
+                weight: 100, // 0.1%
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "SSS",
+                weight: 1900, // 1.9%
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "SS",
+                weight: 5000, // 5%
+            },
+            {
+                type: "item",
+                itemId: "ruong_phap_bao_tinh_anh",
+                amount: 1,
+                weight: 8000, // 8%
+            },
+            {
+                type: "fragment",
+                min: 100,
+                max: 300,
+                weight: 25000, // 25%
+            },
+            {
+                type: "tuvi",
+                min: 5000,
+                max: 15000,
+                weight: 20000, // 20%
+            },
+            {
+                type: "money",
+                min: 80000,
+                max: 250000,
+                weight: 15000, // 15%
+            },
+            {
+                type: "fragment",
+                min: 300,
+                max: 650,
+                weight: 10000, // 10%
+            },
+            {
+                type: "money",
+                min: 250000,
+                max: 500000,
+                weight: 5000, // 5%
+            },
+        ],
+    },
     custom_role: {
         name: "Role Tùy Chỉnh",
         emoji: "<:utit:1328542656405438484>",

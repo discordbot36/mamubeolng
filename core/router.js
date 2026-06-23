@@ -22,6 +22,7 @@ const bicanh = require("../bicanh");
 const sanyeuthu = require("../sanyeuthu");
 const dothachTournament = require("../dothachTournament");
 const phapbao = require("../phapbao");
+const raidserver = require("../raidserver");
 const modules = {
     economy,
     race,
@@ -45,6 +46,7 @@ const modules = {
     sanyeuthu,
     phapbao,
     quest,
+    raidserver,
 };
 
 function resolve(path) {
@@ -139,6 +141,7 @@ async function handleButton(interaction) {
         phapbao.handleButton.bind(phapbao),
         sanyeuthu.handleButton.bind(sanyeuthu),
         flip.handleButton.bind(flip),
+        raidserver.handleButton.bind(raidserver),
     ];
 
     for (const handler of handlers) {

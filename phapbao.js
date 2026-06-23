@@ -58,7 +58,7 @@ const TOWER_CHEST_PHAPBAO_DROPS = {
         { type: "unidentified_weapon", rarity: "SS", weight: 18 },
         { type: "unidentified_weapon", rarity: "SSS", weight: 5 },
     ],
-};;
+};
 const DISMANTLE_FRAGMENT_RANGES = {
     F: [1, 2],
     E: [2, 4],
@@ -442,6 +442,31 @@ function rollChestReward(chestItem) {
         };
     }
 
+    if (drop.type === "item") {
+        return {
+            type: "item",
+            itemId: drop.itemId,
+            amount: randomInt(
+                drop.min || drop.amount || 1,
+                drop.max || drop.amount || 1,
+            ),
+        };
+    }
+
+    if (drop.type === "money") {
+        return {
+            type: "money",
+            amount: randomInt(drop.min, drop.max),
+        };
+    }
+
+    if (drop.type === "tuvi") {
+        return {
+            type: "tuvi",
+            amount: randomInt(drop.min, drop.max),
+        };
+    }
+
     return {
         type: "nothing",
     };
@@ -487,6 +512,23 @@ function formatRewardLine(reward) {
         const rarity = weaponConfig.getRarity(reward.weapon.rarity);
 
         return `${rarity.emoji} ${reward.weapon.name}`;
+    }
+
+    if (reward.type === "item") {
+        const item = shop[reward.itemId];
+        const name = item
+            ? `${item.emoji || "🎁"} ${item.name}`
+            : reward.itemId;
+
+        return `${name} x${formatNumber(reward.amount)}`;
+    }
+
+    if (reward.type === "money") {
+        return `💰 Tiền x${formatNumber(reward.amount)}`;
+    }
+
+    if (reward.type === "tuvi") {
+        return `✨ Tu vi x${formatNumber(reward.amount)}`;
     }
 
     return "💨 Không có gì";
@@ -3015,6 +3057,24 @@ function openChest(interaction) {
             if (reward.type === "unidentified_weapon") {
                 user.weapons.push(reward.weapon);
                 updateBestFoundStats(user, reward.weapon);
+            }
+            if (reward.type === "item" && reward.itemId) {
+                addInventoryAmount(user, reward.itemId, reward.amount);
+            }
+
+            if (reward.type === "money") {
+                user.money =
+                    Number(user.money || 0) + Number(reward.amount || 0);
+            }
+
+            if (reward.type === "tuvi") {
+                if (!user.tuTienProfile) {
+                    user.tuTienProfile = {};
+                }
+
+                user.tuTienProfile.exp =
+                    Number(user.tuTienProfile.exp || 0) +
+                    Number(reward.amount || 0);
             }
         }
 

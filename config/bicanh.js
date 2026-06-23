@@ -21,7 +21,7 @@ module.exports = {
         {
             id: "on_dinh",
             name: "Ổn Định",
-            weight: 24,
+            weight: 30,
             level: 1,
             recommendedMembers: 2,
             requiredProgressMultiplier: 1.0,
@@ -36,7 +36,7 @@ module.exports = {
         {
             id: "nhieu_dong",
             name: "Nhiễu Động",
-            weight: 34,
+            weight: 36,
             level: 2,
             recommendedMembers: 3,
             requiredProgressMultiplier: 1.22,
@@ -51,7 +51,7 @@ module.exports = {
         {
             id: "hung_hiem",
             name: "Hung Hiểm",
-            weight: 25,
+            weight: 22,
             level: 3,
             recommendedMembers: 4,
             requiredProgressMultiplier: 1.52,
@@ -66,12 +66,12 @@ module.exports = {
         {
             id: "ac_mong",
             name: "Ác Mộng",
-            weight: 13,
+            weight: 9,
             level: 4,
             recommendedMembers: 5,
-            requiredProgressMultiplier: 1.9,
+            requiredProgressMultiplier: 1.65,
             hpMultiplier: 0.86,
-            damageMultiplier: 1.55,
+            damageMultiplier: 1.38,
             maxTurns: 10,
             wrongActionMultiplier: 0.05,
             failProgressMultiplier: 0.2,
@@ -81,12 +81,12 @@ module.exports = {
         {
             id: "thien_phat",
             name: "Thiên Phạt",
-            weight: 4,
+            weight: 3,
             level: 5,
             recommendedMembers: 6,
-            requiredProgressMultiplier: 2.45,
+            requiredProgressMultiplier: 2.05,
             hpMultiplier: 0.78,
-            damageMultiplier: 1.95,
+            damageMultiplier: 1.65,
             maxTurns: 11,
             wrongActionMultiplier: 0.02,
             failProgressMultiplier: 0.12,
@@ -96,8 +96,8 @@ module.exports = {
     ],
 
     powerLimits: {
-        minGuestRatio: 0.25,
-        recommendedGuestRatio: 0.6,
+        minGuestRatio: 0.12,
+        recommendedGuestRatio: 0.4,
         maxEffectiveRatio: 1.5,
 
         weakGuestRewardMultiplier: 0.55,
@@ -141,19 +141,19 @@ module.exports = {
 
     scaling: {
         difficulty: {
-            2: 0.52,
-            3: 0.67,
-            4: 0.8,
-            5: 0.91,
+            2: 0.48,
+            3: 0.62,
+            4: 0.76,
+            5: 0.88,
             6: 1,
         },
 
         contributionCap: {
-            2: 0.58,
-            3: 0.42,
-            4: 0.33,
-            5: 0.28,
-            6: 0.24,
+            2: 0.75,
+            3: 0.55,
+            4: 0.42,
+            5: 0.34,
+            6: 0.3,
         },
     },
 

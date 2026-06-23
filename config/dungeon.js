@@ -21,18 +21,18 @@ const monsterNames = [
 ];
 
 function getZoneMultiplier(stage) {
-    if (stage <= 10) return 1;
-    if (stage <= 20) return 1.45;
-    if (stage <= 30) return 2.15;
-    if (stage <= 40) return 3.1;
-    if (stage <= 50) return 4.4;
-    if (stage <= 60) return 6.2;
-    if (stage <= 70) return 8.5;
-    return 11.5;
+    if (stage <= 10) return 0.9;
+    if (stage <= 20) return 1.25;
+    if (stage <= 30) return 1.85;
+    if (stage <= 40) return 2.65;
+    if (stage <= 50) return 3.75;
+    if (stage <= 60) return 5.25;
+    if (stage <= 70) return 7.2;
+    return 9.7;
 }
 
 function getRequiredPower(stage) {
-    return Math.floor(650 * Math.pow(stage, 1.55) * getZoneMultiplier(stage));
+    return Math.floor(560 * Math.pow(stage, 1.52) * getZoneMultiplier(stage));
 }
 
 function getFirstClearMoney(stage) {

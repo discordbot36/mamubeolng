@@ -17,6 +17,16 @@ module.exports = {
                 },
             },
             {
+                id: "hunt_3",
+                name: "Săn yêu thú 3 lần",
+                taskId: "beast_hunt",
+                target: 3,
+                reward: {
+                    money: 5000,
+                    tuVi: 1500,
+                },
+            },
+            {
                 id: "work_2",
                 name: "Đi làm 2 lần",
                 taskId: "work",
@@ -61,6 +71,12 @@ module.exports = {
                 reward: {
                     money: 12000,
                     tuVi: 5000,
+                    items: [
+                        {
+                            itemId: "ruong_phap_bao_thuong",
+                            amount: 1,
+                        },
+                    ],
                 },
             },
             {
@@ -80,6 +96,12 @@ module.exports = {
                 reward: {
                     money: 18000,
                     tuVi: 6000,
+                    items: [
+                        {
+                            itemId: "ruong_phap_bao_thuong",
+                            amount: 1,
+                        },
+                    ],
                 },
             },
             {
@@ -90,6 +112,12 @@ module.exports = {
                 reward: {
                     money: 18000,
                     tuVi: 6000,
+                    items: [
+                        {
+                            itemId: "ruong_phap_bao_thuong",
+                            amount: 1,
+                        },
+                    ],
                 },
             },
         ],

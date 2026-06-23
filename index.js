@@ -7,6 +7,7 @@ const leaderboard = require("./leaderboard");
 const bicanh = require("./bicanh");
 const worldboss = require("./worldboss");
 const sanyeuthu = require("./sanyeuthu");
+const raidserver = require("./raidserver");
 
 function requireEnv(name) {
     const value = process.env[name];
@@ -77,6 +78,11 @@ client.once("clientReady", () => {
     sanyeuthu.recover(client).catch((error) => {
         console.error("[SanYeuThu Recover]", error);
     });
+    raidserver.recover(client).catch((error) => {
+        console.error("[RaidServer Recover]", error);
+    });
+
+    raidserver.startAutoSchedule(client);
 
     leaderboard.startAutoUpdate(client);
     worldboss.startAutoSpawn(client);

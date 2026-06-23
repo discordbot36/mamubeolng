@@ -12,7 +12,7 @@ module.exports = {
     cooldown: {
         soloMs: 15 * 60 * 1000,
         partyMs: 15 * 60 * 1000,
-        maxRunsPerDay: 6,
+        maxRunsPerDay: 7,
         supportRewardRate: 0.1,
     },
 

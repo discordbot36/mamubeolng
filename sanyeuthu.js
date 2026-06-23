@@ -1219,6 +1219,11 @@ async function finishBattle(channel, hunt, success) {
         }
 
         recordResult(userId, success);
+        quest.trackQuestProgress(userId, "beast_hunt", 1);
+
+        if (success) {
+            quest.trackQuestProgress(userId, "beast_hunt_win", 1);
+        }
     }
 
     saveHunt(hunt);

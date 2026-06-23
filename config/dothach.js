@@ -331,7 +331,7 @@ module.exports = {
         },
     },
 
-    perfectPurityChance: 0.0015,
+    perfectPurityChance: 0.002,
 
     messages: {
         noStone: "❌ Bạn không có đá này trong kho",
