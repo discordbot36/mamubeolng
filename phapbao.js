@@ -543,6 +543,14 @@ function buildOpenChestEmbed(interaction, chestItem, amount, rewards) {
         .filter((reward) => reward.type === "unidentified_weapon")
         .map((reward) => reward.weapon);
 
+    const moneyTotal = rewards
+        .filter((reward) => reward.type === "money")
+        .reduce((sum, reward) => sum + Number(reward.amount || 0), 0);
+
+    const itemTotal = rewards
+        .filter((reward) => reward.type === "item")
+        .reduce((sum, reward) => sum + Number(reward.amount || 0), 0);
+
     const rewardLines = rewards.map((reward, index) => {
         return `**${index + 1}.** ${formatRewardLine(reward)}`;
     });
@@ -3039,6 +3047,21 @@ function openChest(interaction) {
         const rewards = [];
 
         for (let i = 0; i < amount; i += 1) {
+            if (chestItem.guaranteedMoney) {
+                const moneyReward = {
+                    type: "money",
+                    amount: randomInt(
+                        chestItem.guaranteedMoney.min,
+                        chestItem.guaranteedMoney.max,
+                    ),
+                };
+
+                rewards.push(moneyReward);
+
+                user.money =
+                    Number(user.money || 0) + Number(moneyReward.amount || 0);
+            }
+
             const reward = rollChestReward({
                 ...chestItem,
                 id: chestInfo.id,

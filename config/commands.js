@@ -607,6 +607,38 @@ module.exports = [
         ],
     },
     {
+        name: "tangitem",
+        description: "Admin tặng vật phẩm bất kỳ trong shop cho user",
+        handler: "admin.giveItem",
+        autocomplete: "admin.autocompleteGiftItem",
+        adminOnly: true,
+        defaultMemberPermissions: "8",
+        dmPermission: false,
+        options: [
+            {
+                type: "user",
+                name: "user",
+                description: "Người nhận vật phẩm",
+                required: true,
+            },
+            {
+                type: "string",
+                name: "vatpham",
+                description: "ID vật phẩm muốn tặng, ví dụ ruong_tan_tich_ex",
+                required: true,
+                autocomplete: true,
+            },
+            {
+                type: "integer",
+                name: "soluong",
+                description: "Số lượng muốn tặng",
+                required: false,
+                minValue: 1,
+                maxValue: 9999,
+            },
+        ],
+    },
+    {
         name: "addmoney",
         description: "Admin cộng tiền cho user",
         handler: "admin.addMoney",

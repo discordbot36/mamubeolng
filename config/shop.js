@@ -679,58 +679,55 @@ module.exports = {
         buyable: false,
         sellable: false,
         description:
-            "Rương thưởng Raid Server. Có 0.1% ra phôi EX chưa giám định.",
+            "Rương thưởng Raid Server. 100% nhận tiền và 100% nhận thêm phôi pháp bảo hoặc rương pháp bảo.",
+
+        guaranteedMoney: {
+            min: 50000,
+            max: 700000,
+        },
+
         phapBaoDrops: [
             {
                 type: "unidentified_weapon",
                 rarity: "EX",
-                weight: 100, // 0.1%
+                weight: 50, // 0.5%
             },
             {
                 type: "unidentified_weapon",
                 rarity: "SSS",
-                weight: 1900, // 1.9%
+                weight: 450, // 4.5%
             },
             {
                 type: "unidentified_weapon",
                 rarity: "SS",
-                weight: 5000, // 5%
+                weight: 1000, // 10%
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "S",
+                weight: 1500, // 15%
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "A",
+                weight: 2200, // 22%
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "B",
+                weight: 1800, // 18%
             },
             {
                 type: "item",
                 itemId: "ruong_phap_bao_tinh_anh",
                 amount: 1,
-                weight: 8000, // 8%
+                weight: 2000, // 20%
             },
             {
-                type: "fragment",
-                min: 100,
-                max: 300,
-                weight: 25000, // 25%
-            },
-            {
-                type: "tuvi",
-                min: 5000,
-                max: 15000,
-                weight: 20000, // 20%
-            },
-            {
-                type: "money",
-                min: 80000,
-                max: 250000,
-                weight: 15000, // 15%
-            },
-            {
-                type: "fragment",
-                min: 300,
-                max: 650,
-                weight: 10000, // 10%
-            },
-            {
-                type: "money",
-                min: 250000,
-                max: 500000,
-                weight: 5000, // 5%
+                type: "item",
+                itemId: "ruong_phap_bao_mamu",
+                amount: 1,
+                weight: 1000, // 10%
             },
         ],
     },

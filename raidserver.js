@@ -489,11 +489,6 @@ function buildRegisterRows() {
                 .setEmoji("🚪")
                 .setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
-                .setCustomId("raid_ready")
-                .setLabel("Sẵn Sàng")
-                .setEmoji("✅")
-                .setStyle(ButtonStyle.Primary),
-            new ButtonBuilder()
                 .setCustomId("raid_list")
                 .setLabel("Danh Sách")
                 .setEmoji("📊")
@@ -590,6 +585,72 @@ function buildRegisterEmbed(raid) {
         .setFooter({
             text: "20:50 bot sẽ tạo channel. 21:00 boss chạy.",
         });
+}
+
+async function refreshRegisterMessage(client, raid) {
+    if (!client || !raid?.registerMessageId) {
+        return;
+    }
+
+    const channelIds = [raid.sourceChannelId, raid.raidChannelId].filter(
+        Boolean,
+    );
+
+    for (const channelId of channelIds) {
+        const channel = await client.channels
+            .fetch(channelId)
+            .catch(() => null);
+
+        if (!channel?.messages?.fetch) {
+            continue;
+        }
+
+        const message = await channel.messages
+            .fetch(raid.registerMessageId)
+            .catch(() => null);
+
+        if (!message) {
+            continue;
+        }
+
+        await message
+            .edit({
+                embeds: [buildRegisterEmbed(raid)],
+                components: buildRegisterRows(),
+            })
+            .catch(() => null);
+
+        return;
+    }
+}
+
+async function refreshPrepareMessage(client, raid) {
+    if (!client || !raid?.raidChannelId || !raid?.prepareMessageId) {
+        return;
+    }
+
+    const channel = await client.channels
+        .fetch(raid.raidChannelId)
+        .catch(() => null);
+
+    if (!channel?.messages?.fetch) {
+        return;
+    }
+
+    const message = await channel.messages
+        .fetch(raid.prepareMessageId)
+        .catch(() => null);
+
+    if (!message) {
+        return;
+    }
+
+    await message
+        .edit({
+            embeds: [buildPrepareEmbed(raid)],
+            components: buildPrepareRows(),
+        })
+        .catch(() => null);
 }
 
 function buildPrepareEmbed(raid) {
@@ -1411,6 +1472,7 @@ class RaidServerManager {
             sourceChannelId: sourceChannel.id,
             raidChannelId: null,
             registerMessageId: null,
+            prepareMessageId: null,
 
             createdAt: registerAt,
             prepareStartsAt,
@@ -1547,7 +1609,7 @@ class RaidServerManager {
         const registeredIds = registered.map((p) => p.userId);
         const mentionText = registeredIds.map((id) => `<@${id}>`).join(" ");
 
-        await raidChannel
+        const prepareMsg = await raidChannel
             .send({
                 content: [
                     mentionText,
@@ -1562,6 +1624,9 @@ class RaidServerManager {
                 },
             })
             .catch(() => null);
+
+        raid.prepareMessageId = prepareMsg?.id || null;
+        setCurrentRaid(raid);
 
         await sourceChannel
             ?.send(
@@ -1687,6 +1752,8 @@ class RaidServerManager {
 
         setCurrentRaid(raid);
 
+        await refreshRegisterMessage(interaction.client, raid);
+
         return interaction.reply({
             content: "✅ Bạn đã đăng ký Raid Server.",
             ephemeral: true,
@@ -1706,6 +1773,8 @@ class RaidServerManager {
         delete raid.players[interaction.user.id];
         setCurrentRaid(raid);
 
+        await refreshRegisterMessage(interaction.client, raid);
+
         return interaction.reply({
             content: "🚪 Đã hủy đăng ký raid.",
             ephemeral: true,
@@ -1715,9 +1784,31 @@ class RaidServerManager {
     async readyRaid(interaction) {
         const raid = getCurrentRaid();
 
-        if (!raid || !raid.players[interaction.user.id]) {
+        if (!raid) {
             return interaction.reply({
-                content: "❌ Bạn chưa đăng ký raid.",
+                content: "❌ Hiện không có raid đang mở.",
+                ephemeral: true,
+            });
+        }
+
+        if (raid.status !== "preparing") {
+            return interaction.reply({
+                content:
+                    "⏳ Chưa tới giờ chuẩn bị. Nút **Sẵn Sàng** chỉ dùng từ 20:50 đến 21:00.",
+                ephemeral: true,
+            });
+        }
+
+        if (!raid.players?.[interaction.user.id]) {
+            return interaction.reply({
+                content: "❌ Bạn chưa đăng ký raid nên không thể sẵn sàng.",
+                ephemeral: true,
+            });
+        }
+
+        if (raid.players[interaction.user.id].ready) {
+            return interaction.reply({
+                content: "✅ Bạn đã sẵn sàng rồi.",
                 ephemeral: true,
             });
         }
@@ -1725,8 +1816,10 @@ class RaidServerManager {
         raid.players[interaction.user.id].ready = true;
         setCurrentRaid(raid);
 
+        await refreshPrepareMessage(interaction.client, raid);
+
         return interaction.reply({
-            content: "✅ Bạn đã sẵn sàng.",
+            content: "✅ Bạn đã sẵn sàng. Mamu đã ghi tên bạn vào sổ vác heo.",
             ephemeral: true,
         });
     }

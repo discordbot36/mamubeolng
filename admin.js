@@ -5,6 +5,8 @@ const {
     removeMoney: takeMoney,
     formatMoney,
     getCurrencyEmoji,
+    getShop,
+    addShopItem,
 } = require("./database");
 
 const adminConfig = require("./config/admin");
@@ -205,7 +207,102 @@ function buildActiveRainReasonText(user) {
     return "🏆 tương tác tốt";
 }
 
+function normalizeSearchText(text) {
+    return String(text || "")
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/đ/g, "d");
+}
+
+function cutChoiceName(text) {
+    const safe = String(text || "");
+
+    return safe.length > 100 ? `${safe.slice(0, 97)}...` : safe;
+}
+
+function formatGiftItemChoice(itemId, item) {
+    const name = item?.name || itemId;
+    const emoji = item?.emoji || "🎁";
+    const type = item?.type || "item";
+
+    return cutChoiceName(`${emoji} ${name} | ${itemId} | ${type}`);
+}
+
 class AdminManager {
+    async autocompleteGiftItem(interaction) {
+        const focusedValue = interaction.options.getFocused();
+        const search = normalizeSearchText(focusedValue);
+        const shopData = getShop();
+
+        const choices = Object.entries(shopData)
+            .filter(([itemId, item]) => {
+                const text = normalizeSearchText(
+                    `${itemId} ${item?.name || ""} ${item?.description || ""} ${item?.type || ""}`,
+                );
+
+                return text.includes(search);
+            })
+            .slice(0, 25)
+            .map(([itemId, item]) => {
+                return {
+                    name: formatGiftItemChoice(itemId, item),
+                    value: itemId,
+                };
+            });
+
+        return interaction.respond(choices);
+    }
+
+    async giveItem(interaction) {
+        if (!isAllowed(interaction.user.id)) {
+            return interaction.reply({
+                content: adminConfig.messages.noPermission,
+                ephemeral: true,
+            });
+        }
+
+        const targetUser = interaction.options.getUser("user", true);
+        const itemId = interaction.options.getString("vatpham", true);
+        const amount = interaction.options.getInteger("soluong") || 1;
+        const shopData = getShop();
+        const item = shopData[itemId];
+
+        if (targetUser.bot) {
+            return interaction.reply({
+                content: "❌ Không tặng vật phẩm cho bot.",
+                ephemeral: true,
+            });
+        }
+
+        if (!item) {
+            return interaction.reply({
+                content:
+                    `❌ Không tìm thấy item ID: \`${itemId}\` trong \`config/shop.js\`.\n` +
+                    "Gõ từ khóa trong ô `vatpham` để bot gợi ý item hợp lệ.",
+                ephemeral: true,
+            });
+        }
+
+        if (!Number.isInteger(amount) || amount <= 0) {
+            return interaction.reply({
+                content: "❌ Số lượng không hợp lệ.",
+                ephemeral: true,
+            });
+        }
+
+        addShopItem(targetUser.id, itemId, amount);
+
+        return interaction.reply({
+            content:
+                `✅ Đã tặng vật phẩm.\n\n` +
+                `👤 Người nhận: ${targetUser}\n` +
+                `🎁 Vật phẩm: ${item.emoji || "🎁"} **${item.name || itemId}**\n` +
+                `🆔 ID: \`${itemId}\`\n` +
+                `📦 Số lượng: **${amount.toLocaleString("vi-VN")}**`,
+            ephemeral: true,
+        });
+    }
     async addMoney(interaction) {
         if (!isAllowed(interaction.user.id)) {
             return interaction.reply({
