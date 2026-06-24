@@ -192,6 +192,19 @@ function getNextDailyTimestamp(hour, minute) {
     return getDailyTimestampAfter(now(), hour, minute);
 }
 
+function getTodayTimestamp(hour, minute) {
+    const parts = getVietnamParts();
+
+    return vietnamLocalToTimestamp(
+        parts.year,
+        parts.month,
+        parts.day,
+        hour,
+        minute,
+        0,
+    );
+}
+
 function getDailyTimestampAfter(baseMs, hour, minute) {
     const parts = getVietnamParts(new Date(Number(baseMs || now())));
 
@@ -1208,12 +1221,41 @@ class RaidServerManager {
             return;
         }
 
+        const current = now();
+        const todayRegisterAt = getTodayTimestamp(
+            raidConfig.registerHour,
+            raidConfig.registerMinute,
+        );
+
+        const todayPrepareAt = getTodayTimestamp(
+            raidConfig.prepareHour ?? raidConfig.startHour,
+            raidConfig.prepareMinute ?? raidConfig.startMinute,
+        );
+
+        const raid = getCurrentRaid();
+        const hasTodayRaid =
+            raid &&
+            raid.dateKey === getDateKey() &&
+            !["finished", "cancelled"].includes(raid.status);
+
+        if (
+            !hasTodayRaid &&
+            current > todayRegisterAt &&
+            current < todayPrepareAt
+        ) {
+            setTimer("raid_auto_register_catchup", 1000, async () => {
+                await this.openRegistrationAuto(client).catch((error) => {
+                    console.error("[RaidServer Auto Catchup]", error);
+                });
+            });
+        }
+
         const target = getNextDailyTimestamp(
             raidConfig.registerHour,
             raidConfig.registerMinute,
         );
 
-        setTimer("raid_auto_register", target - now(), async () => {
+        setTimer("raid_auto_register", target - current, async () => {
             await this.openRegistrationAuto(client).catch((error) => {
                 console.error("[RaidServer Auto]", error);
             });
@@ -1221,7 +1263,6 @@ class RaidServerManager {
             this.startAutoSchedule(client);
         });
     }
-
     async recover(client) {
         const raid = getCurrentRaid();
 
