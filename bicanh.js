@@ -276,6 +276,35 @@ function mergeRewardItem(rewardMap, itemId, amount) {
 
     rewardMap[itemId] = Number(rewardMap[itemId] || 0) + Number(amount);
 }
+
+function pickRandomMembers(memberIds, amount) {
+    const pool = [...memberIds];
+
+    for (let i = pool.length - 1; i > 0; i -= 1) {
+        const j = randomInt(0, i);
+
+        [pool[i], pool[j]] = [pool[j], pool[i]];
+    }
+
+    return pool.slice(0, Math.min(amount, pool.length));
+}
+
+function createNightmareMamuBonus(realm) {
+    const bonusMap = {};
+
+    if (realm.battle?.difficulty?.id !== "ac_mong") {
+        return bonusMap;
+    }
+
+    const winners = pickRandomMembers(realm.memberIds || [], 2);
+
+    for (const userId of winners) {
+        bonusMap[userId] = Number(bonusMap[userId] || 0) + 1;
+    }
+
+    return bonusMap;
+}
+
 function createRealmId() {
     return `bicanh_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
 }
@@ -1651,9 +1680,18 @@ async function finishBattle(channel, realm, success) {
 
     const resultLines = [];
 
+    const nightmareMamuBonus = success ? createNightmareMamuBonus(realm) : {};
+
     if (success) {
         for (const userId of realm.memberIds) {
             const reward = giveSecretRealmReward(realm, userId);
+
+            const mamuBonusAmount = Number(nightmareMamuBonus[userId] || 0);
+
+            if (mamuBonusAmount > 0) {
+                addShopItem(userId, "da_mamu", mamuBonusAmount);
+                mergeRewardItem(reward.items, "da_mamu", mamuBonusAmount);
+            }
 
             const member = realm.members?.[userId] || {};
 

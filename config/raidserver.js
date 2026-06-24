@@ -5,16 +5,22 @@ module.exports = {
 
     categoryId: "1342861817105481819",
     channelName: "raid-server",
+    battleChannelName: "mamu-3-ta-6-18m",
+    battleDisplayName: "Mamu 3 tạ 6 18m",
+    privateRaidChannel: true,
 
-    announceChannelId: null,
+    announceChannelId: "1519261709364101181",
 
     notifyRoleName: "Lợn Tu Tiên",
     notifyRoleId: null,
 
-    registerHour: 18,
-    registerMinute: 50,
+    registerHour: 8,
+    registerMinute: 0,
 
-    startHour: 19,
+    prepareHour: 20,
+    prepareMinute: 50,
+
+    startHour: 21,
     startMinute: 0,
 
     prepareMinutes: 10,
@@ -33,7 +39,6 @@ module.exports = {
         maxRage: 100,
         maxSpirit: 100,
     },
-
 
     perfectMechanic: {
         successBossHpPercent: 0.035,

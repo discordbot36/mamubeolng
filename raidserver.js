@@ -4,6 +4,7 @@ const {
     ButtonBuilder,
     ButtonStyle,
     ChannelType,
+    PermissionFlagsBits,
 } = require("discord.js");
 
 const database = require("./database");
@@ -65,6 +66,12 @@ const MECHANICS = {
         weight: 10,
         minStage: 2,
         hint: "Một đạo hữu giữ Đèn Trấn Hồn. Nếu sống qua phase này, cả raid được buff lớn.",
+    },
+    belly_roll: {
+        title: "🐷 Mamu Lăn Bụng 3 Tạ 6",
+        weight: 12,
+        minStage: 1,
+        hint: "Mamu hít một hơi, bụng rung chuyển như thiên thạch.",
     },
 };
 
@@ -182,8 +189,11 @@ function vietnamLocalToTimestamp(year, month, day, hour, minute, second = 0) {
 }
 
 function getNextDailyTimestamp(hour, minute) {
-    const parts = getVietnamParts();
-    const current = now();
+    return getDailyTimestampAfter(now(), hour, minute);
+}
+
+function getDailyTimestampAfter(baseMs, hour, minute) {
+    const parts = getVietnamParts(new Date(Number(baseMs || now())));
 
     let target = vietnamLocalToTimestamp(
         parts.year,
@@ -194,11 +204,15 @@ function getNextDailyTimestamp(hour, minute) {
         0,
     );
 
-    if (target <= current) {
+    if (target <= Number(baseMs || now())) {
         target += 24 * 60 * 60 * 1000;
     }
 
     return target;
+}
+
+function formatClock(hour, minute) {
+    return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
 }
 
 function getDateKey() {
@@ -254,10 +268,13 @@ function clearCurrentRaid() {
 function setTimer(key, delayMs, fn) {
     clearTimer(key);
 
-    const timer = setTimeout(() => {
-        timers.delete(key);
-        fn();
-    }, Math.max(1000, Number(delayMs || 0)));
+    const timer = setTimeout(
+        () => {
+            timers.delete(key);
+            fn();
+        },
+        Math.max(1000, Number(delayMs || 0)),
+    );
 
     timers.set(key, timer);
 }
@@ -330,7 +347,11 @@ function addMechanicDamage(raid, multiplier = 1) {
         raidConfig.perfectMechanic?.successBossHpPercent || 0.035,
     );
 
-    return addBossDamage(raid, raid.boss.maxHp * percent * multiplier, "mechanic");
+    return addBossDamage(
+        raid,
+        raid.boss.maxHp * percent * multiplier,
+        "mechanic",
+    );
 }
 
 function addRage(raid, amount) {
@@ -378,7 +399,10 @@ function healPlayer(player, amount) {
 
     const safe = Math.max(0, Math.floor(Number(amount || 0)));
 
-    player.hp = Math.min(Number(player.maxHp || 1), Number(player.hp || 0) + safe);
+    player.hp = Math.min(
+        Number(player.maxHp || 1),
+        Number(player.hp || 0) + safe,
+    );
 
     return safe;
 }
@@ -469,7 +493,27 @@ function buildRegisterRows() {
         ),
     ];
 }
-
+function buildPrepareRows() {
+    return [
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId("raid_ready")
+                .setLabel("Tôi Đã Vác Heo Tới")
+                .setEmoji("✅")
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId("raid_list")
+                .setLabel("Danh Sách")
+                .setEmoji("📊")
+                .setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder()
+                .setCustomId("raid_rules")
+                .setLabel("Luật")
+                .setEmoji("📜")
+                .setStyle(ButtonStyle.Secondary),
+        ),
+    ];
+}
 function buildActionRows(raid) {
     const disabled = raid.status !== "battle";
     const row1 = new ActionRowBuilder();
@@ -512,32 +556,60 @@ function buildRegisterEmbed(raid) {
         .setDescription(
             [
                 `**Boss:** ${raidConfig.boss.name}`,
-                `**Bắt đầu:** 19:00`,
+                `**Mở đăng ký:** ${formatClock(raidConfig.registerHour, raidConfig.registerMinute)}`,
+                `**Gom người:** ${formatClock(raidConfig.prepareHour, raidConfig.prepareMinute)}`,
+                `**Bắt đầu:** ${formatClock(raidConfig.startHour, raidConfig.startMinute)}`,
                 `**Chuẩn bị:** ${raidConfig.prepareMinutes} phút`,
                 "",
-                "Bấm **Đăng Ký Tham Gia** để vào raid.",
+                "Bấm **Đăng Ký Tham Gia** để được gọi vào raid lúc 20:50.",
                 "Ai đăng ký nhưng tới giờ không đánh / AFK sẽ **không nhận quà**.",
             ].join("\n"),
         )
         .addFields(
             { name: "Người đăng ký", value: `${count}`, inline: true },
             { name: "Sẵn sàng", value: `${ready}`, inline: true },
-            { name: "Rương chính", value: "🌈 Rương Tàn Tích EX", inline: true },
+            {
+                name: "Rương chính",
+                value: "🌈 Rương Tàn Tích EX",
+                inline: true,
+            },
         )
         .setFooter({
-            text: "Xử lý mechanic chuẩn sẽ gây sát thương thật theo % máu boss.",
+            text: "20:50 bot sẽ tạo channel. 21:00 boss chạy.",
         });
+}
+
+function buildPrepareEmbed(raid) {
+    const count = getRegisteredPlayers(raid).length;
+    const ready = getRegisteredPlayers(raid).filter((p) => p.ready).length;
+
+    return new EmbedBuilder()
+        .setColor(0xffaa33)
+        .setTitle("🐷 MAMU ĐANG ĐƯỢC KHIÊNG RA SÂN")
+        .setDescription(
+            [
+                `**Boss:** ${raidConfig.battleDisplayName || raidConfig.boss.name}`,
+                `**Bắt đầu:** ${formatClock(raidConfig.startHour, raidConfig.startMinute)}`,
+                `**Thời gian chuẩn bị:** ${raidConfig.prepareMinutes} phút`,
+                "",
+                "Bấm **Tôi Đã Vác Heo Tới** để xác nhận có mặt.",
+                "Đúng 21:00 channel đổi tên và raid tự chạy.",
+            ].join("\n"),
+        )
+        .addFields(
+            { name: "Người được gọi", value: `${count}`, inline: true },
+            { name: "Đã có mặt", value: `${ready}`, inline: true },
+        );
 }
 
 function buildPhaseEmbed(raid) {
     const alive = getAlivePlayers(raid).length;
     const total = getRegisteredPlayers(raid).length;
     const chosen = Object.keys(raid.phase.actions || {}).length;
-    const mechanic =
-        MECHANICS[raid.phase.mechanicId] || {
-            title: "🐉 Thiên Đạo Cứu Rỗi",
-            hint: "Thiên Đạo đang nhìn xuống chiến trường.",
-        };
+    const mechanic = MECHANICS[raid.phase.mechanicId] || {
+        title: "🐉 Thiên Đạo Cứu Rỗi",
+        hint: "Thiên Đạo đang nhìn xuống chiến trường.",
+    };
 
     const targetText =
         (raid.phase.targetUserIds || []).map((id) => `<@${id}>`).join(", ") ||
@@ -625,9 +697,13 @@ function shouldTriggerHeavenSave(raid) {
     const danger =
         bossHpPercent <= Number(raidConfig.heavenSave.minBossHpPercent || 35) ||
         deadRatio >= Number(raidConfig.heavenSave.minDeadRatio || 0.4) ||
-        Number(raid.boss.rage || 0) >= Number(raidConfig.heavenSave.minRage || 90);
+        Number(raid.boss.rage || 0) >=
+            Number(raidConfig.heavenSave.minRage || 90);
 
-    return danger && Math.random() < Number(raidConfig.heavenSave.triggerChance || 0.28);
+    return (
+        danger &&
+        Math.random() < Number(raidConfig.heavenSave.triggerChance || 0.28)
+    );
 }
 
 function chooseTargets(raid, mechanicId) {
@@ -708,7 +784,9 @@ function applyPlayerActionDamage(raid, logs) {
 
     if (damage > 0) {
         addBossDamage(raid, damage, "damage");
-        logs.push(`⚔️ Sát thương người chơi gây ra: **${formatNumber(damage)}**.`);
+        logs.push(
+            `⚔️ Sát thương người chơi gây ra: **${formatNumber(damage)}**.`,
+        );
     }
 }
 
@@ -743,14 +821,23 @@ function resolveDeathMark(raid, logs) {
         const dmg = addMechanicDamage(raid, cleanses > 0 ? 1.25 : 1);
         addRage(raid, -5);
         addSpirit(raid, 10);
-        logs.push(`🛡️ Tử Ấn được hóa giải. Boss bị phản chấn **${formatNumber(dmg)}** HP.`);
+        logs.push(
+            `🛡️ Tử Ấn được hóa giải. Boss bị phản chấn **${formatNumber(dmg)}** HP.`,
+        );
     } else {
         if (target) {
-            damagePlayer(raid, target, raid.boss.atk * 5.5, "Không hóa giải Tử Ấn");
+            damagePlayer(
+                raid,
+                target,
+                raid.boss.atk * 5.5,
+                "Không hóa giải Tử Ấn",
+            );
         }
 
         addRage(raid, 15);
-        logs.push(`☠️ Tử Ấn nổ. ${target ? `<@${target.userId}>` : "Một người"} nhận sát thương chí mạng.`);
+        logs.push(
+            `☠️ Tử Ấn nổ. ${target ? `<@${target.userId}>` : "Một người"} nhận sát thương chí mạng.`,
+        );
     }
 }
 
@@ -763,7 +850,9 @@ function resolveClones(raid, logs) {
     if (success) {
         const dmg = addMechanicDamage(raid, 1.35);
         addSpirit(raid, 15);
-        logs.push(`🪞 Cả đội tìm đúng bản thể. Boss nhận thêm **${formatNumber(dmg)}** sát thương thật.`);
+        logs.push(
+            `🪞 Cả đội tìm đúng bản thể. Boss nhận thêm **${formatNumber(dmg)}** sát thương thật.`,
+        );
     } else {
         addRage(raid, 10);
 
@@ -790,9 +879,16 @@ function resolveTopDamageTarget(raid, logs) {
     if (action === "guard" || action === "dodge") {
         const dmg = addMechanicDamage(raid, 1.1);
         target.mechanicScore += 2;
-        logs.push(`👑 <@${target.userId}> né được phản phệ, boss lộ sơ hở mất **${formatNumber(dmg)}** HP.`);
+        logs.push(
+            `👑 <@${target.userId}> né được phản phệ, boss lộ sơ hở mất **${formatNumber(dmg)}** HP.`,
+        );
     } else {
-        damagePlayer(raid, target, raid.boss.atk * 3.8, "Tham công khi bị boss gọi tên");
+        damagePlayer(
+            raid,
+            target,
+            raid.boss.atk * 3.8,
+            "Tham công khi bị boss gọi tên",
+        );
         target.mistakes += 1;
         addRage(raid, 12);
         logs.push(`👑 <@${target.userId}> bị phản sát thương vì không thủ/né.`);
@@ -806,20 +902,33 @@ function resolveAntiSpam(raid, logs) {
         const last = player.lastActions || [];
         const current = raid.phase.actions[player.userId];
 
-        if (current && last.length >= 2 && last.slice(-2).every((a) => a === current)) {
+        if (
+            current &&
+            last.length >= 2 &&
+            last.slice(-2).every((a) => a === current)
+        ) {
             punished.push(player);
-            damagePlayer(raid, player, raid.boss.atk * 1.8, "Bị boss đọc lối đánh");
+            damagePlayer(
+                raid,
+                player,
+                raid.boss.atk * 1.8,
+                "Bị boss đọc lối đánh",
+            );
             player.mistakes += 1;
         }
     }
 
     if (punished.length) {
         addRage(raid, punished.length * 3);
-        logs.push(`🔥 ${punished.length} người spam hành động bị boss phản chế.`);
+        logs.push(
+            `🔥 ${punished.length} người spam hành động bị boss phản chế.`,
+        );
     } else {
         const dmg = addMechanicDamage(raid, 0.9);
         addSpirit(raid, 8);
-        logs.push(`🔥 Không ai bị bắt bài. Boss mất **${formatNumber(dmg)}** HP vì hụt nhịp.`);
+        logs.push(
+            `🔥 Không ai bị bắt bài. Boss mất **${formatNumber(dmg)}** HP vì hụt nhịp.`,
+        );
     }
 }
 
@@ -854,7 +963,9 @@ function resolveDiceFate(raid, logs) {
     } else if (roll <= 5) {
         const dmg = addMechanicDamage(raid, 1.15);
         addSpirit(raid, 12);
-        logs.push(`🎲 Roll **${roll}**. Thiên Mệnh mở yếu điểm, boss mất **${formatNumber(dmg)}** HP.`);
+        logs.push(
+            `🎲 Roll **${roll}**. Thiên Mệnh mở yếu điểm, boss mất **${formatNumber(dmg)}** HP.`,
+        );
     } else {
         const dmg = addMechanicDamage(raid, 1.8);
 
@@ -863,7 +974,9 @@ function resolveDiceFate(raid, logs) {
         }
 
         addSpirit(raid, 20);
-        logs.push(`🎲 Roll **6**! Đại cát, boss mất **${formatNumber(dmg)}** HP và cả đội hồi máu.`);
+        logs.push(
+            `🎲 Roll **6**! Đại cát, boss mất **${formatNumber(dmg)}** HP và cả đội hồi máu.`,
+        );
     }
 }
 
@@ -876,21 +989,33 @@ function resolveSoulLink(raid, logs) {
     const safeB = ["guard", "dodge"].includes(raid.phase.actions[bId]);
 
     const success =
-        a &&
-        b &&
-        safeA &&
-        safeB &&
-        cleanses >= requiredByAlive(raid, 0.18);
+        a && b && safeA && safeB && cleanses >= requiredByAlive(raid, 0.18);
 
     if (success) {
         const dmg = addMechanicDamage(raid, 1.2);
-        logs.push(`🔗 Liên Kết Sinh Mệnh bị cắt. Boss mất **${formatNumber(dmg)}** HP.`);
+        logs.push(
+            `🔗 Liên Kết Sinh Mệnh bị cắt. Boss mất **${formatNumber(dmg)}** HP.`,
+        );
     } else {
-        if (a) damagePlayer(raid, a, raid.boss.atk * 2.5, "Liên Kết Sinh Mệnh thất bại");
-        if (b) damagePlayer(raid, b, raid.boss.atk * 2.5, "Liên Kết Sinh Mệnh thất bại");
+        if (a)
+            damagePlayer(
+                raid,
+                a,
+                raid.boss.atk * 2.5,
+                "Liên Kết Sinh Mệnh thất bại",
+            );
+        if (b)
+            damagePlayer(
+                raid,
+                b,
+                raid.boss.atk * 2.5,
+                "Liên Kết Sinh Mệnh thất bại",
+            );
 
         addRage(raid, 12);
-        logs.push("🔗 Liên kết không được cắt đúng lúc, hai người bị kéo máu cùng nhau.");
+        logs.push(
+            "🔗 Liên kết không được cắt đúng lúc, hai người bị kéo máu cùng nhau.",
+        );
     }
 }
 
@@ -915,7 +1040,9 @@ function resolveLanternHolder(raid, logs) {
         }
 
         addSpirit(raid, 25);
-        logs.push(`🕯️ Đèn Trấn Hồn còn sáng. Boss mất **${formatNumber(dmg)}** HP, cả đội hồi máu.`);
+        logs.push(
+            `🕯️ Đèn Trấn Hồn còn sáng. Boss mất **${formatNumber(dmg)}** HP, cả đội hồi máu.`,
+        );
     } else {
         if (target) {
             damagePlayer(raid, target, raid.boss.atk * 3.2, "Đèn Trấn Hồn vỡ");
@@ -926,6 +1053,39 @@ function resolveLanternHolder(raid, logs) {
     }
 }
 
+function resolveBellyRoll(raid, logs) {
+    const dodges = actionCount(raid, "dodge");
+    const guards = actionCount(raid, "guard");
+    const success = dodges + guards >= requiredByAlive(raid, 0.45);
+
+    if (success) {
+        const dmg = addMechanicDamage(raid, 1.25);
+
+        addRage(raid, -8);
+        logs.push(
+            `🐷 Mamu lăn hụt, tự vấp bụng té sấp mặt. Boss mất **${formatNumber(dmg)}** HP.`,
+        );
+    } else {
+        for (const p of getAlivePlayers(raid)) {
+            const action = raid.phase.actions[p.userId];
+
+            if (action !== "dodge") {
+                damagePlayer(
+                    raid,
+                    p,
+                    raid.boss.atk * 2.2,
+                    "Bị Mamu 3 tạ 6 cán qua",
+                );
+                p.mistakes += 1;
+            }
+        }
+
+        addRage(raid, 15);
+        logs.push(
+            "🐷 Mamu lăn qua chiến trường. Ai không né bị cán dẹp như bánh tráng.",
+        );
+    }
+}
 function resolveHeavenSave(raid, logs) {
     raid.stats.heavenSaveUsed = true;
 
@@ -938,7 +1098,12 @@ function resolveHeavenSave(raid, logs) {
     for (const player of getAlivePlayers(raid)) {
         if (raid.phase.actions[player.userId] === "cleanse") {
             blood += 1;
-            damagePlayer(raid, player, player.hp * 0.2, "Đốt máu cầu Thiên Đạo");
+            damagePlayer(
+                raid,
+                player,
+                player.hp * 0.2,
+                "Đốt máu cầu Thiên Đạo",
+            );
             player.heavenScore += 3;
         }
     }
@@ -955,7 +1120,9 @@ function resolveHeavenSave(raid, logs) {
 
         const dmg = addMechanicDamage(raid, 1.8);
         addRage(raid, -35);
-        logs.push(`🐉 Thiên mệnh nghịch chuyển! Hồi sinh ${dead.length} người, boss mất **${formatNumber(dmg)}** HP.`);
+        logs.push(
+            `🐉 Thiên mệnh nghịch chuyển! Hồi sinh ${dead.length} người, boss mất **${formatNumber(dmg)}** HP.`,
+        );
     } else if (score >= Math.ceil(alive * 0.45)) {
         const dead = getRegisteredPlayers(raid)
             .filter((p) => p.alive === false)
@@ -968,7 +1135,9 @@ function resolveHeavenSave(raid, logs) {
         }
 
         addRage(raid, -20);
-        logs.push(`🐉 Thiên Đạo khai ân. Hồi sinh ${dead.length} người và hồi máu đội hình.`);
+        logs.push(
+            `🐉 Thiên Đạo khai ân. Hồi sinh ${dead.length} người và hồi máu đội hình.`,
+        );
     } else {
         addRage(raid, 6);
         logs.push("🐉 Thiên Đạo im lặng. Cầu nguyện không đủ thành tâm.");
@@ -995,6 +1164,8 @@ function resolveMechanic(raid, logs) {
             return resolveHeavenSave(raid, logs);
         default:
             return resolveDeathMark(raid, logs);
+        case "belly_roll":
+            return resolveBellyRoll(raid, logs);
     }
 }
 
@@ -1058,7 +1229,28 @@ class RaidServerManager {
             return;
         }
 
-        if (raid.status === "registering" || raid.status === "preparing") {
+        if (raid.status === "registering") {
+            const prepareDelay = Number(raid.prepareStartsAt || 0) - now();
+            const startDelay = Number(raid.battleStartsAt || 0) - now();
+
+            if (prepareDelay <= 0) {
+                await this.prepareRaid(client, raid.id);
+            } else {
+                setTimer(`raid_prepare_${raid.id}`, prepareDelay, () => {
+                    this.prepareRaid(client, raid.id).catch(console.error);
+                });
+            }
+
+            setTimer(
+                `raid_start_${raid.id}`,
+                Math.max(1000, startDelay),
+                () => {
+                    this.startBattle(client, raid.id).catch(console.error);
+                },
+            );
+        }
+
+        if (raid.status === "preparing") {
             const delay = Number(raid.battleStartsAt || 0) - now();
 
             if (delay <= 0) {
@@ -1138,9 +1330,36 @@ class RaidServerManager {
             return sourceChannel?.send(message).catch(() => null);
         }
 
+        if (!sourceChannel) {
+            if (interaction) {
+                return interaction.reply({
+                    content: "❌ Không tìm thấy kênh để mở đăng ký raid.",
+                    ephemeral: true,
+                });
+            }
+
+            return null;
+        }
+
         const registerAt = now();
-        const battleStartsAt =
-            registerAt + Number(raidConfig.prepareMinutes || 10) * 60 * 1000;
+
+        const prepareStartsAt = getDailyTimestampAfter(
+            registerAt,
+            raidConfig.prepareHour ?? raidConfig.startHour,
+            raidConfig.prepareMinute ?? raidConfig.startMinute,
+        );
+
+        const configuredStartAt = getDailyTimestampAfter(
+            registerAt,
+            raidConfig.startHour,
+            raidConfig.startMinute,
+        );
+
+        const battleStartsAt = Math.max(
+            configuredStartAt,
+            prepareStartsAt +
+                Number(raidConfig.prepareMinutes || 10) * 60 * 1000,
+        );
 
         const raid = {
             id: createRaidId(),
@@ -1148,11 +1367,12 @@ class RaidServerManager {
             status: "registering",
 
             guildId: guild.id,
-            sourceChannelId: sourceChannel?.id || null,
+            sourceChannelId: sourceChannel.id,
             raidChannelId: null,
             registerMessageId: null,
 
             createdAt: registerAt,
+            prepareStartsAt,
             battleStartsAt,
             battleEndsAt:
                 battleStartsAt +
@@ -1171,20 +1391,12 @@ class RaidServerManager {
             },
         };
 
-        const raidChannel = await guild.channels.create({
-            name: raidConfig.channelName || "raid-server",
-            type: ChannelType.GuildText,
-            parent: raidConfig.categoryId || undefined,
-            reason: "Raid Server tự động mở",
-        });
-
-        raid.raidChannelId = raidChannel.id;
         setCurrentRaid(raid);
 
         const roleMention = await this.getNotifyMention(guild);
         const mentionText = roleMention ? `${roleMention}\n\n` : "";
 
-        const msg = await raidChannel.send({
+        const msg = await sourceChannel.send({
             content: `${mentionText}☠️ **Raid Server đã mở đăng ký!**`,
             embeds: [buildRegisterEmbed(raid)],
             components: buildRegisterRows(),
@@ -1196,11 +1408,9 @@ class RaidServerManager {
         raid.registerMessageId = msg.id;
         setCurrentRaid(raid);
 
-        if (sourceChannel && sourceChannel.id !== raidChannel.id) {
-            await sourceChannel
-                .send(`☠️ Raid Server đã mở ở <#${raidChannel.id}>. ${roleMention || ""}`)
-                .catch(() => null);
-        }
+        setTimer(`raid_prepare_${raid.id}`, prepareStartsAt - now(), () => {
+            this.prepareRaid(client, raid.id).catch(console.error);
+        });
 
         setTimer(`raid_start_${raid.id}`, battleStartsAt - now(), () => {
             this.startBattle(client, raid.id).catch(console.error);
@@ -1208,12 +1418,115 @@ class RaidServerManager {
 
         if (interaction) {
             return interaction.reply({
-                content: `✅ Đã mở đăng ký raid tại <#${raidChannel.id}>.`,
+                content: `✅ Đã mở đăng ký raid tại <#${sourceChannel.id}>. 20:50 bot sẽ tạo channel raid và tag người đăng ký.`,
                 ephemeral: true,
             });
         }
 
         return null;
+    }
+    async createRaidChannel(guild, raid) {
+        const registeredIds = Object.keys(raid.players || {});
+        const permissionOverwrites = [];
+
+        if (raidConfig.privateRaidChannel) {
+            permissionOverwrites.push({
+                id: guild.roles.everyone.id,
+                deny: [PermissionFlagsBits.ViewChannel],
+            });
+        }
+
+        for (const userId of registeredIds) {
+            permissionOverwrites.push({
+                id: userId,
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.SendMessages,
+                    PermissionFlagsBits.ReadMessageHistory,
+                ],
+            });
+        }
+
+        return guild.channels.create({
+            name: raidConfig.channelName || "raid-server",
+            type: ChannelType.GuildText,
+            parent: raidConfig.categoryId || undefined,
+            permissionOverwrites,
+            reason: "Raid Server gom người chuẩn bị",
+        });
+    }
+
+    async prepareRaid(client, raidId) {
+        const raid = getCurrentRaid();
+
+        if (!raid || raid.id !== raidId || raid.status !== "registering") {
+            return;
+        }
+
+        const guild = await client.guilds.fetch(raid.guildId).catch(() => null);
+        const sourceChannel = raid.sourceChannelId
+            ? await client.channels
+                  .fetch(raid.sourceChannelId)
+                  .catch(() => null)
+            : null;
+
+        if (!guild) {
+            return;
+        }
+
+        const registered = getRegisteredPlayers(raid);
+
+        if (registered.length < Number(raidConfig.minPlayers || 2)) {
+            raid.status = "cancelled";
+            raid.result = "not_enough_players";
+            setCurrentRaid(raid);
+
+            await sourceChannel
+                ?.send(
+                    "❌ Raid bị hủy vì không đủ người đăng ký trước giờ gom người.",
+                )
+                .catch(() => null);
+
+            clearRaidTimers(raid.id);
+            clearCurrentRaid();
+            return;
+        }
+
+        for (const player of registered) {
+            player.ready = false;
+        }
+
+        const raidChannel = await this.createRaidChannel(guild, raid);
+
+        raid.raidChannelId = raidChannel.id;
+        raid.status = "preparing";
+
+        setCurrentRaid(raid);
+
+        const registeredIds = registered.map((p) => p.userId);
+        const mentionText = registeredIds.map((id) => `<@${id}>`).join(" ");
+
+        await raidChannel
+            .send({
+                content: [
+                    mentionText,
+                    "",
+                    `🐷 **${raidConfig.battleDisplayName || "Mamu 3 tạ 6 18m"} đang bò vào server!**`,
+                    `Có **${raidConfig.prepareMinutes || 10} phút** chuẩn bị. Đúng 21:00 raid tự chạy.`,
+                ].join("\n"),
+                embeds: [buildPrepareEmbed(raid)],
+                components: buildPrepareRows(),
+                allowedMentions: {
+                    users: registeredIds,
+                },
+            })
+            .catch(() => null);
+
+        await sourceChannel
+            ?.send(
+                `🐷 Đã gom người vào <#${raidChannel.id}>. Raid bắt đầu lúc 21:00.`,
+            )
+            .catch(() => null);
     }
 
     async getNotifyMention(guild) {
@@ -1221,7 +1534,9 @@ class RaidServerManager {
             return `<@&${raidConfig.notifyRoleId}>`;
         }
 
-        const role = guild.roles.cache.find((r) => r.name === raidConfig.notifyRoleName);
+        const role = guild.roles.cache.find(
+            (r) => r.name === raidConfig.notifyRoleName,
+        );
 
         return role ? `<@&${role.id}>` : `@${raidConfig.notifyRoleName}`;
     }
@@ -1324,7 +1639,9 @@ class RaidServerManager {
         }
 
         if (!raid.players[interaction.user.id]) {
-            raid.players[interaction.user.id] = createRaidPlayer(interaction.user.id);
+            raid.players[interaction.user.id] = createRaidPlayer(
+                interaction.user.id,
+            );
         }
 
         setCurrentRaid(raid);
@@ -1413,7 +1730,12 @@ class RaidServerManager {
     async selectAction(interaction, action) {
         const raid = getCurrentRaid();
 
-        if (!raid || raid.status !== "battle" || !raid.phase || raid.phase.resolved) {
+        if (
+            !raid ||
+            raid.status !== "battle" ||
+            !raid.phase ||
+            raid.phase.resolved
+        ) {
             return interaction.reply({
                 content: "❌ Phase hiện tại không nhận hành động.",
                 ephemeral: true,
@@ -1455,7 +1777,23 @@ class RaidServerManager {
         }
 
         const registered = getRegisteredPlayers(raid);
-        const channel = await client.channels.fetch(raid.raidChannelId).catch(() => null);
+
+        let channel = raid.raidChannelId
+            ? await client.channels.fetch(raid.raidChannelId).catch(() => null)
+            : null;
+
+        if (!channel) {
+            const guild = await client.guilds
+                .fetch(raid.guildId)
+                .catch(() => null);
+
+            if (!guild) {
+                return;
+            }
+
+            channel = await this.createRaidChannel(guild, raid);
+            raid.raidChannelId = channel.id;
+        }
 
         if (registered.length < Number(raidConfig.minPlayers || 2)) {
             raid.status = "cancelled";
@@ -1463,8 +1801,11 @@ class RaidServerManager {
 
             setCurrentRaid(raid);
 
-            await channel?.send("❌ Raid bị hủy vì không đủ người đăng ký.").catch(() => null);
+            await channel
+                ?.send("❌ Raid bị hủy vì không đủ người đăng ký.")
+                .catch(() => null);
 
+            clearRaidTimers(raid.id);
             clearCurrentRaid();
             return;
         }
@@ -1485,8 +1826,16 @@ class RaidServerManager {
         setCurrentRaid(raid);
 
         await channel
+            ?.setName(
+                raidConfig.battleChannelName || "mamu-3-ta-6-18m",
+                "Raid Server bắt đầu",
+            )
+            .catch(() => null);
+
+        await channel
             ?.send(
                 [
+                    `🐷 **${raidConfig.battleDisplayName || "Mamu 3 tạ 6 18m"} đã thức tỉnh!**`,
                     "🔒 **RAID ĐÃ KHÓA**",
                     `Người đăng ký: **${registered.length}**`,
                     `Độ khó scale theo: **${scaleCount}** người`,
@@ -1505,7 +1854,9 @@ class RaidServerManager {
             return;
         }
 
-        const channel = await client.channels.fetch(raid.raidChannelId).catch(() => null);
+        const channel = await client.channels
+            .fetch(raid.raidChannelId)
+            .catch(() => null);
 
         if (!channel) {
             return;
@@ -1530,9 +1881,13 @@ class RaidServerManager {
             components: buildActionRows(raid),
         });
 
-        setTimer(`raid_phase_${raid.id}`, Number(raidConfig.phaseSeconds || 30) * 1000, () => {
-            this.resolvePhase(client, raid.id).catch(console.error);
-        });
+        setTimer(
+            `raid_phase_${raid.id}`,
+            Number(raidConfig.phaseSeconds || 30) * 1000,
+            () => {
+                this.resolvePhase(client, raid.id).catch(console.error);
+            },
+        );
     }
 
     async resolvePhase(client, raidId) {
@@ -1547,7 +1902,9 @@ class RaidServerManager {
             return;
         }
 
-        const channel = await client.channels.fetch(raid.raidChannelId).catch(() => null);
+        const channel = await client.channels
+            .fetch(raid.raidChannelId)
+            .catch(() => null);
 
         raid.phase.resolved = true;
 
@@ -1557,7 +1914,10 @@ class RaidServerManager {
         applyPlayerActionDamage(raid, logs);
         resolveMechanic(raid, logs);
 
-        if (Number(raid.boss.rage || 0) >= Number(raidConfig.boss.maxRage || 100)) {
+        if (
+            Number(raid.boss.rage || 0) >=
+            Number(raidConfig.boss.maxRage || 100)
+        ) {
             raid.stats.rageBursts += 1;
             raid.boss.rage = 35;
 
@@ -1612,7 +1972,9 @@ class RaidServerManager {
             return;
         }
 
-        const channel = await client.channels.fetch(raid.raidChannelId).catch(() => null);
+        const channel = await client.channels
+            .fetch(raid.raidChannelId)
+            .catch(() => null);
 
         raid.status = "finished";
         raid.result = result;
@@ -1623,7 +1985,12 @@ class RaidServerManager {
 
         await channel
             ?.send({
-                embeds: [buildResultEmbed(raid, result, [...logs, ...buildSummaryLines(raid)])],
+                embeds: [
+                    buildResultEmbed(raid, result, [
+                        ...logs,
+                        ...buildSummaryLines(raid),
+                    ]),
+                ],
             })
             .catch(() => null);
 
@@ -1640,9 +2007,12 @@ class RaidServerManager {
 
             const eligible =
                 result === "win" &&
-                player.actionsTaken >= Number(raidConfig.reward.minActionsForChest || 3) &&
-                player.activePhases >= Number(raidConfig.reward.minPhasesForChest || 4) &&
-                player.afkPhases <= Number(raidConfig.reward.maxAfkPhasesForChest || 2) &&
+                player.actionsTaken >=
+                    Number(raidConfig.reward.minActionsForChest || 3) &&
+                player.activePhases >=
+                    Number(raidConfig.reward.minPhasesForChest || 4) &&
+                player.afkPhases <=
+                    Number(raidConfig.reward.maxAfkPhasesForChest || 2) &&
                 diedOk;
 
             if (eligible) {
@@ -1654,37 +2024,52 @@ class RaidServerManager {
 
                 database.addMoney(
                     player.userId,
-                    randomInt(raidConfig.reward.winMoneyMin, raidConfig.reward.winMoneyMax),
+                    randomInt(
+                        raidConfig.reward.winMoneyMin,
+                        raidConfig.reward.winMoneyMax,
+                    ),
                 );
 
                 database.updateTuTienProfile(player.userId, (profile) => {
                     profile.exp =
                         Number(profile.exp || 0) +
-                        randomInt(raidConfig.reward.winExpMin, raidConfig.reward.winExpMax);
+                        randomInt(
+                            raidConfig.reward.winExpMin,
+                            raidConfig.reward.winExpMax,
+                        );
                 });
 
                 player.rewardEligible = true;
             } else if (player.actionsTaken > 0) {
                 database.addMoney(
                     player.userId,
-                    randomInt(raidConfig.reward.loseMoneyMin, raidConfig.reward.loseMoneyMax),
+                    randomInt(
+                        raidConfig.reward.loseMoneyMin,
+                        raidConfig.reward.loseMoneyMax,
+                    ),
                 );
 
                 database.updateTuTienProfile(player.userId, (profile) => {
                     profile.exp =
                         Number(profile.exp || 0) +
-                        randomInt(raidConfig.reward.loseExpMin, raidConfig.reward.loseExpMax);
+                        randomInt(
+                            raidConfig.reward.loseExpMin,
+                            raidConfig.reward.loseExpMax,
+                        );
                 });
 
                 player.rewardEligible = false;
-                player.rewardReason = result !== "win" ? "Raid thua" : "Không đủ điều kiện rương";
+                player.rewardReason =
+                    result !== "win" ? "Raid thua" : "Không đủ điều kiện rương";
             } else {
                 player.rewardEligible = false;
                 player.rewardReason = "Đăng ký nhưng không đánh";
             }
         }
 
-        const chestCount = getRegisteredPlayers(raid).filter((p) => p.rewardEligible).length;
+        const chestCount = getRegisteredPlayers(raid).filter(
+            (p) => p.rewardEligible,
+        ).length;
 
         logs.push(
             result === "win"
