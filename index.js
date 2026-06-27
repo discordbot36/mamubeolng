@@ -83,6 +83,7 @@ client.once("clientReady", () => {
     });
 
     raidserver.startAutoSchedule(client);
+    router.startAutoActiveRain?.(client);
 
     leaderboard.startAutoUpdate(client);
     worldboss.startAutoSpawn(client);

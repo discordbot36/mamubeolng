@@ -502,6 +502,24 @@ function updateBestFoundStats(user, weapon) {
         user.phapBaoStats.bestWeaponName = weapon.name;
     }
 }
+function giveUnidentifiedWeaponReward(
+    userId,
+    rarity = "SS",
+    source = "worldboss_chest",
+) {
+    const weapon = createUnidentifiedWeapon(rarity, source);
+
+    return database.updateUser(userId, (user) => {
+        if (!Array.isArray(user.weapons)) {
+            user.weapons = [];
+        }
+
+        user.weapons.push(weapon);
+        updateBestFoundStats(user, weapon);
+
+        return weapon;
+    });
+}
 
 function formatRewardLine(reward) {
     if (reward.type === "fragment") {
@@ -2499,7 +2517,6 @@ function calculateRerollCost(weapon, lockedCount) {
         REROLL_LOCK_MULTIPLIERS[5] ||
         100;
 
-    const starMultiplier = 1 + Number(weapon.stars || 0) * 0.25;
     const qualityMultiplier = Number(weapon.qualityMultiplier || 1);
 
     return Math.floor(
@@ -3747,6 +3764,7 @@ async function handleButton(interaction) {
 module.exports = {
     openChest,
     autocompleteChest,
+    giveUnidentifiedWeaponReward,
 
     listWeapons,
 

@@ -92,6 +92,8 @@ async function handleCommand(interaction) {
         });
     }
 
+    admin.recordCommandActivity(interaction);
+
     const handler = resolve(command?.handler);
 
     return handler ? handler(interaction) : undefined;
@@ -177,10 +179,15 @@ async function handleMessage(message) {
     return noitu.handleMessage(message);
 }
 
+function startAutoActiveRain(client) {
+    return admin.startAutoActiveRain(client);
+}
+
 module.exports = {
     handleCommand,
     handleAutocomplete,
     handleButton,
     handleModal,
     handleMessage,
+    startAutoActiveRain,
 };

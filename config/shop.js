@@ -660,14 +660,15 @@ module.exports = {
     },
 
     tu_luyen_chest: {
-        name: "Rương Tu Luyện",
-        emoji: "🎁",
+        name: "Rương WorldBoss",
+        emoji: "👹",
         price: 0,
         type: "cultivation_chest",
         hidden: true,
         buyable: false,
         sellable: false,
-        description: "Rương thưởng từ Boss Thế Giới.",
+        description:
+            "Rương thưởng từ WorldBoss. Có thể ra tài nguyên tu luyện, tiền và tỉ lệ nhỏ ra phôi pháp bảo SSS.",
     },
     ruong_tan_tich_ex: {
         name: "Rương Tàn Tích EX",

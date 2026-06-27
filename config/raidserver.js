@@ -13,17 +13,16 @@ module.exports = {
 
     notifyRoleName: "Lợn Tu Tiên",
     notifyRoleId: null,
-
     registerHour: 8,
     registerMinute: 0,
 
-    prepareHour: 20,
-    prepareMinute: 50,
+    prepareHour: 21,
+    prepareMinute: 15,
 
     startHour: 21,
-    startMinute: 0,
+    startMinute: 30,
 
-    prepareMinutes: 10,
+    prepareMinutes: 15,
 
     phaseSeconds: 30,
     maxBattleMinutes: 20,

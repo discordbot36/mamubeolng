@@ -569,7 +569,7 @@ function buildRegisterEmbed(raid) {
                 `**Bắt đầu:** ${formatClock(raidConfig.startHour, raidConfig.startMinute)}`,
                 `**Chuẩn bị:** ${raidConfig.prepareMinutes} phút`,
                 "",
-                "Bấm **Đăng Ký Tham Gia** để được gọi vào raid lúc 20:50.",
+                "Bấm **Đăng Ký Tham Gia** để được gọi vào raid lúc 21:15.",
                 "Ai đăng ký nhưng tới giờ không đánh / AFK sẽ **không nhận quà**.",
             ].join("\n"),
         )
@@ -2134,20 +2134,8 @@ class RaidServerManager {
 
     distributeRewards(raid, result, logs) {
         for (const player of getRegisteredPlayers(raid)) {
-            const diedOk =
-                player.deadAtPhase === null ||
-                Number(player.deadAtPhase || 0) >=
-                    Number(raidConfig.reward.minDeathPhaseForChest || 3);
-
             const eligible =
-                result === "win" &&
-                player.actionsTaken >=
-                    Number(raidConfig.reward.minActionsForChest || 3) &&
-                player.activePhases >=
-                    Number(raidConfig.reward.minPhasesForChest || 4) &&
-                player.afkPhases <=
-                    Number(raidConfig.reward.maxAfkPhasesForChest || 2) &&
-                diedOk;
+                result === "win" && Number(player.actionsTaken || 0) > 0;
 
             if (eligible) {
                 database.addShopItem(

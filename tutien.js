@@ -10,6 +10,7 @@ const {
     updateTuTienProfile,
     consumeShopItem,
     addShopItem,
+    addMoney,
     getInventory,
     getShop,
 } = require("./database");
@@ -19,6 +20,7 @@ const quest = require("./quest");
 const skillConfig = require("./config/kynang");
 const chestConfig = require("./config/chest");
 const bicanh = require("./bicanh");
+const { giveUnidentifiedWeaponReward } = require("./phapbao");
 
 const skillTierNames = skillConfig.skillTierNames || {};
 const activeSkills = Array.isArray(skillConfig.activeSkills)
@@ -74,6 +76,13 @@ function formatWeaponBonusForTuTien(stats) {
 }
 function formatNumber(number) {
     return Number(number || 0).toLocaleString("vi-VN");
+}
+
+function randomInt(min, max) {
+    const safeMin = Math.ceil(Number(min || 0));
+    const safeMax = Math.floor(Number(max || safeMin));
+
+    return Math.floor(Math.random() * (safeMax - safeMin + 1)) + safeMin;
 }
 
 function getRealms() {
@@ -1377,7 +1386,7 @@ class TuTienManager {
                 }
 
                 if (item.type === "cultivation_chest") {
-                    detail = `mở rương tu luyện`;
+                    detail = `mở ${item.name}`;
                 }
 
                 return {
@@ -1452,27 +1461,83 @@ class TuTienManager {
 
             const rewardMap = new Map();
 
+            function addReward(key, label, amount = 1, options = {}) {
+                const old = rewardMap.get(key);
+
+                rewardMap.set(key, {
+                    label,
+                    amount: Number(old?.amount || 0) + Number(amount || 0),
+                    isMoney: Boolean(options.isMoney),
+                });
+            }
+
             for (let i = 0; i < quantity; i++) {
                 const drop = pickWeightedChestDrop(drops);
+
+                if (!drop) {
+                    continue;
+                }
+
+                const dropType = drop.type || "item";
+
+                if (dropType === "money") {
+                    const moneyAmount = randomInt(
+                        drop.min || 0,
+                        drop.max || drop.min || 0,
+                    );
+
+                    if (moneyAmount > 0) {
+                        addMoney(interaction.user.id, moneyAmount);
+                        addReward("money", "💰 **Tiền**", moneyAmount, {
+                            isMoney: true,
+                        });
+                    }
+
+                    continue;
+                }
+
+                if (dropType === "unidentified_weapon") {
+                    const weapon = giveUnidentifiedWeaponReward(
+                        interaction.user.id,
+                        drop.rarity || "SS",
+                        itemId,
+                    );
+
+                    addReward(
+                        `weapon:${weapon.rarity}`,
+                        `${weapon.emoji || "⚪"} **${weapon.name}**`,
+                        1,
+                    );
+
+                    continue;
+                }
+
                 const rewardItem = shop[drop.itemId];
 
                 if (!rewardItem) {
                     continue;
                 }
 
-                addShopItem(interaction.user.id, drop.itemId, 1);
+                const amount = Math.max(
+                    1,
+                    Math.floor(Number(drop.amount || 1)),
+                );
 
-                const oldAmount = rewardMap.get(drop.itemId)?.amount || 0;
+                addShopItem(interaction.user.id, drop.itemId, amount);
 
-                rewardMap.set(drop.itemId, {
-                    itemId: drop.itemId,
-                    item: rewardItem,
-                    amount: oldAmount + 1,
-                });
+                addReward(
+                    `item:${drop.itemId}`,
+                    `${rewardItem.emoji || "🎁"} **${rewardItem.name}**`,
+                    amount,
+                );
             }
 
             const rewardLines = Array.from(rewardMap.values()).map((reward) => {
-                return `- ${reward.item.emoji || "🎁"} **${reward.item.name}** x${reward.amount}`;
+                if (reward.isMoney) {
+                    return `- ${reward.label}: **${formatNumber(reward.amount)}**`;
+                }
+
+                return `- ${reward.label} x${reward.amount}`;
             });
 
             return interaction.reply({

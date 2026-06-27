@@ -13,14 +13,29 @@ const adminConfig = require("./config/admin");
 
 const activityStats = new Map();
 const activeRains = new Map();
+const autoActiveRainTimers = new Map();
 
-const ACTIVITY_WINDOW_MS = 30 * 60 * 1000;
+const ACTIVITY_WINDOW_MS = 3 * 60 * 60 * 1000;
 const MESSAGE_COOLDOWN_MS = 20 * 1000;
+const COMMAND_COOLDOWN_MS = 10 * 1000;
 const RAIN_EXPIRE_MS = 60 * 60 * 1000;
 
 const MIN_SCORE_TO_PICK = 8;
 const MAX_SCORE_PER_MESSAGE = 3;
 const MAX_RAIN_TARGETS = 20;
+
+const AUTO_ACTIVE_RAIN_CHANNEL_IDS = [
+    "1508916752514420816",
+    "1509179670967615578",
+];
+
+const AUTO_ACTIVE_RAIN_TARGET_COUNT = 3;
+const AUTO_ACTIVE_RAIN_REWARD = 3000;
+
+const AUTO_ACTIVE_RAIN_MIN_DELAY_MS = 60 * 60 * 1000;
+const AUTO_ACTIVE_RAIN_MAX_DELAY_MS = 3 * 60 * 60 * 1000;
+
+const COMMAND_ACTIVITY_SCORE = 3;
 
 function isAllowed(userId) {
     const allowedUserIds = Array.isArray(adminConfig.allowedUserIds)
@@ -182,21 +197,62 @@ function getRandomActiveUsers(guildId, channelId, limit, excludedUserIds) {
     return candidates.slice(0, limit);
 }
 
-function parsePickedUserIds(input) {
-    const text = String(input || "").trim();
-
-    if (!text) {
+function getRecentActiveUsers(guildId, channelId, limit) {
+    if (limit <= 0) {
         return [];
     }
 
-    const ids = new Set();
-    const matches = text.match(/\d{15,25}/g) || [];
+    const bucket = getChannelBucket(guildId, channelId);
+    const users = [];
 
-    for (const id of matches) {
-        ids.add(id);
+    for (const [userId, stat] of bucket.users.entries()) {
+        pruneSamples(stat);
+
+        if (!Array.isArray(stat.samples) || stat.samples.length <= 0) {
+            continue;
+        }
+
+        const lastActiveAt = stat.samples.reduce((latest, sample) => {
+            return Math.max(latest, Number(sample.createdAt || 0));
+        }, 0);
+
+        if (lastActiveAt <= 0) {
+            continue;
+        }
+
+        users.push({
+            userId,
+            lastActiveAt,
+            messageCount: stat.samples.length,
+            score: getUserScore(stat),
+        });
     }
 
-    return [...ids];
+    return users
+        .sort((a, b) => {
+            return b.lastActiveAt - a.lastActiveAt;
+        })
+        .slice(0, limit);
+}
+
+function randomDelay(minMs, maxMs) {
+    const min = Number(minMs || 0);
+    const max = Number(maxMs || min);
+
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function formatDelay(ms) {
+    const minutes = Math.round(Number(ms || 0) / 60000);
+
+    if (minutes >= 60) {
+        const hours = Math.floor(minutes / 60);
+        const restMinutes = minutes % 60;
+
+        return restMinutes > 0 ? `${hours}h${restMinutes}p` : `${hours}h`;
+    }
+
+    return `${minutes} phút`;
 }
 
 function buildActiveRainReasonText(user) {
@@ -230,6 +286,137 @@ function formatGiftItemChoice(itemId, item) {
 }
 
 class AdminManager {
+    recordCommandActivity(interaction) {
+        if (!interaction || !interaction.guildId || !interaction.channelId) {
+            return undefined;
+        }
+
+        if (!interaction.user || interaction.user.bot) {
+            return undefined;
+        }
+
+        const bucket = getChannelBucket(
+            interaction.guildId,
+            interaction.channelId,
+        );
+
+        if (!bucket.users.has(interaction.user.id)) {
+            bucket.users.set(interaction.user.id, {
+                lastMessageAt: 0,
+                lastCommandAt: 0,
+                lastContent: "",
+                samples: [],
+            });
+        }
+
+        const stat = bucket.users.get(interaction.user.id);
+        const now = Date.now();
+
+        if (now - Number(stat.lastCommandAt || 0) < COMMAND_COOLDOWN_MS) {
+            return undefined;
+        }
+
+        stat.lastCommandAt = now;
+
+        stat.samples.push({
+            score: COMMAND_ACTIVITY_SCORE,
+            createdAt: now,
+            type: "command",
+        });
+
+        pruneSamples(stat);
+
+        return undefined;
+    }
+
+    async runAutoActiveRain(client, channelId) {
+        const channel = await client.channels
+            .fetch(channelId)
+            .catch(() => null);
+
+        if (
+            !channel ||
+            !channel.guildId ||
+            !channel.isTextBased() ||
+            typeof channel.send !== "function"
+        ) {
+            return undefined;
+        }
+
+        const selectedUsers = getRecentActiveUsers(
+            channel.guildId,
+            channel.id,
+            AUTO_ACTIVE_RAIN_TARGET_COUNT,
+        );
+
+        if (selectedUsers.length <= 0) {
+            return undefined;
+        }
+
+        for (const user of selectedUsers) {
+            addMoney(user.userId, AUTO_ACTIVE_RAIN_REWARD);
+        }
+
+        const coin = getCurrencyEmoji();
+
+        const rainDonorId = "1442869815847948470";
+
+        const receiverLines = selectedUsers
+            .map((user) => {
+                return `- <@${user.userId}>`;
+            })
+            .join("\n");
+
+        await channel.send({
+            content: `<@${rainDonorId}> tặng cơn mưa\n` + `${receiverLines}`,
+            allowedMentions: {
+                users: [
+                    rainDonorId,
+                    ...selectedUsers.map((user) => user.userId),
+                ],
+            },
+        });
+
+        return undefined;
+    }
+
+    scheduleAutoActiveRain(client, channelId) {
+        const safeChannelId = String(channelId || "");
+
+        if (!safeChannelId || autoActiveRainTimers.has(safeChannelId)) {
+            return;
+        }
+
+        const delay = randomDelay(
+            AUTO_ACTIVE_RAIN_MIN_DELAY_MS,
+            AUTO_ACTIVE_RAIN_MAX_DELAY_MS,
+        );
+
+        const timer = setTimeout(async () => {
+            autoActiveRainTimers.delete(safeChannelId);
+
+            try {
+                await this.runAutoActiveRain(client, safeChannelId);
+            } catch (error) {
+                console.error(`[AutoActiveRain] ${safeChannelId}`, error);
+            }
+
+            this.scheduleAutoActiveRain(client, safeChannelId);
+        }, delay);
+
+        autoActiveRainTimers.set(safeChannelId, timer);
+
+        console.log(
+            `[AutoActiveRain] Channel ${safeChannelId} sẽ rain sau ${formatDelay(delay)}`,
+        );
+    }
+
+    startAutoActiveRain(client) {
+        for (const channelId of AUTO_ACTIVE_RAIN_CHANNEL_IDS) {
+            this.scheduleAutoActiveRain(client, channelId);
+        }
+    }
+
     async autocompleteGiftItem(interaction) {
         const focusedValue = interaction.options.getFocused();
         const search = normalizeSearchText(focusedValue);
@@ -1033,12 +1220,7 @@ class AdminManager {
             return undefined;
         }
 
-        const score = calculateQualityScore(content);
-
-        if (score <= 0) {
-            return undefined;
-        }
-
+        const score = Math.max(1, calculateQualityScore(content));
         const bucket = getChannelBucket(message.guildId, message.channelId);
 
         if (!bucket.users.has(message.author.id)) {

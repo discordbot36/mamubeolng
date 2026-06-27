@@ -2,28 +2,45 @@ module.exports = {
     cultivationChest: {
         drops: [
             {
-                itemId: "cam_lon_nam_dinh",
-                chance: 45,
-            },
-            {
-                itemId: "cam_lon_tang_trong",
-                chance: 25,
-            },
-            {
+                type: "item",
                 itemId: "cam_lon_xin_vl",
-                chance: 15,
+                amount: 2,
+                chance: 35,
             },
             {
+                type: "item",
+                itemId: "cam_on_em_vi_tat_ca",
+                amount: 1,
+                chance: 23,
+            },
+            {
+                type: "item",
                 itemId: "bi_tich_rach_chu_dong",
-                chance: 5,
+                amount: 1,
+                chance: 12,
             },
             {
+                type: "item",
                 itemId: "bi_tich_rach_bi_dong",
-                chance: 5,
+                amount: 1,
+                chance: 12,
             },
             {
+                type: "item",
                 itemId: "tay_tuy_linh_can_dan",
-                chance: 5,
+                amount: 1,
+                chance: 8,
+            },
+            {
+                type: "money",
+                min: 50000,
+                max: 150000,
+                chance: 8,
+            },
+            {
+                type: "unidentified_weapon",
+                rarity: "SS",
+                chance: 2,
             },
         ],
     },
