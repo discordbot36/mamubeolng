@@ -7,6 +7,7 @@ const {
 
 const {
     addMoney,
+    addShopItem,
     formatMoney,
     ensureTuTienProfile,
     updateTuTienProfile,
@@ -16,6 +17,7 @@ const {
 } = require("./database");
 
 const worldBossConfig = require("./config/worldboss");
+const shop = require("./config/shop");
 const tuTienConfig = require("./config/tutien");
 const combat = require("./utils/combat");
 const {
@@ -838,17 +840,18 @@ async function finishBoss(client, reason = "killed") {
             addTuTienExp(item.userId, expReward);
         }
 
-        const phapBaoRewards =
-            chestReward > 0
-                ? givePhapBaoFarmReward(item.userId, "worldboss", {
-                      rolls: chestReward,
-                  })
-                : [];
+        let chestRewardText = "";
 
-        const phapBaoRewardText = phapBaoRewards
-            .map(formatPhapBaoFarmReward)
-            .filter(Boolean)
-            .join(" | ");
+        if (chestReward > 0) {
+            const chestItemId = worldBossConfig.chestItemId || "tu_luyen_chest";
+            const chestItem = shop[chestItemId] || {};
+
+            addShopItem(item.userId, chestItemId, chestReward);
+
+            chestRewardText =
+                `${chestItem.emoji || "🎁"} **${chestItem.name || "Rương WorldBoss"}** ` +
+                `x${formatNumber(chestReward)}`;
+        }
         if (rank <= maxRankDisplay) {
             const tags = [];
 
@@ -869,7 +872,7 @@ async function finishBoss(client, reason = "killed") {
                     `⚔️ ${formatNumber(item.hits)} lượt | ` +
                     `💰 ${formatMoney(moneyReward)}` +
                     ` | ✨ +${formatNumber(expReward)} exp` +
-                    `${phapBaoRewardText ? ` | ${phapBaoRewardText}` : ""}` +
+                    `${chestRewardText ? ` | ${chestRewardText}` : ""}` +
                     `${tags.length > 0 ? ` | ${tags.join(", ")}` : ""}`,
             );
         } else {
