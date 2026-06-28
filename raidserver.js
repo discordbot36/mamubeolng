@@ -1529,19 +1529,35 @@ class RaidServerManager {
         return null;
     }
     async createRaidChannel(guild, raid) {
-        const registeredIds = Object.keys(raid.players || {});
+        const registeredIds = Object.keys(raid.players || {}).filter((id) => {
+            return /^\d{17,20}$/.test(String(id));
+        });
+
         const permissionOverwrites = [];
 
         if (raidConfig.privateRaidChannel) {
             permissionOverwrites.push({
                 id: guild.roles.everyone.id,
+                type: 0, // Role
                 deny: [PermissionFlagsBits.ViewChannel],
             });
         }
 
+        permissionOverwrites.push({
+            id: guild.members.me?.id || guild.client.user.id,
+            type: 1, // Member
+            allow: [
+                PermissionFlagsBits.ViewChannel,
+                PermissionFlagsBits.SendMessages,
+                PermissionFlagsBits.ReadMessageHistory,
+                PermissionFlagsBits.ManageChannels,
+            ],
+        });
+
         for (const userId of registeredIds) {
             permissionOverwrites.push({
                 id: userId,
+                type: 1, // Member
                 allow: [
                     PermissionFlagsBits.ViewChannel,
                     PermissionFlagsBits.SendMessages,
