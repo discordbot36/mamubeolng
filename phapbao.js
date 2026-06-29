@@ -2519,9 +2519,7 @@ function calculateRerollCost(weapon, lockedCount) {
 
     const qualityMultiplier = Number(weapon.qualityMultiplier || 1);
 
-    return Math.floor(
-        baseCost * lockMultiplier * starMultiplier * qualityMultiplier,
-    );
+    return Math.floor(baseCost * lockMultiplier * qualityMultiplier);
 }
 
 function canRerollWeapon(user, weapon, lockedIndexes) {

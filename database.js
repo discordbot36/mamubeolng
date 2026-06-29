@@ -10,6 +10,11 @@ const questConfig = require("./config/quest");
 
 const DATA_FILE = databaseConfig.dataFile;
 const DEFAULT_DATA = { users: {}, system: {} };
+const SAVE_DEBOUNCE_MS = 1500;
+
+let dataCache = null;
+let saveTimer = null;
+let dirty = false;
 
 function createDefaultUser() {
     return {
@@ -39,6 +44,53 @@ function loadData() {
 function saveData(data) {
     fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
+
+function getDataCache() {
+    if (!dataCache) {
+        dataCache = loadData();
+    }
+
+    return dataCache;
+}
+
+function flushData() {
+    if (!dataCache || !dirty) {
+        return;
+    }
+
+    if (saveTimer) {
+        clearTimeout(saveTimer);
+        saveTimer = null;
+    }
+
+    saveData(dataCache);
+    dirty = false;
+}
+
+function scheduleSaveData() {
+    dirty = true;
+
+    if (saveTimer) {
+        return;
+    }
+
+    saveTimer = setTimeout(() => {
+        saveTimer = null;
+        flushData();
+    }, SAVE_DEBOUNCE_MS);
+}
+
+process.once("beforeExit", flushData);
+
+process.once("SIGINT", () => {
+    flushData();
+    process.exit(0);
+});
+
+process.once("SIGTERM", () => {
+    flushData();
+    process.exit(0);
+});
 
 function getShiftedDate(offsetHours = 7) {
     return new Date(Date.now() + offsetHours * 60 * 60 * 1000);
@@ -293,10 +345,10 @@ function ensureUser(data, userId) {
 }
 
 function withData(mutator) {
-    const data = loadData();
+    const data = getDataCache();
     const result = mutator(data);
 
-    saveData(data);
+    scheduleSaveData();
 
     return result;
 }

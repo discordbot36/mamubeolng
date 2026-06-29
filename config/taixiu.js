@@ -2,7 +2,7 @@ const { ButtonStyle } = require("discord.js");
 const { GAMBLE_MAX_BET } = require("./gamble");
 
 module.exports = {
-    countdownMs: 45_000,
+    countdownMs: 50_000,
 
     minBet: 1,
     maxBet: GAMBLE_MAX_BET,
@@ -55,16 +55,9 @@ module.exports = {
     },
 
     effect: {
-        rollingDelayMs: 600,
-        openDelayMs: 800,
-        frames: [
-            "🎲 Đang lắc... `.`",
-            "🎲 Đang lắc... `..`",
-            "🎲 Đang lắc... `...`",
-            "🎲 Lắc mạnh vl... `.`",
-            "🎲 Lắc mạnh vl... `..`",
-            "🎲 Lắc mạnh vl... `...`",
-        ],
+        rollingDelayMs: 1200,
+        openDelayMs: 1200,
+        frames: ["🎲 Đang lắc... `...`", "🎲 Lắc mạnh vl... `...`"],
     },
 
     messages: {

@@ -582,7 +582,7 @@ function getBreakthroughChance(profile) {
 }
 
 function getCultivateCooldownMs() {
-    return 18 * 60 * 1000;
+    return Number(tuTienConfig.cultivateCooldownMs || 18 * 60 * 1000);
 }
 
 function getCooldownText(timeLeft) {

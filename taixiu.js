@@ -19,6 +19,9 @@ const {
 const taixiuConfig = require("./config/taixiu");
 
 const games = new Map();
+const gamesById = new Map();
+const tableEditTimers = new Map();
+const TABLE_EDIT_DEBOUNCE_MS = 1500;
 
 function sleep(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -26,6 +29,53 @@ function sleep(ms) {
 
 function getGameKey(guildId, channelId) {
     return `${guildId}_${channelId}`;
+}
+
+function getGameById(gameId) {
+    return gamesById.get(gameId) || null;
+}
+
+function cleanupGame(game) {
+    if (!game) {
+        return;
+    }
+
+    games.delete(game.key);
+    gamesById.delete(game.id);
+
+    const timer = tableEditTimers.get(game.id);
+
+    if (timer) {
+        clearTimeout(timer);
+        tableEditTimers.delete(game.id);
+    }
+}
+
+function scheduleTableEdit(game) {
+    if (!game || game.closed || !game.message) {
+        return;
+    }
+
+    if (tableEditTimers.has(game.id)) {
+        return;
+    }
+
+    const timer = setTimeout(async () => {
+        tableEditTimers.delete(game.id);
+
+        if (game.closed || !game.message) {
+            return;
+        }
+
+        await game.message
+            .edit({
+                content: buildTableContent(game),
+                components: createButtons(game),
+            })
+            .catch(() => undefined);
+    }, TABLE_EDIT_DEBOUNCE_MS);
+
+    tableEditTimers.set(game.id, timer);
 }
 
 function randomInt(min, max) {
@@ -271,6 +321,7 @@ class TaiXiuManager {
         };
 
         games.set(key, game);
+        gamesById.set(game.id, game);
 
         await interaction.reply({
             content: buildTableContent(game),
@@ -278,11 +329,13 @@ class TaiXiuManager {
         });
 
         const gameMessage = await interaction.fetchReply();
+        game.message = gameMessage;
+        game.messageId = gameMessage.id;
 
         setTimeout(() => {
             this.run(interaction, gameMessage, game).catch((error) => {
                 console.error(error);
-                games.delete(key);
+                cleanupGame(game);
             });
         }, taixiuConfig.countdownMs);
 
@@ -302,9 +355,7 @@ class TaiXiuManager {
         const gameId = parts[2];
         const betKey = parts.slice(3).join("_");
 
-        const game = Array.from(games.values()).find(
-            (item) => item.id === gameId,
-        );
+        const game = getGameById(gameId);
 
         if (!game || game.closed) {
             return interaction.reply({
@@ -325,9 +376,7 @@ class TaiXiuManager {
         const gameId = parts[2];
         const betKey = parts.slice(3).join("_");
 
-        const game = Array.from(games.values()).find(
-            (item) => item.id === gameId,
-        );
+       const game = getGameById(gameId);
 
         if (!game || game.closed) {
             return interaction.reply({
@@ -368,28 +417,17 @@ class TaiXiuManager {
             amount,
         });
 
-        const message = await interaction.channel.messages
-            .fetch(interaction.message?.id)
-            .catch(() => null);
-
         await interaction.reply({
             content: `✅ Đã cược ${formatMoney(amount)} vào ${getBetLabel(betKey)}`,
             ephemeral: true,
         });
-
-        if (message) {
-            await message.edit({
-                content: buildTableContent(game),
-                components: createButtons(game),
-            });
-        }
-
+        scheduleTableEdit(game);
         return undefined;
     }
 
     async run(interaction, gameMessage, game) {
         game.closed = true;
-        games.delete(game.key);
+        cleanupGame(game);
 
         if (game.bets.length <= 0) {
             return gameMessage.edit({

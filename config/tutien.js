@@ -1,5 +1,5 @@
 module.exports = {
-    cultivateCooldownMs: 30 * 60 * 1000,
+    cultivateCooldownMs: 18 * 60 * 1000,
 
     cultivate: {
         minExp: 80,
@@ -8,7 +8,7 @@ module.exports = {
 
     breakthrough: {
         successChance: 0.6,
-        failExpKeepRate: 0,
+        failExpKeepRate: 0.35,
     },
 
     spiritualRoots: [

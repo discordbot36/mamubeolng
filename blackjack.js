@@ -15,7 +15,7 @@ const {
 } = require("./database");
 
 const { GAMBLE_MAX_BET } = require("./config/gamble");
-
+const GAME_EXPIRE_MS = 10 * 60 * 1000;
 const games = new Map();
 const MIN_BET = 100;
 const MAX_BET = GAMBLE_MAX_BET;
@@ -122,17 +122,20 @@ function formatHand(hand, hideFirst = false) {
     return hand.map(formatCard).join(" ");
 }
 
-function createButtons(userId, disabled = false) {
+function createButtons(game, disabled = false) {
+    const userId = game.userId;
+    const gameId = game.id;
+
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(`blackjack_hit_${userId}`)
+            .setCustomId(`blackjack_hit_${userId}_${gameId}`)
             .setLabel("Rút bài")
             .setEmoji("🃏")
             .setStyle(ButtonStyle.Primary)
             .setDisabled(disabled),
 
         new ButtonBuilder()
-            .setCustomId(`blackjack_stand_${userId}`)
+            .setCustomId(`blackjack_stand_${userId}_${gameId}`)
             .setLabel("Dừng")
             .setEmoji("🛑")
             .setStyle(ButtonStyle.Success)
@@ -284,12 +287,14 @@ class BlackjackManager {
         addMoney(interaction.user.id, -bet);
 
         const game = {
+            id: `${Date.now()}${Math.random().toString(36).slice(2, 8)}`,
             userId: interaction.user.id,
             bet,
             deck: createDeck(),
             playerHand: [],
             dealerHand: [],
             createdAt: Date.now(),
+            processing: false,
         };
 
         game.playerHand.push(drawCard(game));
@@ -304,13 +309,13 @@ class BlackjackManager {
 
             return interaction.reply({
                 embeds: [buildGameEmbed(game, true, resultText)],
-                components: [createButtons(interaction.user.id, true)],
+                components: [createButtons(game, true)],
             });
         }
 
         return interaction.reply({
             embeds: [buildGameEmbed(game)],
-            components: [createButtons(interaction.user.id)],
+            components: [createButtons(game)],
         });
     }
 
@@ -322,6 +327,7 @@ class BlackjackManager {
         const parts = interaction.customId.split("_");
         const action = parts[1];
         const userId = parts[2];
+        const gameId = parts[3];
 
         if (interaction.user.id !== userId) {
             return interaction.reply({
@@ -332,54 +338,96 @@ class BlackjackManager {
 
         const game = games.get(userId);
 
-        if (!game) {
+        if (!game || String(game.id) !== String(gameId)) {
+            await interaction.message
+                ?.edit({
+                    components: [
+                        createButtons(
+                            {
+                                userId,
+                                id: gameId || "expired",
+                            },
+                            true,
+                        ),
+                    ],
+                })
+                .catch(() => undefined);
+
             return interaction.reply({
-                content: "❌ Ván Blackjack này đã kết thúc hoặc không tồn tại.",
+                content:
+                    "❌ Ván Blackjack này đã kết thúc hoặc bot vừa restart. Hãy tạo ván mới.",
                 ephemeral: true,
             });
         }
 
-        if (action === "hit") {
-            game.playerHand.push(drawCard(game));
+        if (Date.now() - Number(game.createdAt || 0) > GAME_EXPIRE_MS) {
+            games.delete(userId);
 
-            const playerValue = calculateHandValue(game.playerHand);
+            return interaction.update({
+                content: "⏰ Ván Blackjack đã hết hạn. Hãy tạo ván mới.",
+                embeds: [],
+                components: [createButtons(game, true)],
+            });
+        }
 
-            if (playerValue > 21) {
-                const resultText = finishGame(game, "player_bust");
+        if (game.processing) {
+            return interaction.reply({
+                content: "⏳ Ván này đang xử lý, đừng spam nút.",
+                ephemeral: true,
+            });
+        }
 
-                return interaction.update({
-                    embeds: [buildGameEmbed(game, true, resultText)],
-                    components: [createButtons(userId, true)],
+        game.processing = true;
+
+        try {
+            if (action === "hit") {
+                game.playerHand.push(drawCard(game));
+
+                const playerValue = calculateHandValue(game.playerHand);
+
+                if (playerValue > 21) {
+                    const resultText = finishGame(game, "player_bust");
+
+                    return await interaction.update({
+                        embeds: [buildGameEmbed(game, true, resultText)],
+                        components: [createButtons(game, true)],
+                    });
+                }
+
+                if (playerValue === 21) {
+                    const outcome = resolveDealer(game);
+                    const resultText = finishGame(game, outcome);
+
+                    return await interaction.update({
+                        embeds: [buildGameEmbed(game, true, resultText)],
+                        components: [createButtons(game, true)],
+                    });
+                }
+
+                return await interaction.update({
+                    embeds: [buildGameEmbed(game)],
+                    components: [createButtons(game)],
                 });
             }
 
-            if (playerValue === 21) {
+            if (action === "stand") {
                 const outcome = resolveDealer(game);
                 const resultText = finishGame(game, outcome);
 
-                return interaction.update({
+                return await interaction.update({
                     embeds: [buildGameEmbed(game, true, resultText)],
-                    components: [createButtons(userId, true)],
+                    components: [createButtons(game, true)],
                 });
             }
 
-            return interaction.update({
-                embeds: [buildGameEmbed(game)],
-                components: [createButtons(userId)],
-            });
+            return undefined;
+        } finally {
+            const current = games.get(userId);
+
+            if (current && current.id === game.id) {
+                current.processing = false;
+            }
         }
-
-        if (action === "stand") {
-            const outcome = resolveDealer(game);
-            const resultText = finishGame(game, outcome);
-
-            return interaction.update({
-                embeds: [buildGameEmbed(game, true, resultText)],
-                components: [createButtons(userId, true)],
-            });
-        }
-
-        return undefined;
     }
 }
 
