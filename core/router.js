@@ -23,6 +23,7 @@ const sanyeuthu = require("../sanyeuthu");
 const dothachTournament = require("../dothachTournament");
 const phapbao = require("../phapbao");
 const raidserver = require("../raidserver");
+const duyen = require("../duyen");
 const modules = {
     economy,
     race,
@@ -34,6 +35,7 @@ const modules = {
     taixiu,
     admin,
     tutien,
+    duyen,
     tower,
     kynang,
     leaderboard,
@@ -141,6 +143,7 @@ async function handleButton(interaction) {
         quest.handleButton.bind(quest),
         bicanh.handleButton.bind(bicanh),
         phapbao.handleButton.bind(phapbao),
+        duyen.handleButton.bind(duyen),
         sanyeuthu.handleButton.bind(sanyeuthu),
         flip.handleButton.bind(flip),
         raidserver.handleButton.bind(raidserver),

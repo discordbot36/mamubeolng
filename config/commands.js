@@ -690,6 +690,14 @@ module.exports = [
         handler: "tutien.profile",
     },
     {
+        name: "duyen",
+        description: "Admin mở Bí Cảnh Truyền Thừa tổ đội",
+        handler: "duyen.start",
+        adminOnly: true,
+        defaultMemberPermissions: "8",
+        dmPermission: false,
+    },
+    {
         name: "daohieu",
         description: "Đặt đạo hiệu tu tiên",
         handler: "tutien.setDaoHieu",
