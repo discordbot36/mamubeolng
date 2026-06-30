@@ -8,7 +8,8 @@ const {
 } = require("discord.js");
 
 const db = require("./database");
-
+const shop = require("./config/shop");
+const weaponConfig = require("./weapon");
 const events = new Map();
 const timers = new Map();
 
@@ -64,6 +65,182 @@ const REACT = {
     sneak: ["🕶️", "Âm thầm", "Chậm hơn, mạnh khi nhiều đội đánh nhau."],
     ambush: ["🪤", "Mai phục", "Chờ đội ôm bảo vật đi ra."],
     ignore: ["🙏", "Bỏ qua", "An toàn, nhận quà nhỏ."],
+};
+
+const DUYEN_REWARD_POOLS = {
+    winner: {
+        money: [35000, 70000],
+        rolls: 3,
+        ssPhoiChance: 2.5,
+        pool: [
+            {
+                type: "item",
+                itemId: "manh_phap_bao",
+                min: 90,
+                max: 220,
+                weight: 28,
+            },
+            {
+                type: "item",
+                itemId: "ruong_phap_bao_tinh_anh",
+                amount: 1,
+                weight: 16,
+            },
+            {
+                type: "item",
+                itemId: "ruong_phap_bao_mamu",
+                amount: 1,
+                weight: 6,
+            },
+
+            {
+                type: "item",
+                itemId: "bi_tich_cao_cap_chu_dong",
+                amount: 1,
+                weight: 12,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_cao_cap_bi_dong",
+                amount: 1,
+                weight: 12,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_thien_giai_chu_dong",
+                amount: 1,
+                weight: 4,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_thien_giai_bi_dong",
+                amount: 1,
+                weight: 4,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_mamu_cam_thuat_chu_dong",
+                amount: 1,
+                weight: 0.7,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_mamu_cam_thuat_bi_dong",
+                amount: 1,
+                weight: 0.5,
+            },
+
+            { type: "item", itemId: "da_mamu", amount: 1, weight: 8 },
+            { type: "item", itemId: "da_hoa_dien", amount: 1, weight: 10 },
+            { type: "item", itemId: "da_phi_thuy", amount: 1, weight: 8 },
+        ],
+    },
+
+    runner: {
+        money: [12000, 25000],
+        rolls: 2,
+        ssPhoiChance: 0.6,
+        pool: [
+            {
+                type: "item",
+                itemId: "manh_phap_bao",
+                min: 45,
+                max: 120,
+                weight: 35,
+            },
+            {
+                type: "item",
+                itemId: "ruong_phap_bao_tinh_anh",
+                amount: 1,
+                weight: 7,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_cao_cap_chu_dong",
+                amount: 1,
+                weight: 12,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_cao_cap_bi_dong",
+                amount: 1,
+                weight: 12,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_thien_giai_chu_dong",
+                amount: 1,
+                weight: 1.5,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_thien_giai_bi_dong",
+                amount: 1,
+                weight: 1.5,
+            },
+            { type: "item", itemId: "da_hoa_dien", amount: 1, weight: 12 },
+            { type: "item", itemId: "da_phi_thuy", amount: 1, weight: 10 },
+            { type: "item", itemId: "da_mamu", amount: 1, weight: 3 },
+        ],
+    },
+
+    ignore: {
+        money: [5000, 9000],
+        rolls: 1,
+        ssPhoiChance: 0,
+        pool: [
+            {
+                type: "item",
+                itemId: "manh_phap_bao",
+                min: 15,
+                max: 45,
+                weight: 35,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_thuong_chu_dong",
+                amount: 1,
+                weight: 16,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_thuong_bi_dong",
+                amount: 1,
+                weight: 16,
+            },
+            { type: "item", itemId: "da_ngoc_bich", amount: 1, weight: 12 },
+            { type: "item", itemId: "da_phi_thuy", amount: 1, weight: 7 },
+        ],
+    },
+
+    loser: {
+        money: [3000, 7000],
+        rolls: 1,
+        ssPhoiChance: 0,
+        pool: [
+            {
+                type: "item",
+                itemId: "manh_phap_bao",
+                min: 10,
+                max: 35,
+                weight: 40,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_thuong_chu_dong",
+                amount: 1,
+                weight: 10,
+            },
+            {
+                type: "item",
+                itemId: "bi_tich_thuong_bi_dong",
+                amount: 1,
+                weight: 10,
+            },
+            { type: "item", itemId: "da_ngoc_bich", amount: 1, weight: 10 },
+            { type: "item", itemId: "da_hoa_dien", amount: 1, weight: 4 },
+        ],
+    },
 };
 
 function rnd(min, max) {
@@ -745,183 +922,672 @@ async function discoverOpportunity(event) {
         }, FINAL_MS),
     );
 }
-async function startRound(event, round) {
-    event.round = round;
 
-    for (const team of event.teams) {
-        team.pathOptions = pickRandom(Object.keys(PATHS), 3);
-        team.votes[`r${round}`] = {};
+function calculateFinalScore(event, team, finder) {
+    const attackCount = event.teams.filter((item) => {
+        return item.finalChoice === "attack";
+    }).length;
 
-        const lines = team.pathOptions
-            .map((id) => {
-                const path = PATHS[id];
-                return `${path[0]} **${path[1]}** — ${path[2]}`;
-            })
-            .join("\n");
+    let score =
+        rnd(20, 75) +
+        team.stats.combat * 0.35 +
+        team.stats.trick * 0.25 +
+        team.stats.formation * 0.22 +
+        team.stats.luck * 0.12 -
+        team.stats.fatigue * 0.35 -
+        team.stats.noise * 0.12;
 
-        const channel = await event.guild.channels
-            .fetch(team.channelId)
-            .catch(() => null);
+    if (team.id === finder.id) {
+        score += 30;
 
-        await channel
-            ?.send({
-                content:
-                    `🕯️ **ROUND ${round}/${ROUND_MAX} — Chọn hướng đi**\n\n` +
-                    `${lines}\n\n` +
-                    statsLine(team),
-                components: buildPathRows(event, team),
-            })
-            .catch(() => undefined);
+        if (team.finalChoice === "fast") {
+            score += attackCount ? -18 : 45;
+        }
+
+        if (team.finalChoice === "defend") {
+            score += 18 + team.stats.formation * 0.35 + (attackCount ? 25 : 0);
+        }
+
+        if (team.finalChoice === "hide") {
+            score += team.stats.trick * 0.45 - Math.max(0, attackCount - 1) * 8;
+        }
+
+        if (team.finalChoice === "bait") {
+            score += attackCount ? 38 + team.stats.formation * 0.25 : -12;
+        }
+
+        if (team.finalChoice === "retreat") {
+            const ambushCount = event.teams.filter((item) => {
+                return item.finalChoice === "ambush";
+            }).length;
+
+            score += 15 - ambushCount * 20;
+        }
+
+        return Math.round(score);
     }
 
-    timers.set(
-        `round_${event.id}_${round}`,
-        setTimeout(() => {
-            resolveRound(event).catch((error) => {
-                console.error("[Duyen resolveRound]", error);
-            });
-        }, ROUND_MS),
+    if (team.finalChoice === "attack") {
+        score += 24 + team.stats.combat * 0.25;
+
+        if (finder.finalChoice === "defend") {
+            score -= 24;
+        }
+
+        if (finder.finalChoice === "bait") {
+            score -= 34;
+        }
+
+        if (finder.finalChoice === "hide") {
+            score -= 15;
+        }
+    }
+
+    if (team.finalChoice === "sneak") {
+        score += 16 + team.stats.trick * 0.38;
+
+        if (attackCount >= 2) {
+            score += 28;
+        }
+
+        if (finder.finalChoice === "hide") {
+            score -= 10;
+        }
+    }
+
+    if (team.finalChoice === "ambush") {
+        score += team.stats.formation * 0.35 + team.stats.trick * 0.25;
+
+        if (finder.finalChoice === "retreat") {
+            score += 45;
+        }
+
+        if (attackCount) {
+            score += 10;
+        }
+    }
+
+    return Math.round(score);
+}
+
+function pickWeightedWinner(teams) {
+    const top = [...teams]
+        .sort((a, b) => b.finalScore - a.finalScore)
+        .slice(0, 3);
+
+    const minScore = Math.min(...top.map((team) => team.finalScore));
+
+    let totalWeight = 0;
+
+    const weights = top.map((team) => {
+        const weight = Math.max(10, team.finalScore - minScore + 25);
+        totalWeight += weight;
+        return weight;
+    });
+
+    let roll = Math.random() * totalWeight;
+
+    for (let i = 0; i < top.length; i += 1) {
+        roll -= weights[i];
+
+        if (roll <= 0) {
+            return top[i];
+        }
+    }
+
+    return top[0];
+}
+
+function createUid(prefix = "pb") {
+    return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function rollPercent(chance) {
+    return Math.random() * 100 < Number(chance || 0);
+}
+
+function rollWeighted(pool) {
+    const valid = Array.isArray(pool)
+        ? pool.filter((item) => Number(item.weight || 0) > 0)
+        : [];
+
+    const total = valid.reduce(
+        (sum, item) => sum + Number(item.weight || 0),
+        0,
+    );
+
+    if (total <= 0) {
+        return null;
+    }
+
+    let roll = Math.random() * total;
+
+    for (const item of valid) {
+        roll -= Number(item.weight || 0);
+
+        if (roll <= 0) {
+            return item;
+        }
+    }
+
+    return valid[valid.length - 1] || null;
+}
+
+function createUnidentifiedWeapon(rarityId = "SS", source = "duyen") {
+    const rarity = weaponConfig.getRarity(rarityId);
+    const now = Date.now();
+
+    return {
+        uid: createUid("pb"),
+        type: "phap_bao",
+        state: "unidentified",
+
+        rarity: rarity.id,
+        unidentifiedRarity: rarity.id,
+        finalRarity: null,
+
+        weaponId: null,
+        name: `Phôi Pháp Bảo ${rarity.id} Chưa Giám Định`,
+        emoji: rarity.emoji,
+
+        qualityId: null,
+        qualityMultiplier: null,
+        stars: 0,
+        subStats: [],
+
+        locked: false,
+        source,
+        createdAt: now,
+        updatedAt: now,
+    };
+}
+
+function giveUnidentifiedWeapon(userId, rarityId = "SS") {
+    const weapon = createUnidentifiedWeapon(rarityId, "duyen_major");
+
+    return db.updateUser(userId, (user) => {
+        if (!Array.isArray(user.weapons)) {
+            user.weapons = [];
+        }
+
+        if (!user.phapBaoStats) {
+            user.phapBaoStats = {};
+        }
+
+        user.weapons.push(weapon);
+
+        const rarityRank = {
+            F: 1,
+            E: 2,
+            D: 3,
+            C: 4,
+            B: 5,
+            A: 6,
+            S: 7,
+            SS: 8,
+            SSS: 9,
+            EX: 10,
+        };
+
+        const oldBest = user.phapBaoStats.bestRarityFound;
+        const oldRank = rarityRank[oldBest] || 0;
+        const newRank = rarityRank[weapon.rarity] || 0;
+
+        if (newRank > oldRank) {
+            user.phapBaoStats.bestRarityFound = weapon.rarity;
+            user.phapBaoStats.bestWeaponName = weapon.name;
+        }
+
+        return weapon;
+    });
+}
+
+function giveRewardItem(userId, reward) {
+    if (!reward) {
+        return null;
+    }
+
+    if (reward.type === "item") {
+        const amount =
+            reward.min && reward.max
+                ? rnd(reward.min, reward.max)
+                : Number(reward.amount || 1);
+
+        db.addShopItem(userId, reward.itemId, amount);
+
+        return {
+            type: "item",
+            itemId: reward.itemId,
+            amount,
+        };
+    }
+
+    return null;
+}
+
+function formatReward(reward) {
+    if (!reward) {
+        return null;
+    }
+
+    if (reward.type === "money") {
+        return `💰 ${fmt(reward.amount)}`;
+    }
+
+    if (reward.type === "weapon") {
+        return `🟦 Phôi Pháp Bảo **${reward.rarity}**`;
+    }
+
+    if (reward.type === "item") {
+        const item = shop[reward.itemId];
+        const name = item
+            ? `${item.emoji || "🎁"} ${item.name}`
+            : reward.itemId;
+
+        return `${name} x${fmt(reward.amount)}`;
+    }
+
+    return null;
+}
+
+function grantTeamRewards(team, tier = "loser") {
+    const config = DUYEN_REWARD_POOLS[tier] || DUYEN_REWARD_POOLS.loser;
+    const lines = [];
+
+    for (const userId of team.members) {
+        const money = rnd(config.money[0], config.money[1]);
+
+        db.addMoney(userId, money);
+
+        const personalRewards = [
+            {
+                type: "money",
+                amount: money,
+            },
+        ];
+
+        for (let i = 0; i < Number(config.rolls || 1); i += 1) {
+            const rolled = rollWeighted(config.pool);
+            const given = giveRewardItem(userId, rolled);
+
+            if (given) {
+                personalRewards.push(given);
+            }
+        }
+
+        lines.push(
+            `${tag(userId)}: ${personalRewards
+                .map(formatReward)
+                .filter(Boolean)
+                .join(" • ")}`,
+        );
+    }
+
+    if (rollPercent(config.ssPhoiChance)) {
+        const luckyUserId = team.members[rnd(0, team.members.length - 1)];
+
+        giveUnidentifiedWeapon(luckyUserId, "SS");
+
+        lines.push(
+            `🌌 **ĐẠI CƠ DUYÊN NỔ LỚN:** ${tag(luckyUserId)} nhận **Phôi Pháp Bảo SS Chưa Giám Định**.`,
+        );
+    }
+
+    return lines;
+}
+
+function buildResultText(event, winner, finder) {
+    const topText = [...event.teams]
+        .filter((team) => team.finalChoice !== "ignore")
+        .sort((a, b) => b.finalScore - a.finalScore)
+        .slice(0, 5)
+        .map((team, index) => {
+            const source = team.id === finder.id ? FINDER : REACT;
+            const choice = source[team.finalChoice];
+
+            return (
+                `${team.id === winner.id ? "🏆" : `${index + 1}.`} ` +
+                `**Đội ${team.no}** — ${team.finalScore} điểm — ` +
+                `${choice?.[0]} ${choice?.[1]}`
+            );
+        })
+        .join("\n");
+
+    const drama = [];
+
+    const attackers = event.teams.filter(
+        (team) => team.finalChoice === "attack",
+    );
+    const sneakers = event.teams.filter((team) => team.finalChoice === "sneak");
+    const ambushers = event.teams.filter(
+        (team) => team.finalChoice === "ambush",
+    );
+
+    if (finder.finalChoice === "hide") {
+        drama.push(
+            `🕶️ Đội ${finder.no} che giấu khí tức, khiến vài đội mò đường như tìm nyc.`,
+        );
+    }
+
+    if (finder.finalChoice === "bait") {
+        drama.push(
+            `🩸 Đội ${finder.no} đặt bẫy quanh Linh Trì. Ai lao vào quá hăng đều có mùi ăn nghiệp.`,
+        );
+    }
+
+    if (attackers.length >= 2) {
+        drama.push(
+            `⚔️ ${attackers.map((team) => `Đội ${team.no}`).join(", ")} lao vào tranh trực diện, bí cảnh ồn như cái chợ.`,
+        );
+    }
+
+    if (sneakers.length > 0) {
+        drama.push(
+            `🕶️ ${sneakers.map((team) => `Đội ${team.no}`).join(", ")} chọn chim sẻ sau lưng.`,
+        );
+    }
+
+    if (ambushers.length > 0) {
+        drama.push(
+            `🪤 ${ambushers.map((team) => `Đội ${team.no}`).join(", ")} mai phục đường rút.`,
+        );
+    }
+
+    if (winner.id !== finder.id) {
+        drama.push(
+            `💀 Đội ${finder.no} tìm ra cơ duyên trước nhưng không giữ được hết.`,
+        );
+    }
+
+    return (
+        "🌌 **BÍ CẢNH TRUYỀN THỪA KHÉP LẠI**\n\n" +
+        `🏆 **Đội thắng lớn: Đội ${winner.no}**\n` +
+        `🔎 Đội phát hiện cơ duyên: **Đội ${finder.no}**\n\n` +
+        `**BXH tranh đoạt:**\n${topText || "Không có đội tranh đoạt."}\n\n` +
+        `**Diễn biến:**\n${drama.slice(0, 6).join("\n") || "Thiên Đạo thấy hơi ít drama."}\n\n` +
+        "**Thiên Đạo kết luận:** Mạnh không sai. Mạnh mà không biết chọn thời cơ thì vẫn ăn cám."
     );
 }
 
-function applyPath(team, pathId) {
-    if (pathId === "khong") {
-        const roll = rnd(1, 100);
-
-        if (roll <= 35) {
-            team.stats.clue += 3;
-            team.stats.trick += 8;
-            return "🌀 Không Gian Nứt đưa đội tới gần mạch cơ duyên. Hơi có mùi buff bẩn.";
-        }
-
-        if (roll <= 70) {
-            team.stats.combat += 10;
-            team.stats.formation += 10;
-            return "🌀 Không Gian Nứt không giàu nhưng cũng không ngu.";
-        }
-
-        team.stats.fatigue += 18;
-        team.stats.noise += 12;
-        return "🌀 Đội bị Không Gian Nứt dắt đi vòng, hơi mất mặt.";
+async function resolveFinal(event) {
+    if (event.status !== "final") {
+        return;
     }
 
-    const path = PATHS[pathId];
-    const effect = path[3];
-
-    team.stats.combat += effect.combat || 0;
-    team.stats.trick += effect.trick || 0;
-    team.stats.formation += effect.formation || 0;
-    team.stats.noise += effect.noise || 0;
-    team.stats.fatigue += effect.fatigue || 0;
-    team.stats.clue += effect.clue || 0;
-
-    return `${path[0]} Đội chọn **${path[1]}**. ${path[2]}`;
-}
-
-async function resolveRound(event) {
-    const timerKey = `round_${event.id}_${event.round}`;
-    const timer = timers.get(timerKey);
+    const timer = timers.get(`final_${event.id}`);
 
     if (timer) {
         clearTimeout(timer);
-        timers.delete(timerKey);
+        timers.delete(`final_${event.id}`);
+    }
+
+    event.status = "done";
+
+    const finder = event.teams.find((team) => team.id === event.finderId);
+
+    if (!finder) {
+        events.delete(event.key);
+        return cleanup(event, 30_000);
     }
 
     for (const team of event.teams) {
-        const chosen = pickVoteWinner(
-            team,
-            `r${event.round}`,
-            team.pathOptions,
-        );
-
-        team.choices[`r${event.round}`] = chosen;
-
-        const text = applyPath(team, chosen);
-
-        team.stats.noise = Math.max(0, Math.round(team.stats.noise));
-
-        const channel = await event.guild.channels
-            .fetch(team.channelId)
-            .catch(() => null);
-
-        await channel
-            ?.send(`${text}\n\n${statsLine(team)}`)
-            .catch(() => undefined);
+        const source = team.id === finder.id ? FINDER : REACT;
+        team.finalChoice = pickVoteWinner(team, "final", Object.keys(source));
     }
 
-    if (event.round >= ROUND_MAX) {
-        return discoverOpportunity(event);
+    const contestants = event.teams.filter((team) => {
+        return team.finalChoice !== "ignore";
+    });
+
+    for (const team of contestants) {
+        team.finalScore = calculateFinalScore(event, team, finder);
     }
 
-    return startRound(event, event.round + 1);
-}
-
-function getDiscoveryScore(team) {
-    return (
-        team.stats.clue * 30 +
-        team.stats.trick * 0.8 +
-        team.stats.luck * 0.7 -
-        team.stats.noise * 0.35 -
-        team.stats.fatigue * 0.25 +
-        rnd(1, 55)
+    const winner = pickWeightedWinner(
+        contestants.length ? contestants : [finder],
     );
-}
 
-async function discoverOpportunity(event) {
-    event.status = "final";
+    const rewardLines = [];
 
-    let finder = event.teams[0];
-    let bestScore = -999999;
+    const winnerTier =
+        winner.id === finder.id && finder.finalChoice === "retreat"
+            ? "runner"
+            : "winner";
 
-    for (const team of event.teams) {
-        team.discoveryScore = Math.round(getDiscoveryScore(team));
+    rewardLines.push(`🏆 **Đội ${winner.no} — Thắng lớn:**`);
+    rewardLines.push(...grantTeamRewards(winner, winnerTier));
 
-        if (team.discoveryScore > bestScore) {
-            bestScore = team.discoveryScore;
-            finder = team;
+    const sortedTeams = [...event.teams].sort((a, b) => {
+        return Number(b.finalScore || 0) - Number(a.finalScore || 0);
+    });
+
+    for (const team of sortedTeams) {
+        if (team.id === winner.id) {
+            continue;
         }
+
+        if (team.finalChoice === "ignore") {
+            rewardLines.push(`🙏 **Đội ${team.no} — Bỏ qua tranh đoạt:**`);
+            rewardLines.push(...grantTeamRewards(team, "ignore"));
+            continue;
+        }
+
+        if (team === sortedTeams[1]) {
+            rewardLines.push(`🥈 **Đội ${team.no} — Ăn được phần phụ:**`);
+            rewardLines.push(...grantTeamRewards(team, "runner"));
+            continue;
+        }
+
+        rewardLines.push(`🎒 **Đội ${team.no} — Quà an ủi:**`);
+        rewardLines.push(...grantTeamRewards(team, "loser"));
     }
 
-    event.finderId = finder.id;
+    const publicChannel = await event.guild.channels
+        .fetch(event.channelId)
+        .catch(() => null);
 
-    for (const team of event.teams) {
-        team.votes.final = {};
-
-        const isFinder = team.id === finder.id;
-        const source = isFinder ? FINDER : REACT;
-
-        const lines = Object.values(source)
-            .map((option) => {
-                return `${option[0]} **${option[1]}** — ${option[2]}`;
-            })
-            .join("\n");
-
-        const channel = await event.guild.channels
-            .fetch(team.channelId)
-            .catch(() => null);
-
-        await channel
-            ?.send({
-                content: isFinder
-                    ? `🌌 **ĐỘI BẠN PHÁT HIỆN LINH TRÌ TRUYỀN THỪA**\n\n${lines}\n\nTìm được chưa chắc giữ được. Vote cách xử lý.`
-                    : `⚠️ **DAO ĐỘNG LINH KHÍ CỰC MẠNH**\n\nCó đội đã phát hiện Cơ Duyên Lớn. Vị trí chưa rõ.\n\n${lines}`,
-                components: buildFinalRows(event, team, isFinder),
-            })
-            .catch(() => undefined);
-    }
-
-    await event.message
-        ?.reply(
-            "⚠️ Dao động linh khí cực mạnh! Một đội đã phát hiện Cơ Duyên Lớn.",
+    await publicChannel
+        ?.send(
+            buildResultText(event, winner, finder) +
+                `\n\n🎁 **Thưởng Bí Cảnh:**\n${rewardLines.slice(0, 18).join("\n")}` +
+                (rewardLines.length > 18
+                    ? "\n...và một số phần thưởng khác đã được phát vào kho."
+                    : ""),
         )
         .catch(() => undefined);
 
-    timers.set(
-        `final_${event.id}`,
-        setTimeout(() => {
-            resolveFinal(event).catch((error) => {
-                console.error("[Duyen resolveFinal]", error);
-            });
-        }, FINAL_MS),
-    );
+    for (const team of event.teams) {
+        const teamChannel = await event.guild.channels
+            .fetch(team.channelId)
+            .catch(() => null);
+
+        await teamChannel
+            ?.send(
+                `📜 Tổng kết đội ${team.no}: **${team.finalScore || 0}** điểm.\n` +
+                    "Kênh đội tự xóa sau 5 phút, có gì chửi nhau thì chửi nhanh.",
+            )
+            .catch(() => undefined);
+    }
+
+    events.delete(event.key);
+
+    cleanup(event, 5 * 60_000);
 }
+
+async function cleanup(event, delay) {
+    setTimeout(async () => {
+        for (const team of event.teams) {
+            const channel = await event.guild.channels
+                .fetch(team.channelId)
+                .catch(() => null);
+
+            await channel
+                ?.delete("Xóa kênh đội Bí Cảnh")
+                .catch(() => undefined);
+        }
+
+        if (event.categoryId) {
+            const category = await event.guild.channels
+                .fetch(event.categoryId)
+                .catch(() => null);
+
+            await category
+                ?.delete("Xóa category Bí Cảnh")
+                .catch(() => undefined);
+        }
+    }, delay);
+}
+
+async function handlePathVote(interaction, event, parts) {
+    const teamId = parts[3];
+    const round = Number(parts[4]);
+    const pathId = parts[5];
+    const userId = String(interaction.user.id);
+
+    const team = event.teams.find((item) => item.id === teamId);
+
+    if (!team || !team.members.includes(userId)) {
+        return interaction.reply({
+            content: "❌ Bạn không thuộc đội này.",
+            ephemeral: true,
+        });
+    }
+
+    if (event.status !== "explore" || event.round !== round) {
+        return interaction.reply({
+            content: "❌ Lượt vote này đã hết hạn.",
+            ephemeral: true,
+        });
+    }
+
+    if (!team.pathOptions.includes(pathId)) {
+        return interaction.reply({
+            content: "❌ Đường này không có trong lượt này.",
+            ephemeral: true,
+        });
+    }
+
+    team.votes[`r${round}`][userId] = pathId;
+
+    return interaction.reply({
+        content: `${PATHS[pathId][0]} Bạn vote **${PATHS[pathId][1]}**. Có thể bấm lại để đổi trước khi hết giờ.`,
+        ephemeral: true,
+    });
+}
+
+async function handleFinalVote(interaction, event, parts, isFinderVote) {
+    const teamId = parts[3];
+    const choice = parts[4];
+    const userId = String(interaction.user.id);
+
+    const team = event.teams.find((item) => item.id === teamId);
+
+    if (!team || !team.members.includes(userId)) {
+        return interaction.reply({
+            content: "❌ Bạn không thuộc đội này.",
+            ephemeral: true,
+        });
+    }
+
+    if (event.status !== "final") {
+        return interaction.reply({
+            content: "❌ Pha chọn cuối đã hết hạn.",
+            ephemeral: true,
+        });
+    }
+
+    const isFinder = team.id === event.finderId;
+
+    if (isFinder !== isFinderVote) {
+        return interaction.reply({
+            content: "❌ Nút này không dành cho đội bạn.",
+            ephemeral: true,
+        });
+    }
+
+    const source = isFinder ? FINDER : REACT;
+
+    if (!source[choice]) {
+        return interaction.reply({
+            content: "❌ Lựa chọn không hợp lệ.",
+            ephemeral: true,
+        });
+    }
+
+    team.votes.final[userId] = choice;
+
+    return interaction.reply({
+        content: `${source[choice][0]} Bạn vote **${source[choice][1]}**.`,
+        ephemeral: true,
+    });
+}
+
+async function handleButton(interaction) {
+    if (!interaction.customId.startsWith("duyen_")) {
+        return undefined;
+    }
+
+    const parts = interaction.customId.split("_");
+    const action = parts[1];
+    const event = findEvent(parts[2]);
+
+    if (!event) {
+        return interaction.reply({
+            content: "❌ Bí cảnh đã kết thúc hoặc bot vừa restart.",
+            ephemeral: true,
+        });
+    }
+
+    if (action === "create") {
+        return createTeam(interaction, event, false);
+    }
+
+    if (action === "solo") {
+        return createTeam(interaction, event, true);
+    }
+
+    if (action === "join") {
+        return showJoinMenu(interaction, event);
+    }
+
+    if (action === "joinselect") {
+        return joinTeam(interaction, event, interaction.values?.[0]);
+    }
+
+    if (action === "start") {
+        const team = getUserTeam(event, interaction.user.id);
+
+        if (!team || team.leaderId !== String(interaction.user.id)) {
+            return interaction.reply({
+                content: "❌ Chỉ đội trưởng được bắt đầu sớm.",
+                ephemeral: true,
+            });
+        }
+
+        await interaction.reply({
+            content: "🔒 Đã bắt đầu sớm.",
+            ephemeral: true,
+        });
+
+        return beginExplore(event);
+    }
+
+    if (action === "path") {
+        return handlePathVote(interaction, event, parts);
+    }
+
+    if (action === "finder") {
+        return handleFinalVote(interaction, event, parts, true);
+    }
+
+    if (action === "react") {
+        return handleFinalVote(interaction, event, parts, false);
+    }
+
+    return undefined;
+}
+
+module.exports = {
+    start,
+    handleButton,
+};
