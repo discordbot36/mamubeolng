@@ -1001,7 +1001,7 @@ function sellAllDoThachUnder360k(userId) {
                 continue;
             }
 
-            if (value >= 360000) {
+            if (value >= 1000000) {
                 keptItems.push(item);
                 continue;
             }
@@ -1012,7 +1012,7 @@ function sellAllDoThachUnder360k(userId) {
         if (soldItems.length <= 0) {
             return {
                 success: false,
-                message: "Bạn không có đá dưới 360k",
+                message: "Bạn không có đá dưới 1 triệu",
             };
         }
 
