@@ -888,8 +888,7 @@ async function runPuzzle(event, team) {
             "Cổ trận yêu cầu cả đội chọn đáp án đúng.\n\n" +
             `**Câu hỏi:** ${puzzle.question}\n\n` +
             `${formatPuzzleChoices(puzzle)}\n\n` +
-            `⏳ Có **${PUZZLE_MS / 1000}s** để vote. Đáp án nhiều vote nhất sẽ được chọn.\n` +
-            `💡 Gợi ý: ${puzzle.hint}`,
+            `⏳ Có **${PUZZLE_MS / 1000}s** để vote. Đáp án nhiều vote nhất sẽ được chọn.`,
         components: buildPuzzleRows(event, team, puzzleKey),
     });
 
