@@ -1007,7 +1007,10 @@ async function sell(interaction) {
         });
     }
 
-    if (itemId === "all_dothach_under_360k") {
+    if (
+        itemId === "all_dothach_under_360k" ||
+        itemId === "all_dothach_under_1m"
+    ) {
         const result = sellAllDoThachUnder360k(interaction.user.id);
 
         if (!result.success) {
