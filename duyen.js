@@ -8,17 +8,20 @@ const {
 } = require("discord.js");
 
 const db = require("./database");
+const duyenPuzzles = require("./config/duyenPuzzles");
 const shop = require("./config/shop");
 const weaponConfig = require("./weapon");
 const events = new Map();
 const timers = new Map();
-
+const activePuzzles = new Map();
 const MAX_TEAM_SIZE = 4;
 const MAX_TEAMS = 6;
-const LOBBY_MS = 90_000;
+const LOBBY_MS = 10 * 60 * 1000;
 const ROUND_MS = 40_000;
 const FINAL_MS = 45_000;
 const ROUND_MAX = 3;
+const PUZZLE_MS = 60_000;
+const PUZZLE_CHANCE_ON_TRAN_PATH = 100;
 
 const PATHS = {
     linh: [
@@ -339,7 +342,7 @@ function buildLobbyText(event) {
 
     return (
         "🌌 **BÍ CẢNH TRUYỀN THỪA MỞ RA**\n\n" +
-        `⏳ Lập đội trong **${LOBBY_MS / 1000}s**. Mỗi đội tối đa **${MAX_TEAM_SIZE} người**.\n` +
+        `⏳ Lập đội trong **10 phút**. Mỗi đội tối đa **${MAX_TEAM_SIZE} người**.\n` +
         "Bot sẽ tạo kênh riêng cho từng đội để bàn mưu.\n\n" +
         `${teamsText}\n\n` +
         "Mỗi round chỉ chọn 1 trong 3 đường. Không quá đau đầu, nhưng chọn ngu vẫn ăn nghiệp."
@@ -393,7 +396,60 @@ function buildPathRows(event, team) {
         ),
     ];
 }
+function buildPuzzleRows(event, team, puzzleKey, disabled = false) {
+    const labels = ["A", "B", "C", "D"];
 
+    return [
+        new ActionRowBuilder().addComponents(
+            labels.map((label, index) => {
+                return new ButtonBuilder()
+                    .setCustomId(
+                        `duyen_puzzle_${event.id}_${team.id}_${puzzleKey}_${index}`,
+                    )
+                    .setLabel(label)
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(disabled);
+            }),
+        ),
+    ];
+}
+
+function formatPuzzleChoices(puzzle) {
+    return puzzle.choices
+        .map((choice, index) => {
+            const label = ["A", "B", "C", "D"][index];
+            return `**${label}.** ${choice}`;
+        })
+        .join("\n");
+}
+
+function pickPuzzle() {
+    return duyenPuzzles[rnd(0, duyenPuzzles.length - 1)];
+}
+
+function pickPuzzleVote(state) {
+    const counts = {};
+
+    for (const choiceIndex of Object.values(state.votes)) {
+        counts[choiceIndex] = Number(counts[choiceIndex] || 0) + 1;
+    }
+
+    const entries = Object.entries(counts);
+
+    if (entries.length <= 0) {
+        return -1;
+    }
+
+    entries.sort((a, b) => {
+        return Number(b[1]) - Number(a[1]);
+    });
+
+    return Number(entries[0][0]);
+}
+
+function formatPuzzleAnswer(index) {
+    return ["A", "B", "C", "D"][index] || "?";
+}
 function buildFinalRows(event, team, isFinder) {
     const source = isFinder ? FINDER : REACT;
     const prefix = isFinder ? "finder" : "react";
@@ -780,7 +836,131 @@ async function startRound(event, round) {
         }, ROUND_MS),
     );
 }
+function grantPuzzleReward(team, puzzle) {
+    const reward = puzzle.reward || {};
+    const moneyRange = reward.money || [2000, 4000];
 
+    team.stats.clue += Number(reward.clue || 1);
+    team.stats.formation += Number(reward.formation || 3);
+    team.stats.noise = Math.max(0, team.stats.noise - 4);
+
+    const money = rnd(moneyRange[0], moneyRange[1]);
+
+    for (const userId of team.members) {
+        db.addMoney(userId, money);
+    }
+
+    return money;
+}
+
+function applyPuzzleFail(team) {
+    team.stats.fatigue += 12;
+    team.stats.noise += 18;
+}
+
+async function runPuzzle(event, team) {
+    const puzzle = pickPuzzle();
+    const puzzleKey = `${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
+
+    const channel = await event.guild.channels
+        .fetch(team.channelId)
+        .catch(() => null);
+
+    if (!channel) {
+        return "🧩 Cổ trận xuất hiện nhưng kênh đội không còn tồn tại.";
+    }
+
+    const state = {
+        eventId: event.id,
+        teamId: team.id,
+        puzzleKey,
+        puzzle,
+        votes: {},
+        message: null,
+    };
+
+    activePuzzles.set(puzzleKey, state);
+
+    const message = await channel.send({
+        content:
+            "🧩 **CƠ QUAN CỔ TRẬN**\n\n" +
+            "Một cửa đá khắc đầy phù văn chắn trước mặt.\n" +
+            "Cổ trận yêu cầu cả đội chọn đáp án đúng.\n\n" +
+            `**Câu hỏi:** ${puzzle.question}\n\n` +
+            `${formatPuzzleChoices(puzzle)}\n\n` +
+            `⏳ Có **${PUZZLE_MS / 1000}s** để vote. Đáp án nhiều vote nhất sẽ được chọn.\n` +
+            `💡 Gợi ý: ${puzzle.hint}`,
+        components: buildPuzzleRows(event, team, puzzleKey),
+    });
+
+    state.message = message;
+
+    return new Promise((resolve) => {
+        setTimeout(async () => {
+            activePuzzles.delete(puzzleKey);
+
+            const chosenIndex = pickPuzzleVote(state);
+            const correct = chosenIndex === Number(puzzle.answerIndex);
+
+            if (correct) {
+                const money = grantPuzzleReward(team, puzzle);
+
+                await message
+                    .edit({
+                        content:
+                            message.content +
+                            "\n\n✅ **Cổ trận được phá giải.**\n" +
+                            `Đội chọn **${formatPuzzleAnswer(chosenIndex)}** và đã đúng.\n` +
+                            `Đội nhận 🧩 +${puzzle.reward?.clue || 1} manh mối, 🪤 +${puzzle.reward?.formation || 3} trận pháp, 💰 ${fmt(money)} mỗi người.`,
+                        components: buildPuzzleRows(
+                            event,
+                            team,
+                            puzzleKey,
+                            true,
+                        ),
+                    })
+                    .catch(() => undefined);
+
+                return resolve(
+                    `✅ Đội phá giải Cổ Trận thành công. Nhận +${puzzle.reward?.clue || 1} manh mối và quà cơ quan.`,
+                );
+            }
+
+            applyPuzzleFail(team);
+
+            await message
+                .edit({
+                    content:
+                        message.content +
+                        "\n\n💀 **Cổ trận phản phệ.**\n" +
+                        (chosenIndex >= 0
+                            ? `Đội chọn **${formatPuzzleAnswer(chosenIndex)}**, đáp án đúng là **${formatPuzzleAnswer(puzzle.answerIndex)}**.\n`
+                            : `Không ai chọn đáp án. Đáp án đúng là **${formatPuzzleAnswer(puzzle.answerIndex)}**.\n`) +
+                        "Đội bị 😵 +12 mệt mỏi, 🔊 +18 dấu vết.\n" +
+                        "Thiên Đạo kết luận: câu này không khó, người khó là đội bạn.",
+                    components: buildPuzzleRows(event, team, puzzleKey, true),
+                })
+                .catch(() => undefined);
+
+            return resolve("💀 Đội giải sai Cổ Trận, bị phản phệ.");
+        }, PUZZLE_MS);
+    });
+}
+async function resolvePath(event, team, pathId) {
+    const text = applyPath(team, pathId);
+
+    if (pathId !== "tran") {
+        return text;
+    }
+
+    if (rnd(1, 100) > PUZZLE_CHANCE_ON_TRAN_PATH) {
+        return text;
+    }
+
+    const puzzleText = await runPuzzle(event, team);
+
+    return `${text}\n${puzzleText}`;
+}
 function applyPath(team, pathId) {
     if (pathId === "khong") {
         const roll = rnd(1, 100);
@@ -824,25 +1004,35 @@ async function resolveRound(event) {
         timers.delete(timerKey);
     }
 
-    for (const team of event.teams) {
-        const chosen = pickVoteWinner(
-            team,
-            `r${event.round}`,
-            team.pathOptions,
-        );
+    const results = await Promise.all(
+        event.teams.map(async (team) => {
+            const chosen = pickVoteWinner(
+                team,
+                `r${event.round}`,
+                team.pathOptions,
+            );
 
-        team.choices[`r${event.round}`] = chosen;
+            team.choices[`r${event.round}`] = chosen;
 
-        const text = applyPath(team, chosen);
+            const text = await resolvePath(event, team, chosen);
 
-        team.stats.noise = Math.max(0, Math.round(team.stats.noise));
+            team.stats.noise = Math.max(0, Math.round(team.stats.noise));
+            team.stats.fatigue = Math.max(0, Math.round(team.stats.fatigue));
 
+            return {
+                team,
+                text,
+            };
+        }),
+    );
+
+    for (const result of results) {
         const channel = await event.guild.channels
-            .fetch(team.channelId)
+            .fetch(result.team.channelId)
             .catch(() => null);
 
         await channel
-            ?.send(`${text}\n\n${statsLine(team)}`)
+            ?.send(`${result.text}\n\n${statsLine(result.team)}`)
             .catch(() => undefined);
     }
 
@@ -852,7 +1042,6 @@ async function resolveRound(event) {
 
     return startRound(event, event.round + 1);
 }
-
 function getDiscoveryScore(team) {
     return (
         team.stats.clue * 30 +
@@ -1521,6 +1710,53 @@ async function handleFinalVote(interaction, event, parts, isFinderVote) {
         ephemeral: true,
     });
 }
+async function handlePuzzleVote(interaction, event, parts) {
+    const teamId = parts[3];
+    const puzzleKey = parts[4];
+    const choiceIndex = Number(parts[5]);
+    const userId = String(interaction.user.id);
+
+    const state = activePuzzles.get(puzzleKey);
+
+    if (!state) {
+        return interaction.reply({
+            content: "❌ Cổ trận này đã hết thời gian.",
+            ephemeral: true,
+        });
+    }
+
+    const team = event.teams.find((item) => item.id === teamId);
+
+    if (!team || !team.members.includes(userId)) {
+        return interaction.reply({
+            content: "❌ Bạn không thuộc đội này.",
+            ephemeral: true,
+        });
+    }
+
+    if (event.status !== "explore") {
+        return interaction.reply({
+            content: "❌ Cổ trận này đã đóng.",
+            ephemeral: true,
+        });
+    }
+
+    if (choiceIndex < 0 || choiceIndex > 3) {
+        return interaction.reply({
+            content: "❌ Đáp án không hợp lệ.",
+            ephemeral: true,
+        });
+    }
+
+    state.votes[userId] = choiceIndex;
+
+    return interaction.reply({
+        content:
+            `✅ Bạn đã vote **${formatPuzzleAnswer(choiceIndex)}**.\n` +
+            "Có thể bấm đáp án khác để đổi trước khi hết giờ.",
+        ephemeral: true,
+    });
+}
 
 async function handleButton(interaction) {
     if (!interaction.customId.startsWith("duyen_")) {
@@ -1570,6 +1806,9 @@ async function handleButton(interaction) {
         });
 
         return beginExplore(event);
+    }
+    if (action === "puzzle") {
+        return handlePuzzleVote(interaction, event, parts);
     }
 
     if (action === "path") {

@@ -376,7 +376,7 @@ class TaiXiuManager {
         const gameId = parts[2];
         const betKey = parts.slice(3).join("_");
 
-       const game = getGameById(gameId);
+        const game = getGameById(gameId);
 
         if (!game || game.closed) {
             return interaction.reply({
