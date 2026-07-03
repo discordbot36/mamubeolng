@@ -460,6 +460,24 @@ module.exports = [
         ],
     },
     {
+        name: "dothach_chucphuc",
+        description:
+            "Admin dùng Lời Chúc Phúc Của Thiên Đạo buff đổ thạch cho kênh",
+        handler: "dothach.activateBlessing",
+        adminOnly: true,
+        defaultMemberPermissions: "8",
+        dmPermission: false,
+        options: [
+            {
+                type: "channel",
+                name: "kenh",
+                description: "Kênh muốn buff, bỏ trống là kênh hiện tại",
+                required: false,
+                channelTypes: [0],
+            },
+        ],
+    },
+    {
         name: "giaidothach_mo",
         description: "Admin mở đăng ký giải đổ thạch",
         handler: "dothachTournament.open",

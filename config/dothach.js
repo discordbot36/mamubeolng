@@ -330,7 +330,31 @@ module.exports = {
             },
         },
     },
+    blessing: {
+        itemId: "loi_chuc_phuc_thien_dao",
+        durationMs: 30 * 60 * 1000,
 
+        purityBonus: 8,
+        perfectPurityBonusChance: 0.008,
+
+        gemChanceMultipliers: {
+            rac: 0.55,
+            cut_mui_mamu: 0.55,
+            da_binh_thuong: 0.65,
+            xuong_lon: 0.75,
+            thach_anh: 0.85,
+
+            ma_nao: 1.05,
+            ngoc_bich: 1.12,
+            cam_thach: 1.2,
+            phi_thuy: 1.35,
+            hoa_dien_ngoc: 1.55,
+            huyet_ngoc: 1.85,
+            hac_long_thach: 2.2,
+            de_vuong_luc: 2.8,
+            mamu_hoa_thach: 3.5,
+        },
+    },
     perfectPurityChance: 0.002,
 
     messages: {

@@ -39,7 +39,16 @@ module.exports = {
         emoji: "🐷",
         price: 500000,
     },
-
+    loi_chuc_phuc_thien_dao: {
+        name: "Lời Chúc Phúc Của Thiên Đạo",
+        emoji: "🌌",
+        price: 10000000000,
+        type: "dothach_channel_blessing",
+        shopCategory: "dothach",
+        sellable: false,
+        description:
+            "Admin dùng /dothach_chucphuc để buff tỉ lệ đổ thạch cho cả kênh trong 30 phút.",
+    },
     cam_lon_nam_dinh: {
         name: "Cám Lợn Thanh Hóa",
         emoji: "🌾",

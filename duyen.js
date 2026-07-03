@@ -11,17 +11,22 @@ const db = require("./database");
 const duyenPuzzles = require("./config/duyenPuzzles");
 const shop = require("./config/shop");
 const weaponConfig = require("./weapon");
+const adminConfig = require("./config/admin");
 const events = new Map();
 const timers = new Map();
 const activePuzzles = new Map();
+const activeBosses = new Map();
 const MAX_TEAM_SIZE = 4;
 const MAX_TEAMS = 6;
 const LOBBY_MS = 10 * 60 * 1000;
-const ROUND_MS = 40_000;
+const ROUND_MS = 45_000;
 const FINAL_MS = 45_000;
-const ROUND_MAX = 3;
+const ROUND_MAX = 6;
 const PUZZLE_MS = 60_000;
 const PUZZLE_CHANCE_ON_TRAN_PATH = 100;
+const MINI_BOSS_CHANCE = 45;
+const MAJOR_BOSS_CHANCE = 80;
+const BOSS_TURN_MS = 35_000;
 
 const PATHS = {
     linh: [
@@ -69,7 +74,41 @@ const REACT = {
     ambush: ["🪤", "Mai phục", "Chờ đội ôm bảo vật đi ra."],
     ignore: ["🙏", "Bỏ qua", "An toàn, nhận quà nhỏ."],
 };
+const BOSS_ACTIONS = {
+    attack: ["⚔️", "Công kích"],
+    guard: ["🛡️", "Thủ trận"],
+    heal: ["💚", "Hồi máu"],
+    call: ["🆘", "Gọi trợ giúp"],
+};
+function isDuyenAdmin(interaction) {
+    const allowedUserIds = Array.isArray(adminConfig.allowedUserIds)
+        ? adminConfig.allowedUserIds.map(String)
+        : [];
 
+    return allowedUserIds.includes(String(interaction.user.id));
+}
+const DUYEN_BOSSES = {
+    mini: {
+        emoji: "👹",
+        name: "Mini Boss Cơ Duyên",
+        hp: 150,
+        atk: 34,
+        turns: 3,
+        money: [9000, 18000],
+        fragment: [12, 28],
+        clue: 2,
+    },
+    major: {
+        emoji: "🐉",
+        name: "Boss Cơ Duyên",
+        hp: 320,
+        atk: 58,
+        turns: 5,
+        money: [28000, 52000],
+        fragment: [35, 90],
+        clue: 5,
+    },
+};
 const DUYEN_REWARD_POOLS = {
     winner: {
         money: [35000, 70000],
@@ -318,7 +357,36 @@ function buildBaseStats(memberIds) {
     };
 }
 
+function calculateTeamMaxHp(team) {
+    return Math.max(
+        180,
+        Math.round(
+            160 +
+                team.members.length * 80 +
+                Number(team.stats.combat || 0) * 1.2 +
+                Number(team.stats.formation || 0) * 0.9,
+        ),
+    );
+}
+
+function setupTeamHp(team, reset = false) {
+    const oldMaxHp = Number(team.maxHp || 0);
+    const newMaxHp = calculateTeamMaxHp(team);
+
+    team.maxHp = newMaxHp;
+
+    if (reset || team.hp === undefined || team.hp === null) {
+        team.hp = newMaxHp;
+        return;
+    }
+
+    const ratio = oldMaxHp > 0 ? Number(team.hp || 0) / oldMaxHp : 1;
+    team.hp = Math.max(1, Math.min(newMaxHp, Math.round(newMaxHp * ratio)));
+}
+
 function statsLine(team) {
+    const hpText = team.maxHp ? ` | ❤️ ${fmt(team.hp)}/${fmt(team.maxHp)}` : "";
+
     return (
         `⚔️ ${team.stats.combat} | ` +
         `🕶️ ${team.stats.trick} | ` +
@@ -326,7 +394,8 @@ function statsLine(team) {
         `🍀 ${team.stats.luck} | ` +
         `🔊 ${team.stats.noise} | ` +
         `🧩 ${team.stats.clue} | ` +
-        `😵 ${team.stats.fatigue}`
+        `😵 ${team.stats.fatigue}` +
+        hpText
     );
 }
 
@@ -648,9 +717,11 @@ async function createTeam(interaction, event, solo = false) {
         pathOptions: [],
         finalChoice: null,
         finalScore: 0,
+        hp: 0,
+        maxHp: 0,
         channelId: null,
     };
-
+    setupTeamHp(team, true);
     event.teams.push(team);
 
     await createTeamChannel(event, team);
@@ -733,7 +804,7 @@ async function joinTeam(interaction, event, teamId) {
 
     team.members.push(userId);
     team.stats = buildBaseStats(team.members);
-
+    setupTeamHp(team, true);
     const channel = await event.guild.channels
         .fetch(team.channelId)
         .catch(() => null);
@@ -945,20 +1016,291 @@ async function runPuzzle(event, team) {
         }, PUZZLE_MS);
     });
 }
+function buildBossRows(
+    event,
+    team,
+    bossKey,
+    canCallHelp = false,
+    disabled = false,
+) {
+    const buttons = [
+        new ButtonBuilder()
+            .setCustomId(`duyen_boss_${event.id}_${team.id}_${bossKey}_attack`)
+            .setEmoji(BOSS_ACTIONS.attack[0])
+            .setLabel(BOSS_ACTIONS.attack[1])
+            .setStyle(ButtonStyle.Danger)
+            .setDisabled(disabled),
+        new ButtonBuilder()
+            .setCustomId(`duyen_boss_${event.id}_${team.id}_${bossKey}_guard`)
+            .setEmoji(BOSS_ACTIONS.guard[0])
+            .setLabel(BOSS_ACTIONS.guard[1])
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(disabled),
+        new ButtonBuilder()
+            .setCustomId(`duyen_boss_${event.id}_${team.id}_${bossKey}_heal`)
+            .setEmoji(BOSS_ACTIONS.heal[0])
+            .setLabel(BOSS_ACTIONS.heal[1])
+            .setStyle(ButtonStyle.Success)
+            .setDisabled(disabled),
+    ];
+
+    if (canCallHelp) {
+        buttons.push(
+            new ButtonBuilder()
+                .setCustomId(
+                    `duyen_boss_${event.id}_${team.id}_${bossKey}_call`,
+                )
+                .setEmoji(BOSS_ACTIONS.call[0])
+                .setLabel(BOSS_ACTIONS.call[1])
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(disabled),
+        );
+    }
+
+    return [new ActionRowBuilder().addComponents(...buttons)];
+}
+
+function bossHpLine(team, boss) {
+    return (
+        `👹 Boss: **${fmt(boss.hp)}/${fmt(boss.maxHp)}**\n` +
+        `❤️ Đội: **${fmt(team.hp)}/${fmt(team.maxHp)}**`
+    );
+}
+
+function countBossActions(votes, action) {
+    return Object.values(votes || {}).filter((item) => item === action).length;
+}
+
+function grantDuyenBossReward(team, type, success, helperIds = []) {
+    const bossConfig = DUYEN_BOSSES[type] || DUYEN_BOSSES.mini;
+    const lines = [];
+
+    if (success) {
+        team.stats.clue += Number(bossConfig.clue || 1);
+        team.stats.combat += type === "major" ? 10 : 4;
+        team.stats.formation += type === "major" ? 6 : 2;
+    } else {
+        team.stats.fatigue += type === "major" ? 22 : 12;
+        team.stats.noise += type === "major" ? 16 : 8;
+    }
+
+    for (const userId of team.members) {
+        const money = success
+            ? rnd(bossConfig.money[0], bossConfig.money[1])
+            : rnd(3000, 7000);
+        const fragment = success
+            ? rnd(bossConfig.fragment[0], bossConfig.fragment[1])
+            : rnd(5, 12);
+
+        db.addMoney(userId, money);
+        db.addShopItem(userId, "manh_phap_bao", fragment);
+
+        if (success && type === "major") {
+            db.addShopItem(userId, "ruong_phap_bao_tinh_anh", 1);
+        }
+
+        lines.push(
+            `${tag(userId)}: 💰 ${fmt(money)} • Mảnh Pháp Bảo x${fmt(fragment)}`,
+        );
+    }
+
+    for (const helperId of helperIds) {
+        const money = rnd(7000, 15000);
+        const fragment = rnd(10, 25);
+
+        db.addMoney(helperId, money);
+        db.addShopItem(helperId, "manh_phap_bao", fragment);
+
+        lines.push(
+            `🆘 ${tag(helperId)} trợ giúp: 💰 ${fmt(money)} • Mảnh Pháp Bảo x${fmt(fragment)}`,
+        );
+    }
+
+    return lines;
+}
+async function runBossEncounter(event, team, type = "mini") {
+    const bossConfig = DUYEN_BOSSES[type] || DUYEN_BOSSES.mini;
+    const channel = await event.guild.channels
+        .fetch(team.channelId)
+        .catch(() => null);
+
+    if (!channel) {
+        return "👹 Boss xuất hiện nhưng kênh đội không còn tồn tại.";
+    }
+
+    setupTeamHp(team, false);
+
+    const boss = {
+        hp: Math.round(
+            bossConfig.hp +
+                Number(team.stats.combat || 0) *
+                    (type === "major" ? 1.35 : 0.9) +
+                team.members.length * (type === "major" ? 55 : 25),
+        ),
+        maxHp: 0,
+    };
+
+    boss.maxHp = boss.hp;
+
+    const helperIds = new Set();
+    let helped = false;
+
+    await channel.send(
+        `${bossConfig.emoji} **${bossConfig.name.toUpperCase()} XUẤT HIỆN**\n` +
+            `Máu đội sẽ giữ xuyên suốt Bí Cảnh. Đánh ngu là round sau đau tiếp.\n\n` +
+            bossHpLine(team, boss),
+    );
+
+    for (let turn = 1; turn <= bossConfig.turns; turn += 1) {
+        if (boss.hp <= 0 || team.hp <= 0) {
+            break;
+        }
+
+        const bossKey = `${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
+        const state = {
+            eventId: event.id,
+            teamId: team.id,
+            bossKey,
+            bossType: type,
+            votes: {},
+            helpers: new Set(),
+            supportPower: 0,
+            helpCalled: false,
+            publicMessage: null,
+        };
+
+        activeBosses.set(bossKey, state);
+
+        const message = await channel.send({
+            content:
+                `⚔️ **Boss Turn ${turn}/${bossConfig.turns}**\n` +
+                `Chọn hành động trong **${BOSS_TURN_MS / 1000}s**. Vote sau sẽ đè vote trước.\n\n` +
+                bossHpLine(team, boss),
+            components: buildBossRows(
+                event,
+                team,
+                bossKey,
+                type === "major" && !helped,
+            ),
+        });
+
+        await new Promise((resolve) => setTimeout(resolve, BOSS_TURN_MS));
+        activeBosses.delete(bossKey);
+
+        await message
+            .edit({
+                components: buildBossRows(
+                    event,
+                    team,
+                    bossKey,
+                    type === "major" && !helped,
+                    true,
+                ),
+            })
+            .catch(() => undefined);
+
+        for (const helperId of state.helpers) {
+            helperIds.add(helperId);
+        }
+
+        if (state.helpCalled) {
+            helped = true;
+            team.stats.noise += 10;
+        }
+
+        const attackCount = countBossActions(state.votes, "attack");
+        const guardCount = countBossActions(state.votes, "guard");
+        const healCount = countBossActions(state.votes, "heal");
+        const afkCount = Math.max(
+            0,
+            team.members.length - Object.keys(state.votes).length,
+        );
+
+        const damage = Math.max(
+            8,
+            Math.round(
+                (Number(team.stats.combat || 1) * 0.55 +
+                    Number(team.stats.trick || 1) * 0.22 +
+                    rnd(8, 28)) *
+                    (0.35 + attackCount * 0.42) +
+                    state.supportPower,
+            ),
+        );
+
+        const protection = Math.round(
+            guardCount *
+                (Number(team.stats.formation || 1) * 0.22 + rnd(10, 22)),
+        );
+
+        const receivedDamage = Math.max(
+            0,
+            Math.round(
+                bossConfig.atk +
+                    turn * 8 +
+                    afkCount * 8 -
+                    protection -
+                    healCount * 8,
+            ),
+        );
+
+        const healAmount = healCount
+            ? Math.round(team.maxHp * (0.08 + healCount * 0.035))
+            : 0;
+
+        boss.hp = Math.max(0, boss.hp - damage);
+        team.hp = Math.max(
+            0,
+            Math.min(team.maxHp, team.hp - receivedDamage + healAmount),
+        );
+
+        await channel.send(
+            `📌 **Kết quả Boss Turn ${turn}**\n` +
+                `⚔️ Công: **${attackCount}** | 🛡️ Thủ: **${guardCount}** | 💚 Hồi: **${healCount}** | 😴 AFK: **${afkCount}**\n` +
+                `💥 Gây boss: **-${fmt(damage)}**` +
+                (state.supportPower
+                    ? ` *(trợ giúp +${fmt(state.supportPower)})*`
+                    : "") +
+                `\n❤️ Đội mất: **-${fmt(receivedDamage)}**` +
+                (healAmount ? ` | 💚 Hồi: **+${fmt(healAmount)}**` : "") +
+                `\n\n${bossHpLine(team, boss)}`,
+        );
+    }
+
+    const success = boss.hp <= 0;
+    const rewardLines = grantDuyenBossReward(team, type, success, [
+        ...helperIds,
+    ]);
+
+    if (!success && team.hp <= 0) {
+        team.hp = 1;
+    }
+
+    await channel.send(
+        success
+            ? `✅ **${bossConfig.name} bị hạ.**\n🎁 ${rewardLines.join("\n")}`
+            : `💀 **Không hạ được ${bossConfig.name}.** Đội trọng thương nhưng vẫn lết tiếp.\n🎁 ${rewardLines.join("\n")}`,
+    );
+
+    return success
+        ? `✅ Gặp và hạ **${bossConfig.name}**. Nhận quà boss, đội còn ❤️ ${fmt(team.hp)}/${fmt(team.maxHp)}.`
+        : `💀 Gặp **${bossConfig.name}** nhưng đánh không lại. Đội còn ❤️ ${fmt(team.hp)}/${fmt(team.maxHp)}.`;
+}
 async function resolvePath(event, team, pathId) {
-    const text = applyPath(team, pathId);
+    let text = applyPath(team, pathId);
 
-    if (pathId !== "tran") {
-        return text;
+    if (pathId === "tran") {
+        if (rnd(1, 100) <= PUZZLE_CHANCE_ON_TRAN_PATH) {
+            const puzzleText = await runPuzzle(event, team);
+            text = `${text}\n${puzzleText}`;
+        }
     }
 
-    if (rnd(1, 100) > PUZZLE_CHANCE_ON_TRAN_PATH) {
-        return text;
+    if (rnd(1, 100) <= MINI_BOSS_CHANCE) {
+        const bossText = await runBossEncounter(event, team, "mini");
+        text = `${text}\n${bossText}`;
     }
 
-    const puzzleText = await runPuzzle(event, team);
-
-    return `${text}\n${puzzleText}`;
+    return text;
 }
 function applyPath(team, pathId) {
     if (pathId === "khong") {
@@ -1053,7 +1395,7 @@ function getDiscoveryScore(team) {
 }
 
 async function discoverOpportunity(event) {
-    event.status = "final";
+    event.status = "boss";
 
     let finder = event.teams[0];
     let bestScore = -999999;
@@ -1068,6 +1410,21 @@ async function discoverOpportunity(event) {
     }
 
     event.finderId = finder.id;
+    if (rnd(1, 100) <= MAJOR_BOSS_CHANCE) {
+        const publicChannel = await event.guild.channels
+            .fetch(event.channelId)
+            .catch(() => null);
+
+        await publicChannel
+            ?.send(
+                `🐉 Đội ${finder.no} vừa chạm **Boss Cơ Duyên**. Nếu kẹt quá có thể bấm **Gọi trợ giúp** trong kênh đội.`,
+            )
+            .catch(() => undefined);
+
+        await runBossEncounter(event, finder, "major");
+    }
+
+    event.status = "final";
 
     for (const team of event.teams) {
         team.votes.final = {};
@@ -1756,7 +2113,137 @@ async function handlePuzzleVote(interaction, event, parts) {
         ephemeral: true,
     });
 }
+async function handleBossAction(interaction, event, parts) {
+    const teamId = parts[3];
+    const bossKey = parts[4];
+    const action = parts[5];
+    const userId = String(interaction.user.id);
+    const state = activeBosses.get(bossKey);
 
+    if (!state || state.eventId !== event.id || state.teamId !== teamId) {
+        return interaction.reply({
+            content: "❌ Lượt boss này đã hết hạn.",
+            ephemeral: true,
+        });
+    }
+
+    const team = event.teams.find((item) => item.id === teamId);
+
+    if (!team || !team.members.includes(userId)) {
+        return interaction.reply({
+            content: "❌ Bạn không thuộc đội này.",
+            ephemeral: true,
+        });
+    }
+
+    if (action === "call") {
+        if (state.bossType !== "major") {
+            return interaction.reply({
+                content: "❌ Chỉ Boss Cơ Duyên mới gọi trợ giúp được.",
+                ephemeral: true,
+            });
+        }
+
+        if (state.helpCalled) {
+            return interaction.reply({
+                content: "❌ Đội đã gọi trợ giúp rồi.",
+                ephemeral: true,
+            });
+        }
+
+        state.helpCalled = true;
+
+        const publicChannel = await event.guild.channels
+            .fetch(event.channelId)
+            .catch(() => null);
+
+        await publicChannel
+            ?.send({
+                content:
+                    `🆘 **Đội ${team.no} đang bị Boss Cơ Duyên dí.**\n` +
+                    `Đội khác có thể trợ giúp để nhận quà phụ.`,
+                components: [
+                    new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(
+                                `duyen_help_${event.id}_${team.id}_${bossKey}`,
+                            )
+                            .setEmoji("🆘")
+                            .setLabel("Trợ giúp boss")
+                            .setStyle(ButtonStyle.Success),
+                    ),
+                ],
+            })
+            .catch(() => null);
+
+        return interaction.reply({
+            content:
+                "🆘 Đã gọi trợ giúp. Đội khác bấm hỗ trợ sẽ cộng sát thương cho lượt boss này.",
+            ephemeral: true,
+        });
+    }
+
+    if (!BOSS_ACTIONS[action]) {
+        return interaction.reply({
+            content: "❌ Hành động boss không hợp lệ.",
+            ephemeral: true,
+        });
+    }
+
+    state.votes[userId] = action;
+
+    return interaction.reply({
+        content: `${BOSS_ACTIONS[action][0]} Bạn chọn **${BOSS_ACTIONS[action][1]}**.`,
+        ephemeral: true,
+    });
+}
+
+async function handleBossHelp(interaction, event, parts) {
+    const teamId = parts[3];
+    const bossKey = parts[4];
+    const userId = String(interaction.user.id);
+    const state = activeBosses.get(bossKey);
+
+    if (!state || state.eventId !== event.id || state.teamId !== teamId) {
+        return interaction.reply({
+            content: "❌ Lượt trợ giúp này đã hết hạn.",
+            ephemeral: true,
+        });
+    }
+
+    const targetTeam = event.teams.find((item) => item.id === teamId);
+    const helperTeam = getUserTeam(event, userId);
+
+    if (!helperTeam || helperTeam.id === targetTeam?.id) {
+        return interaction.reply({
+            content:
+                "❌ Chỉ người thuộc đội khác trong Bí Cảnh mới trợ giúp được.",
+            ephemeral: true,
+        });
+    }
+
+    if (state.helpers.has(userId)) {
+        return interaction.reply({
+            content: "❌ Bạn đã trợ giúp lượt này rồi.",
+            ephemeral: true,
+        });
+    }
+
+    const supportPower = Math.round(
+        25 +
+            Number(helperTeam.stats.combat || 0) * 0.12 +
+            Number(helperTeam.stats.formation || 0) * 0.08,
+    );
+
+    state.helpers.add(userId);
+    state.supportPower += supportPower;
+    helperTeam.stats.noise += 4;
+
+    return interaction.reply({
+        content: `🆘 Bạn trợ giúp Đội ${targetTeam?.no || "?"}, cộng **${fmt(supportPower)}** sát thương boss và sẽ nhận quà phụ nếu boss kết thúc.`,
+        ephemeral: true,
+    });
+}
 async function handleButton(interaction) {
     if (!interaction.customId.startsWith("duyen_")) {
         return undefined;
@@ -1788,19 +2275,31 @@ async function handleButton(interaction) {
     if (action === "joinselect") {
         return joinTeam(interaction, event, interaction.values?.[0]);
     }
+    if (action === "boss") {
+        return handleBossAction(interaction, event, parts);
+    }
+
+    if (action === "help") {
+        return handleBossHelp(interaction, event, parts);
+    }
 
     if (action === "start") {
-        const team = getUserTeam(event, interaction.user.id);
-
-        if (!team || team.leaderId !== String(interaction.user.id)) {
+        if (!isDuyenAdmin(interaction)) {
             return interaction.reply({
-                content: "❌ Chỉ đội trưởng được bắt đầu sớm.",
+                content: "❌ Chỉ admin được bắt đầu sớm Bí Cảnh.",
+                ephemeral: true,
+            });
+        }
+
+        if (event.status !== "lobby") {
+            return interaction.reply({
+                content: "❌ Bí Cảnh đã bắt đầu rồi.",
                 ephemeral: true,
             });
         }
 
         await interaction.reply({
-            content: "🔒 Đã bắt đầu sớm.",
+            content: "🔒 Admin đã bắt đầu sớm.",
             ephemeral: true,
         });
 

@@ -169,9 +169,105 @@ function pickWeighted(list, weightKey = "weight") {
     return pool[pool.length - 1];
 }
 
-function pickSecretRealmDifficulty() {
+function getBattleModOptions() {
+    return Array.isArray(config.battleMods?.options)
+        ? config.battleMods.options
+        : [];
+}
+
+function getBattleModConfig(modId) {
+    return getBattleModOptions().find((mod) => mod.id === modId) || null;
+}
+
+function getApprovedBattleModIds(realm) {
+    if (!config.battleMods?.enabled) {
+        return [];
+    }
+
+    const votes = realm.battleModVotes || {};
+    const activeMembers = new Set((realm.memberIds || []).map(String));
+    const memberCount = Math.max(1, activeMembers.size);
+    const defaultVoteRatio = Number(config.battleMods.voteRatio || 0.5);
+
+    return getBattleModOptions()
+        .filter((mod) => {
+            const voterIds = (Array.isArray(votes[mod.id]) ? votes[mod.id] : [])
+                .map(String)
+                .filter((userId) => activeMembers.has(userId));
+
+            const requiredVotes = Math.max(
+                1,
+                Math.ceil(
+                    memberCount * Number(mod.voteRatio || defaultVoteRatio),
+                ),
+            );
+
+            return voterIds.length >= requiredVotes;
+        })
+        .map((mod) => mod.id);
+}
+
+function calculateBattleModEffects(modIds = []) {
+    const effects = {
+        requiredProgressMultiplier: 1,
+        hpMultiplier: 1,
+        damageMultiplier: 1,
+        rewardMultiplier: 1,
+        wrongActionDamageMultiplier: 1,
+
+        difficultyBias: 0,
+        maxTurnPenalty: 0,
+        startEnergyPenalty: 0,
+        startStabilityPenalty: 0,
+    };
+
+    for (const modId of modIds) {
+        const mod = getBattleModConfig(modId);
+
+        if (!mod) {
+            continue;
+        }
+
+        effects.requiredProgressMultiplier *= Number(
+            mod.requiredProgressMultiplier || 1,
+        );
+        effects.hpMultiplier *= Number(mod.hpMultiplier || 1);
+        effects.damageMultiplier *= Number(mod.damageMultiplier || 1);
+        effects.rewardMultiplier *= Number(mod.rewardMultiplier || 1);
+        effects.wrongActionDamageMultiplier *= Number(
+            mod.wrongActionDamageMultiplier || 1,
+        );
+
+        effects.difficultyBias += Number(mod.difficultyBias || 0);
+        effects.maxTurnPenalty += Number(mod.maxTurnPenalty || 0);
+        effects.startEnergyPenalty += Number(mod.startEnergyPenalty || 0);
+        effects.startStabilityPenalty += Number(mod.startStabilityPenalty || 0);
+    }
+
+    return effects;
+}
+
+function pickSecretRealmDifficulty(modIds = []) {
+    const effects = calculateBattleModEffects(modIds);
+
+    const boostedTiers = (config.difficultyTiers || []).map((tier) => {
+        const level = Number(tier.level || 1);
+        const bias = Number(effects.difficultyBias || 0);
+
+        const hardBonus = Math.max(0, level - 2) * bias;
+        const easyPenalty = level <= 2 ? bias * 0.35 : 0;
+
+        return {
+            ...tier,
+            weight: Math.max(
+                0.1,
+                Number(tier.weight || 0) + hardBonus - easyPenalty,
+            ),
+        };
+    });
+
     return (
-        pickWeighted(config.difficultyTiers || []) || {
+        pickWeighted(boostedTiers) || {
             id: "default",
             name: "Thường",
             level: 1,
@@ -186,6 +282,18 @@ function pickSecretRealmDifficulty() {
             rewardMultiplier: 1,
         }
     );
+}
+
+function formatBattleModNames(modIds = []) {
+    const names = modIds
+        .map((modId) => {
+            const mod = getBattleModConfig(modId);
+
+            return mod ? `${mod.emoji || "🔥"} ${mod.name}` : null;
+        })
+        .filter(Boolean);
+
+    return names.length > 0 ? names.join(", ") : "Không có";
 }
 
 function pickRoundMechanic(battle) {
@@ -277,6 +385,35 @@ function mergeRewardItem(rewardMap, itemId, amount) {
     rewardMap[itemId] = Number(rewardMap[itemId] || 0) + Number(amount);
 }
 
+function canRollSuperHighReward(realm) {
+    const rule = config.superHighDifficulty || {};
+    const difficultyLevel = Number(realm.battle?.difficulty?.level || 1);
+    const modCount = Number(realm.battle?.selectedBattleModIds?.length || 0);
+
+    return (
+        difficultyLevel >= Number(rule.minDifficultyLevel || 5) &&
+        modCount >= Number(rule.minModCount || 2)
+    );
+}
+
+function tryGiveSuperHighReward(realm, userId, rewardMap) {
+    if (!canRollSuperHighReward(realm)) {
+        return;
+    }
+
+    const rule = config.superHighDifficulty || {};
+
+    if (Math.random() < Number(rule.exChestChance || 0)) {
+        addShopItem(userId, "ruong_tan_tich_ex", 1);
+        mergeRewardItem(rewardMap, "ruong_tan_tich_ex", 1);
+        return;
+    }
+
+    if (Math.random() < Number(rule.mamuChestChance || 0)) {
+        addShopItem(userId, "ruong_phap_bao_mamu", 1);
+        mergeRewardItem(rewardMap, "ruong_phap_bao_mamu", 1);
+    }
+}
 function pickRandomMembers(memberIds, amount) {
     const pool = [...memberIds];
 
@@ -418,7 +555,7 @@ async function createRealmChannel(interaction, realm) {
             `Mọi người đủ điều kiện có thể bấm **Tham gia**.`,
 
         embeds: [buildLobbyEmbed(realm)],
-        components: [buildLobbyButtons(realm)],
+        components: buildLobbyComponents(realm),
     });
 
     realm.messageId = message.id;
@@ -476,6 +613,8 @@ function buildLobbyEmbed(realm) {
                 `👥 Thành viên: **${realm.memberIds.length}/${realm.maxMembers}**\n` +
                 `📌 Tối thiểu bắt đầu: **${realm.minMembers} người**\n\n` +
                 `${memberLines.join("\n")}\n\n` +
+                `🔥 Dị biến đã thông qua: **${formatBattleModNames(getApprovedBattleModIds(realm))}**\n` +
+                `Vote dị biến càng căng thì Bí Cảnh càng dễ ra độ khó cao, quà càng ngon nhưng có thể thua thật.\n\n` +
                 `Người chơi đủ điều kiện có thể bấm **Tham gia**.\n` +
                 `Khi đủ ${realm.maxMembers} người, Bí Cảnh sẽ tự bắt đầu.`,
         )
@@ -519,6 +658,61 @@ function buildLobbyButtons(realm) {
             .setStyle(ButtonStyle.Danger)
             .setDisabled(cannotStart),
     );
+}
+
+function buildBattleModVoteButtons(realm) {
+    if (!config.battleMods?.enabled) {
+        return null;
+    }
+
+    const disabled =
+        realm.status !== "lobby" || realm.recruitmentClosed === true;
+
+    const activeMembers = new Set((realm.memberIds || []).map(String));
+    const memberCount = Math.max(1, activeMembers.size);
+    const defaultVoteRatio = Number(config.battleMods.voteRatio || 0.5);
+    const votes = realm.battleModVotes || {};
+
+    const mods = getBattleModOptions().slice(0, 5);
+
+    if (mods.length <= 0) {
+        return null;
+    }
+
+    return new ActionRowBuilder().addComponents(
+        ...mods.map((mod) => {
+            const voterIds = (Array.isArray(votes[mod.id]) ? votes[mod.id] : [])
+                .map(String)
+                .filter((userId) => activeMembers.has(userId));
+
+            const requiredVotes = Math.max(
+                1,
+                Math.ceil(
+                    memberCount * Number(mod.voteRatio || defaultVoteRatio),
+                ),
+            );
+
+            const approved = voterIds.length >= requiredVotes;
+
+            return new ButtonBuilder()
+                .setCustomId(`bicanh_mod_${mod.id}_${realm.id}`)
+                .setLabel(`${mod.name} ${voterIds.length}/${requiredVotes}`)
+                .setEmoji(mod.emoji || "🔥")
+                .setStyle(approved ? ButtonStyle.Danger : ButtonStyle.Secondary)
+                .setDisabled(disabled);
+        }),
+    );
+}
+
+function buildLobbyComponents(realm) {
+    const rows = [buildLobbyButtons(realm)];
+    const modRow = buildBattleModVoteButtons(realm);
+
+    if (modRow) {
+        rows.push(modRow);
+    }
+
+    return rows;
 }
 
 async function tryTrigger(interaction, source) {
@@ -594,6 +788,9 @@ async function tryTrigger(interaction, source) {
                 afkTurns: 0,
             },
         },
+
+        battleModVotes: {},
+        selectedBattleModIds: [],
 
         battle: null,
     };
@@ -748,7 +945,7 @@ async function joinRealm(interaction, realm) {
             await lobbyMessage
                 .edit({
                     embeds: [buildLobbyEmbed(realm)],
-                    components: [buildLobbyButtons(realm)],
+                    components: buildLobbyComponents(realm),
                 })
                 .catch(() => null);
         }
@@ -760,7 +957,7 @@ async function joinRealm(interaction, realm) {
         await lobbyMessage
             .edit({
                 embeds: [buildLobbyEmbed(realm)],
-                components: [buildLobbyButtons(realm)],
+                components: buildLobbyComponents(realm),
             })
             .catch(() => null);
     }
@@ -831,6 +1028,11 @@ async function leaveRealm(interaction, realm) {
     realm.memberIds = realm.memberIds.filter((id) => id !== userId);
 
     delete realm.members[userId];
+    for (const modId of Object.keys(realm.battleModVotes || {})) {
+        realm.battleModVotes[modId] = realm.battleModVotes[modId].filter(
+            (voterId) => String(voterId) !== String(userId),
+        );
+    }
 
     updateSecretRealmState((state) => {
         delete state.activeUserRealms[userId];
@@ -849,7 +1051,7 @@ async function leaveRealm(interaction, realm) {
     if (message) {
         await message.edit({
             embeds: [buildLobbyEmbed(realm)],
-            components: [buildLobbyButtons(realm)],
+            components: buildLobbyComponents(realm),
         });
     }
 
@@ -1020,6 +1222,73 @@ async function expireLobby(client, realmId) {
     }, 10 * 1000);
 }
 
+async function toggleBattleModVote(interaction, modId, realm) {
+    const userId = String(interaction.user.id);
+
+    if (realm.status !== "lobby" || realm.recruitmentClosed === true) {
+        return interaction.reply({
+            content: "❌ Bí Cảnh đã khóa vote dị biến.",
+            ephemeral: true,
+        });
+    }
+
+    if (!realm.memberIds.includes(userId)) {
+        return interaction.reply({
+            content: "❌ Chỉ thành viên trong đội Bí Cảnh mới được vote.",
+            ephemeral: true,
+        });
+    }
+
+    const mod = getBattleModConfig(modId);
+
+    if (!mod) {
+        return interaction.reply({
+            content: "❌ Dị biến Bí Cảnh không tồn tại.",
+            ephemeral: true,
+        });
+    }
+
+    if (!realm.battleModVotes) {
+        realm.battleModVotes = {};
+    }
+
+    const votes = new Set(
+        Array.isArray(realm.battleModVotes[modId])
+            ? realm.battleModVotes[modId].map(String)
+            : [],
+    );
+
+    if (votes.has(userId)) {
+        votes.delete(userId);
+    } else {
+        votes.add(userId);
+    }
+
+    realm.battleModVotes[modId] = [...votes];
+
+    saveRealm(realm);
+
+    const message = await interaction.channel.messages
+        .fetch(realm.messageId)
+        .catch(() => null);
+
+    if (message) {
+        await message
+            .edit({
+                embeds: [buildLobbyEmbed(realm)],
+                components: buildLobbyComponents(realm),
+            })
+            .catch(() => null);
+    }
+
+    return interaction.reply({
+        content: votes.has(userId)
+            ? `${mod.emoji || "🔥"} Đã vote bật **${mod.name}**.`
+            : `${mod.emoji || "🔥"} Đã bỏ vote **${mod.name}**.`,
+        ephemeral: true,
+    });
+}
+
 async function handleButton(interaction) {
     if (!interaction.customId.startsWith("bicanh_")) {
         return undefined;
@@ -1042,6 +1311,20 @@ async function handleButton(interaction) {
         }
 
         return selectBattleAction(interaction, realm, battleAction);
+    }
+    if (action === "mod") {
+        const modId = parts[2];
+        const realmId = parts.slice(3).join("_");
+        const realm = getRealm(realmId);
+
+        if (!realm) {
+            return interaction.reply({
+                content: "❌ Bí cảnh không tồn tại.",
+                ephemeral: true,
+            });
+        }
+
+        return toggleBattleModVote(interaction, modId, realm);
     }
 
     const realmId = parts.slice(2).join("_");
@@ -1168,7 +1451,12 @@ function createBattleState(realm) {
         return total + Math.max(1, Number(member?.effectivePower || 1));
     }, 0);
 
-    const difficulty = pickSecretRealmDifficulty();
+    const selectedBattleModIds = getApprovedBattleModIds(realm);
+    const battleModEffects = calculateBattleModEffects(selectedBattleModIds);
+
+    realm.selectedBattleModIds = selectedBattleModIds;
+
+    const difficulty = pickSecretRealmDifficulty(selectedBattleModIds);
 
     const recommendedMembers = Math.max(
         config.party?.minMembers || 2,
@@ -1196,7 +1484,8 @@ function createBattleState(realm) {
                 difficultyMultiplier *
                 0.072 *
                 Number(difficulty.requiredProgressMultiplier || 1) *
-                missingDifficultyMultiplier,
+                missingDifficultyMultiplier *
+                Number(battleModEffects.requiredProgressMultiplier || 1),
         ),
     );
 
@@ -1206,7 +1495,8 @@ function createBattleState(realm) {
             totalEffectivePower *
                 0.105 *
                 Number(difficulty.hpMultiplier || 1) *
-                Math.max(0.72, 1 - missingMembers * 0.06),
+                Math.max(0.72, 1 - missingMembers * 0.06) *
+                Number(battleModEffects.hpMultiplier || 1),
         ),
     );
 
@@ -1229,8 +1519,10 @@ function createBattleState(realm) {
     return {
         turn: 1,
         maxTurns: Math.max(
-            6,
-            Number(difficulty.maxTurns || 8) + missingMembers,
+            5,
+            Number(difficulty.maxTurns || 8) +
+                missingMembers -
+                Number(battleModEffects.maxTurnPenalty || 0),
         ),
 
         progress: 0,
@@ -1239,8 +1531,14 @@ function createBattleState(realm) {
         teamHp: maxTeamHp,
         maxTeamHp,
 
-        energy: 50,
-        stability: 50,
+        energy: Math.max(
+            15,
+            50 - Number(battleModEffects.startEnergyPenalty || 0),
+        ),
+        stability: Math.max(
+            15,
+            50 - Number(battleModEffects.startStabilityPenalty || 0),
+        ),
 
         totalEffectivePower,
         difficultyMultiplier,
@@ -1251,16 +1549,21 @@ function createBattleState(realm) {
             level: Number(difficulty.level || 1),
             recommendedMembers,
             missingMembers,
-            damageMultiplier: Number(difficulty.damageMultiplier || 1),
+            damageMultiplier:
+                Number(difficulty.damageMultiplier || 1) *
+                Number(battleModEffects.damageMultiplier || 1),
             wrongActionMultiplier: Number(
                 difficulty.wrongActionMultiplier ?? 0.12,
             ),
             failProgressMultiplier: Number(
                 difficulty.failProgressMultiplier ?? 0.3,
             ),
-            rewardMultiplier: Number(difficulty.rewardMultiplier || 1),
+            rewardMultiplier:
+                Number(difficulty.rewardMultiplier || 1) *
+                Number(battleModEffects.rewardMultiplier || 1),
         },
-
+        selectedBattleModIds,
+        battleModEffects,
         perfectTurns: 0,
         failedMechanics: 0,
         wrongActions: 0,
@@ -1425,11 +1728,17 @@ function calculateRealmDamage(
     const missingRolePenalty =
         battle.maxTeamHp * 0.075 * missingRoles * damageMultiplier;
 
+    const wrongActionDamageMultiplier = Math.max(
+        1,
+        Number(battle.battleModEffects?.wrongActionDamageMultiplier || 1),
+    );
+
     const wrongActionPenalty =
         battle.maxTeamHp *
         0.045 *
         Number(wrongActionCount || 0) *
-        damageMultiplier;
+        damageMultiplier *
+        wrongActionDamageMultiplier;
 
     const instabilityPenalty =
         battle.stability < 30 ? battle.maxTeamHp * 0.075 * damageMultiplier : 0;
@@ -1562,6 +1871,7 @@ function giveSecretRealmReward(realm, userId) {
         addShopItem(userId, rewardItem.itemId, amount);
         mergeRewardItem(items, rewardItem.itemId, amount);
     }
+    tryGiveSuperHighReward(realm, userId, items);
     /*
      * Buff nhẹ economy.
      */
@@ -1787,6 +2097,8 @@ async function finishBattle(channel, realm, success) {
                 : `Đội đã không thể vượt qua Bí Cảnh.`) +
                 `\n\n` +
                 `🔥 Độ khó: **${battle.difficulty?.name || "Thường"}**\n` +
+                `💢 Dị biến: **${formatBattleModNames(battle.selectedBattleModIds || [])}**\n` +
+                `🎁 Hệ số quà: **x${Number(battle.difficulty?.rewardMultiplier || 1).toFixed(2)}**\n` +
                 `✅ Lượt hoàn hảo: **${formatNumber(battle.perfectTurns || 0)}**\n` +
                 `⚠️ Cơ chế thất bại: **${formatNumber(battle.failedMechanics || 0)}**\n` +
                 `❌ Hành động lệch nhịp: **${formatNumber(battle.wrongActions || 0)}**\n` +

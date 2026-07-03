@@ -21,7 +21,7 @@ module.exports = {
         {
             id: "on_dinh",
             name: "Ổn Định",
-            weight: 30,
+            weight: 18,
             level: 1,
             recommendedMembers: 2,
             requiredProgressMultiplier: 1.0,
@@ -36,7 +36,7 @@ module.exports = {
         {
             id: "nhieu_dong",
             name: "Nhiễu Động",
-            weight: 36,
+            weight: 30,
             level: 2,
             recommendedMembers: 3,
             requiredProgressMultiplier: 1.22,
@@ -51,7 +51,7 @@ module.exports = {
         {
             id: "hung_hiem",
             name: "Hung Hiểm",
-            weight: 22,
+            weight: 28,
             level: 3,
             recommendedMembers: 4,
             requiredProgressMultiplier: 1.52,
@@ -66,7 +66,7 @@ module.exports = {
         {
             id: "ac_mong",
             name: "Ác Mộng",
-            weight: 9,
+            weight: 16,
             level: 4,
             recommendedMembers: 5,
             requiredProgressMultiplier: 1.65,
@@ -81,7 +81,7 @@ module.exports = {
         {
             id: "thien_phat",
             name: "Thiên Phạt",
-            weight: 3,
+            weight: 8,
             level: 5,
             recommendedMembers: 6,
             requiredProgressMultiplier: 2.05,
@@ -95,6 +95,70 @@ module.exports = {
         },
     ],
 
+    battleMods: {
+        enabled: true,
+        voteRatio: 0.5,
+
+        options: [
+            {
+                id: "quai50",
+                name: "Quái mạnh hơn 50%",
+                emoji: "💢",
+                description:
+                    "Sát thương Bí Cảnh tăng mạnh, nhưng quà ngon hơn.",
+                difficultyBias: 1.2,
+                damageMultiplier: 1.5,
+                rewardMultiplier: 1.35,
+            },
+            {
+                id: "mauquai",
+                name: "Máu quái tăng",
+                emoji: "❤️",
+                description: "Cần nhiều tiến độ hơn để clear Bí Cảnh.",
+                difficultyBias: 1.0,
+                requiredProgressMultiplier: 1.45,
+                rewardMultiplier: 1.35,
+            },
+            {
+                id: "phanchan",
+                name: "Phản Chấn",
+                emoji: "🩸",
+                description: "Chọn sai hành động sẽ bị phạt đau hơn.",
+                difficultyBias: 0.8,
+                damageMultiplier: 1.12,
+                wrongActionDamageMultiplier: 1.65,
+                rewardMultiplier: 1.3,
+            },
+            {
+                id: "linhkhi",
+                name: "Linh Khí Hỗn Loạn",
+                emoji: "🌀",
+                description: "Vào trận bị giảm linh khí và ổn định.",
+                difficultyBias: 0.7,
+                startEnergyPenalty: 18,
+                startStabilityPenalty: 14,
+                rewardMultiplier: 1.25,
+            },
+            {
+                id: "tuyetlo",
+                name: "Tuyệt Lộ",
+                emoji: "☠️",
+                description: "Ít lượt hơn, dễ fail hơn, nhưng quà cao.",
+                difficultyBias: 1.3,
+                maxTurnPenalty: 2,
+                damageMultiplier: 1.18,
+                rewardMultiplier: 1.55,
+            },
+        ],
+    },
+
+    superHighDifficulty: {
+        minDifficultyLevel: 5,
+        minModCount: 2,
+
+        exChestChance: 0.035,
+        mamuChestChance: 0.12,
+    },
     powerLimits: {
         minGuestRatio: 0.12,
         recommendedGuestRatio: 0.4,
@@ -166,19 +230,19 @@ module.exports = {
 
     rewards: {
         economy: {
-            hostMin: 3000,
-            hostMax: 8000,
+            hostMin: 7000,
+            hostMax: 18000,
 
-            guestMin: 2000,
-            guestMax: 5000,
+            guestMin: 5000,
+            guestMax: 12000,
         },
 
         tuVi: {
-            hostMin: 120,
-            hostMax: 240,
+            hostMin: 220,
+            hostMax: 420,
 
-            guestMin: 70,
-            guestMax: 160,
+            guestMin: 150,
+            guestMax: 300,
         },
         guaranteedFeed: {
             itemId: "cam_lon_nam_dinh",
@@ -190,8 +254,8 @@ module.exports = {
             guestMax: 3,
         },
 
-        hostRolls: 4,
-        guestRolls: 2,
+        hostRolls: 5,
+        guestRolls: 3,
 
         rewardPool: [
             {

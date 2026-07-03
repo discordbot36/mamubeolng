@@ -8,10 +8,14 @@ const {
     consumeShopItem,
     addInventoryItem,
     formatMoney,
+    getSystemValue,
+    setSystemValue,
 } = require("./database");
 
 const dothachConfig = require("./config/dothach");
-
+const BLESSING_ITEM_ID =
+    dothachConfig.blessing?.itemId || "loi_chuc_phuc_thien_dao";
+const CHANNEL_BLESSING_KEY = "dothach_channel_blessings";
 const sessions = new Map();
 
 function randomInt(min, max) {
@@ -58,8 +62,24 @@ function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
 
-function pickWeightedGem(stone) {
-    const entries = Object.entries(stone.gemChances || {});
+function getBlessedGemChance(gemId, chance, blessingActive = false) {
+    if (!blessingActive) {
+        return Number(chance || 0);
+    }
+
+    const multipliers = dothachConfig.blessing?.gemChanceMultipliers || {};
+    const multiplier = Number(multipliers[gemId] || 1);
+
+    return Number(chance || 0) * multiplier;
+}
+
+function pickWeightedGem(stone, blessingActive = false) {
+    const entries = Object.entries(stone.gemChances || {}).map(
+        ([gemId, chance]) => {
+            return [gemId, getBlessedGemChance(gemId, chance, blessingActive)];
+        },
+    );
+
     const totalChance = entries.reduce((total, [, chance]) => {
         return total + chance;
     }, 0);
@@ -94,12 +114,20 @@ function pickWeightedGem(stone) {
     };
 }
 
-function rollPurity(stone) {
-    if (Math.random() < (dothachConfig.perfectPurityChance || 0)) {
+function rollPurity(stone, blessingActive = false) {
+    const blessing = dothachConfig.blessing || {};
+    const perfectChance =
+        Number(dothachConfig.perfectPurityChance || 0) +
+        (blessingActive ? Number(blessing.perfectPurityBonusChance || 0) : 0);
+
+    if (Math.random() < perfectChance) {
         return 100;
     }
 
-    const purityBonus = stone.purityBonus || 0;
+    const purityBonus =
+        Number(stone.purityBonus || 0) +
+        (blessingActive ? Number(blessing.purityBonus || 0) : 0);
+
     const purity = randomInt(0, 99) + purityBonus;
 
     return clamp(purity, 0, 99);
@@ -117,9 +145,9 @@ function calculateGemValue(gem, grade) {
     return Math.max(1, value);
 }
 
-function createResult(stone) {
-    const gem = pickWeightedGem(stone);
-    const purity = rollPurity(stone);
+function createResult(stone, blessingActive = false) {
+    const gem = pickWeightedGem(stone, blessingActive);
+    const purity = rollPurity(stone, blessingActive);
     const grade = getPurityGrade(purity);
     const value = calculateGemValue(gem, grade);
     const finalName = `${gem.name} ${grade.name}`;
@@ -132,7 +160,85 @@ function createResult(stone) {
         finalName,
     };
 }
+function getChannelBlessings() {
+    const blessings = getSystemValue(CHANNEL_BLESSING_KEY);
 
+    if (
+        !blessings ||
+        typeof blessings !== "object" ||
+        Array.isArray(blessings)
+    ) {
+        return {};
+    }
+
+    return blessings;
+}
+
+function cleanupExpiredChannelBlessings() {
+    const now = Date.now();
+    const blessings = getChannelBlessings();
+    let changed = false;
+
+    for (const [channelId, blessing] of Object.entries(blessings)) {
+        if (Number(blessing?.expiresAt || 0) <= now) {
+            delete blessings[channelId];
+            changed = true;
+        }
+    }
+
+    if (changed) {
+        setSystemValue(CHANNEL_BLESSING_KEY, blessings);
+    }
+
+    return blessings;
+}
+
+function getActiveChannelBlessing(channelId) {
+    const blessings = cleanupExpiredChannelBlessings();
+    const blessing = blessings[String(channelId)];
+
+    if (!blessing || Number(blessing.expiresAt || 0) <= Date.now()) {
+        return null;
+    }
+
+    return blessing;
+}
+
+function setChannelBlessing(channelId, activatedBy) {
+    const now = Date.now();
+    const blessings = cleanupExpiredChannelBlessings();
+    const durationMs = Number(
+        dothachConfig.blessing?.durationMs || 30 * 60 * 1000,
+    );
+    const currentExpiresAt = Number(
+        blessings[String(channelId)]?.expiresAt || 0,
+    );
+    const startsAt = Math.max(now, currentExpiresAt);
+
+    blessings[String(channelId)] = {
+        channelId: String(channelId),
+        activatedBy: String(activatedBy),
+        activatedAt: now,
+        expiresAt: startsAt + durationMs,
+    };
+
+    setSystemValue(CHANNEL_BLESSING_KEY, blessings);
+
+    return blessings[String(channelId)];
+}
+
+function formatBlessingLine(channelId) {
+    const blessing = getActiveChannelBlessing(channelId);
+
+    if (!blessing) {
+        return "";
+    }
+
+    return (
+        `\n🌌 **Lời Chúc Phúc Của Thiên Đạo đang phủ kênh này** ` +
+        `(còn **${formatTimeLeft(Number(blessing.expiresAt || 0) - Date.now())}**)`
+    );
+}
 function formatTimeLeft(ms) {
     const totalSeconds = Math.ceil(ms / 1000);
     const minutes = Math.floor(totalSeconds / 60);
@@ -206,6 +312,7 @@ class DoThachManager {
 
         sessions.set(sessionId, {
             userId: interaction.user.id,
+            channelId: interaction.channelId,
             stoneId,
             blackMachineIndex,
             createdAt: Date.now(),
@@ -214,20 +321,59 @@ class DoThachManager {
         return interaction.reply({
             content:
                 `${interaction.user} chuẩn bị đổ thạch\n\n` +
-                `${stone.emoji || "🪨"} Đá: **${stone.name}**\n` +
+                `${stone.emoji || "🪨"} Đá: **${stone.name}**${formatBlessingLine(interaction.channelId)}\n` +
                 `🔪 Chọn 1 trong ${dothachConfig.machines.length} máy để cắt đá\n` +
                 `💀 Có 1 máy đen, chọn trúng là nổ mất đá`,
             components: [createMachineButtons(sessionId)],
         });
     }
-    rollTemporaryResult(stoneId = "da_mamu") {
+    rollTemporaryResult(stoneId = "da_mamu", blessingActive = false) {
         const stone = getStoneConfig(stoneId);
 
         if (!stone) {
             return null;
         }
 
-        return createResult(stone);
+        return createResult(stone, blessingActive);
+    }
+
+    async activateBlessing(interaction) {
+        const targetChannel =
+            interaction.options.getChannel("kenh") || interaction.channel;
+
+        if (!targetChannel) {
+            return interaction.reply({
+                content: "❌ Không tìm thấy kênh để chúc phúc.",
+                ephemeral: true,
+            });
+        }
+
+        const consumeResult = consumeShopItem(
+            interaction.user.id,
+            BLESSING_ITEM_ID,
+            1,
+        );
+
+        if (!consumeResult.success) {
+            return interaction.reply({
+                content:
+                    `❌ Bạn cần có **Lời Chúc Phúc Của Thiên Đạo** để buff kênh.\n` +
+                    `Mua bằng: \`/mua vatpham:${BLESSING_ITEM_ID} soluong:1\``,
+                ephemeral: true,
+            });
+        }
+
+        const blessing = setChannelBlessing(
+            targetChannel.id,
+            interaction.user.id,
+        );
+
+        return interaction.reply({
+            content:
+                `🌌 ${interaction.user} đã dùng **Lời Chúc Phúc Của Thiên Đạo**.\n` +
+                `Kênh ${targetChannel} được buff tỉ lệ đổ thạch trong **30 phút**.\n` +
+                `⏳ Hết hiệu lực: <t:${Math.floor(Number(blessing.expiresAt || 0) / 1000)}:R>`,
+        });
     }
     async handleButton(interaction) {
         if (!interaction.customId.startsWith("dothach_pick_")) {
@@ -317,7 +463,10 @@ class DoThachManager {
                     });
                 }
 
-                const result = createResult(freshStone);
+                const blessingActive = Boolean(
+                    getActiveChannelBlessing(session.channelId),
+                );
+                const result = createResult(freshStone, blessingActive);
 
                 const gemItem = {
                     id: `dothach_${stoneId}_${result.gem.id}_${result.grade.name}`,

@@ -479,11 +479,18 @@ function createBattleState(hunt) {
         ),
     );
 
+    const teamHpModeMultiplier =
+        hunt.mode === "party" ? 1.35 + Math.max(0, memberCount - 2) * 0.12 : 1;
+
     const maxTeamHp = Math.max(
         90,
-        Math.floor(totalPower * 0.075 * Math.max(0.85, 1.08 - level * 0.04)),
+        Math.floor(
+            totalPower *
+                0.075 *
+                Math.max(0.85, 1.08 - level * 0.04) *
+                teamHpModeMultiplier,
+        ),
     );
-
     const contributions = {};
 
     for (const userId of hunt.memberIds) {
