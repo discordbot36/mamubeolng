@@ -42,12 +42,12 @@ module.exports = {
     loi_chuc_phuc_thien_dao: {
         name: "Lời Chúc Phúc Của Thiên Đạo",
         emoji: "🌌",
-        price: 10000000000,
+        price: 500000000,
         type: "dothach_channel_blessing",
         shopCategory: "dothach",
         sellable: false,
         description:
-            "Admin dùng /dothach_chucphuc để buff tỉ lệ đổ thạch cho cả kênh trong 30 phút.",
+            "Kích hoạt chúc phúc đổ thạch cho 1 kênh trong 30 phút. Không cộng dồn thời gian.",
     },
     cam_lon_nam_dinh: {
         name: "Cám Lợn Thanh Hóa",

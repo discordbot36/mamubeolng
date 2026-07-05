@@ -19,7 +19,7 @@ const activeBosses = new Map();
 const MAX_TEAM_SIZE = 4;
 const MAX_TEAMS = 6;
 const LOBBY_MS = 10 * 60 * 1000;
-const ROUND_MS = 45_000;
+const ROUND_MS = 36_000;
 const FINAL_MS = 45_000;
 const ROUND_MAX = 6;
 const PUZZLE_MS = 60_000;
@@ -1888,9 +1888,25 @@ async function resolveFinal(event) {
         team.finalScore = calculateFinalScore(event, team, finder);
     }
 
-    const winner = pickWeightedWinner(
-        contestants.length ? contestants : [finder],
-    );
+    const winnerPool = contestants.length ? contestants : [finder];
+
+    const winner = [...winnerPool].sort((a, b) => {
+        const scoreDiff = Number(b.finalScore || 0) - Number(a.finalScore || 0);
+
+        if (scoreDiff !== 0) {
+            return scoreDiff;
+        }
+
+        if (a.id === finder.id) {
+            return -1;
+        }
+
+        if (b.id === finder.id) {
+            return 1;
+        }
+
+        return Number(a.no || 999) - Number(b.no || 999);
+    })[0];
 
     const rewardLines = [];
 
@@ -1906,6 +1922,10 @@ async function resolveFinal(event) {
         return Number(b.finalScore || 0) - Number(a.finalScore || 0);
     });
 
+    const runnerTeam = sortedTeams.find((team) => {
+        return team.id !== winner.id && team.finalChoice !== "ignore";
+    });
+
     for (const team of sortedTeams) {
         if (team.id === winner.id) {
             continue;
@@ -1917,7 +1937,7 @@ async function resolveFinal(event) {
             continue;
         }
 
-        if (team === sortedTeams[1]) {
+        if (runnerTeam && team.id === runnerTeam.id) {
             rewardLines.push(`🥈 **Đội ${team.no} — Ăn được phần phụ:**`);
             rewardLines.push(...grantTeamRewards(team, "runner"));
             continue;

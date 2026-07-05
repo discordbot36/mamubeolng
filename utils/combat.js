@@ -268,7 +268,26 @@ function calculateActiveSkillPowerBonus(profile) {
 function calculateRealmPower(realmIndex) {
     const safeRealmIndex = Math.max(0, Number(realmIndex || 0));
 
-    return Math.floor(1000 * Math.pow(safeRealmIndex + 1, 2.45));
+    const rawPower = Math.floor(1000 * Math.pow(safeRealmIndex + 1, 2.45));
+
+    if (safeRealmIndex <= 0) {
+        return rawPower;
+    }
+
+    const previousRawPower = Math.floor(1000 * Math.pow(safeRealmIndex, 2.45));
+
+    const previousMaxFloorBonus = 1 + (MAX_REALM_FLOOR - 1) * 0.04;
+    const previousMaxExpBonus = 1.1;
+    const breakthroughBonus = 1.08;
+
+    const minimumPowerAfterBreakthrough = Math.floor(
+        previousRawPower *
+            previousMaxFloorBonus *
+            previousMaxExpBonus *
+            breakthroughBonus,
+    );
+
+    return Math.max(rawPower, minimumPowerAfterBreakthrough);
 }
 
 function calculateFloorPower(realmPower, floor) {

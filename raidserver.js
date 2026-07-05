@@ -2150,8 +2150,9 @@ class RaidServerManager {
 
     distributeRewards(raid, result, logs) {
         for (const player of getRegisteredPlayers(raid)) {
-            const eligible =
-                result === "win" && Number(player.actionsTaken || 0) > 0;
+            const hasFought = Number(player.actionsTaken || 0) > 0;
+
+            const eligible = result === "win" && hasFought;
 
             if (eligible) {
                 database.addShopItem(
@@ -2178,7 +2179,7 @@ class RaidServerManager {
                 });
 
                 player.rewardEligible = true;
-            } else if (player.actionsTaken > 0) {
+            } else if (hasFought) {
                 database.addMoney(
                     player.userId,
                     randomInt(
@@ -2201,7 +2202,7 @@ class RaidServerManager {
                     result !== "win" ? "Raid thua" : "Không đủ điều kiện rương";
             } else {
                 player.rewardEligible = false;
-                player.rewardReason = "Đăng ký nhưng không đánh";
+                player.rewardReason = "Đăng ký/điểm danh nhưng không đánh";
             }
         }
 
@@ -2211,7 +2212,7 @@ class RaidServerManager {
 
         logs.push(
             result === "win"
-                ? `🎁 Đã phát **${chestCount}** Rương Tàn Tích EX cho người đủ điều kiện.`
+                ? `🎁 Đã phát **${chestCount}** Rương Tàn Tích EX cho người đủ điều kiện. Người chỉ đăng ký/điểm danh nhưng AFK không nhận rương.`
                 : "🎁 Raid thua, không phát Rương Tàn Tích EX.",
         );
     }

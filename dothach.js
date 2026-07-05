@@ -16,6 +16,8 @@ const dothachConfig = require("./config/dothach");
 const BLESSING_ITEM_ID =
     dothachConfig.blessing?.itemId || "loi_chuc_phuc_thien_dao";
 const CHANNEL_BLESSING_KEY = "dothach_channel_blessings";
+const GUILD_BLESSING_COOLDOWN_KEY = "dothach_blessing_guild_cooldowns";
+const BLESSING_GUILD_COOLDOWN_MS = 12 * 60 * 60 * 1000;
 const sessions = new Map();
 
 function randomInt(min, max) {
@@ -210,21 +212,45 @@ function setChannelBlessing(channelId, activatedBy) {
     const durationMs = Number(
         dothachConfig.blessing?.durationMs || 30 * 60 * 1000,
     );
-    const currentExpiresAt = Number(
-        blessings[String(channelId)]?.expiresAt || 0,
-    );
-    const startsAt = Math.max(now, currentExpiresAt);
 
     blessings[String(channelId)] = {
         channelId: String(channelId),
         activatedBy: String(activatedBy),
         activatedAt: now,
-        expiresAt: startsAt + durationMs,
+        expiresAt: now + durationMs,
     };
 
     setSystemValue(CHANNEL_BLESSING_KEY, blessings);
 
     return blessings[String(channelId)];
+}
+function getGuildBlessingCooldowns() {
+    const cooldowns = getSystemValue(GUILD_BLESSING_COOLDOWN_KEY);
+
+    if (
+        !cooldowns ||
+        typeof cooldowns !== "object" ||
+        Array.isArray(cooldowns)
+    ) {
+        return {};
+    }
+
+    return cooldowns;
+}
+
+function getGuildBlessingCooldown(guildId) {
+    const cooldowns = getGuildBlessingCooldowns();
+    const until = Number(cooldowns[String(guildId)] || 0);
+
+    return until > Date.now() ? until : 0;
+}
+
+function setGuildBlessingCooldown(guildId) {
+    const cooldowns = getGuildBlessingCooldowns();
+
+    cooldowns[String(guildId)] = Date.now() + BLESSING_GUILD_COOLDOWN_MS;
+
+    setSystemValue(GUILD_BLESSING_COOLDOWN_KEY, cooldowns);
 }
 
 function formatBlessingLine(channelId) {
@@ -348,6 +374,29 @@ class DoThachManager {
             });
         }
 
+        const activeBlessing = getActiveChannelBlessing(targetChannel.id);
+
+        if (activeBlessing) {
+            return interaction.reply({
+                content:
+                    `❌ Kênh ${targetChannel} đang có **Lời Chúc Phúc Của Thiên Đạo** rồi.\n` +
+                    `⏳ Còn hiệu lực: <t:${Math.floor(Number(activeBlessing.expiresAt || 0) / 1000)}:R>\n` +
+                    `Không thể cộng dồn thời gian.`,
+                ephemeral: true,
+            });
+        }
+
+        const cooldownUntil = getGuildBlessingCooldown(interaction.guildId);
+
+        if (cooldownUntil) {
+            return interaction.reply({
+                content:
+                    `❌ Server này đã dùng **Lời Chúc Phúc Của Thiên Đạo** gần đây.\n` +
+                    `⏳ Có thể dùng lại: <t:${Math.floor(cooldownUntil / 1000)}:R>`,
+                ephemeral: true,
+            });
+        }
+
         const consumeResult = consumeShopItem(
             interaction.user.id,
             BLESSING_ITEM_ID,
@@ -368,11 +417,14 @@ class DoThachManager {
             interaction.user.id,
         );
 
+        setGuildBlessingCooldown(interaction.guildId);
+
         return interaction.reply({
             content:
                 `🌌 ${interaction.user} đã dùng **Lời Chúc Phúc Của Thiên Đạo**.\n` +
                 `Kênh ${targetChannel} được buff tỉ lệ đổ thạch trong **30 phút**.\n` +
-                `⏳ Hết hiệu lực: <t:${Math.floor(Number(blessing.expiresAt || 0) / 1000)}:R>`,
+                `⏳ Hết hiệu lực: <t:${Math.floor(Number(blessing.expiresAt || 0) / 1000)}:R>\n` +
+                `🕛 Server có thể dùng lại sau **12 tiếng**.`,
         });
     }
     async handleButton(interaction) {
