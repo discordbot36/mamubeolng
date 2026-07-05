@@ -460,12 +460,10 @@ module.exports = [
         ],
     },
     {
-        name: "dothach_chucphuc",
+        name: "chucphuc",
         description:
-            "Admin dùng Lời Chúc Phúc Của Thiên Đạo buff đổ thạch cho kênh",
+            "Lời Chúc Phúc Của Thiên Đạo buff đổ thạch cho kênh",
         handler: "dothach.activateBlessing",
-        adminOnly: true,
-        defaultMemberPermissions: "8",
         dmPermission: false,
         options: [
             {

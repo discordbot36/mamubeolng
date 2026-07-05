@@ -364,8 +364,20 @@ class DoThachManager {
     }
 
     async activateBlessing(interaction) {
-        const targetChannel =
-            interaction.options.getChannel("kenh") || interaction.channel;
+        const pickedChannel = interaction.options.getChannel("kenh");
+
+        if (
+            pickedChannel &&
+            !interaction.memberPermissions?.has("Administrator")
+        ) {
+            return interaction.reply({
+                content:
+                    "❌ Chỉ admin mới được chọn kênh khác. Người thường chỉ có thể chúc phúc kênh hiện tại.",
+                ephemeral: true,
+            });
+        }
+
+        const targetChannel = pickedChannel || interaction.channel;
 
         if (!targetChannel) {
             return interaction.reply({

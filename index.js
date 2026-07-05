@@ -7,6 +7,8 @@ const leaderboard = require("./leaderboard");
 const bicanh = require("./bicanh");
 const worldboss = require("./worldboss");
 const sanyeuthu = require("./sanyeuthu");
+const duyen = require("./duyen");
+const duyenConfig = require("./config/duyen");
 const raidserver = require("./raidserver");
 
 function requireEnv(name) {
@@ -58,6 +60,89 @@ process.on("unhandledRejection", (error) => {
 process.on("uncaughtException", (error) => {
     console.error("[Uncaught Exception]", error);
 });
+function randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function getMinutesOfDay(date = new Date(), timezone = "Asia/Ho_Chi_Minh") {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: timezone,
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+    }).formatToParts(date);
+
+    const hour =
+        Number(parts.find((part) => part.type === "hour")?.value || 0) % 24;
+    const minute = Number(
+        parts.find((part) => part.type === "minute")?.value || 0,
+    );
+
+    return hour * 60 + minute;
+}
+
+function isInAvoidWindow(date, window, timezone = "Asia/Ho_Chi_Minh") {
+    const nowMinutes = getMinutesOfDay(date, timezone);
+    const start =
+        Number(window.startHour || 0) * 60 + Number(window.startMinute || 0);
+    const end =
+        Number(window.endHour || 0) * 60 + Number(window.endMinute || 0);
+
+    if (start <= end) {
+        return nowMinutes >= start && nowMinutes <= end;
+    }
+
+    // Trường hợp window qua ngày, ví dụ 23:00 - 01:00
+    return nowMinutes >= start || nowMinutes <= end;
+}
+
+function isInDuyenAvoidTime() {
+    const autoConfig = duyenConfig.autoOpen || {};
+    const avoidWindows = Array.isArray(autoConfig.avoidWindows)
+        ? autoConfig.avoidWindows
+        : [];
+
+    const now = new Date();
+    const timezone = autoConfig.timezone || "Asia/Ho_Chi_Minh";
+
+    return avoidWindows.some((window) =>
+        isInAvoidWindow(now, window, timezone),
+    );
+}
+
+function scheduleAutoDuyen(client) {
+    const autoConfig = duyenConfig.autoOpen || {};
+
+    if (!autoConfig.enabled) {
+        console.log("[DUYEN AUTO] Đã tắt auto cơ duyên.");
+        return;
+    }
+
+    const minDelay = Number(autoConfig.minDelayMs || 3 * 60 * 60 * 1000);
+    const maxDelay = Number(autoConfig.maxDelayMs || 6 * 60 * 60 * 1000);
+    const delay = randomInt(minDelay, maxDelay);
+
+    console.log(
+        `[DUYEN AUTO] Lần mở tiếp theo sau khoảng ${Math.round(delay / 60000)} phút.`,
+    );
+
+    setTimeout(async () => {
+        try {
+            if (isInDuyenAvoidTime()) {
+                console.log(
+                    "[DUYEN AUTO] Đang trong khung giờ raid, bỏ qua lần mở này.",
+                );
+            } else {
+                await duyen.autoStart(client);
+                console.log("[DUYEN AUTO] Đã tự động mở Cơ Duyên.");
+            }
+        } catch (error) {
+            console.error("[DUYEN AUTO] Lỗi khi mở cơ duyên:", error);
+        }
+
+        scheduleAutoDuyen(client);
+    }, delay);
+}
 
 function isIgnoredInteractionError(error) {
     return (
@@ -74,7 +159,7 @@ client.once("clientReady", () => {
     bicanh.recover(client).catch((error) => {
         console.error("[BiCanh Recover]", error);
     });
-
+    scheduleAutoDuyen(client);
     sanyeuthu.recover(client).catch((error) => {
         console.error("[SanYeuThu Recover]", error);
     });

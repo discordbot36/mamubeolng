@@ -8,6 +8,7 @@ const {
 } = require("discord.js");
 
 const db = require("./database");
+const duyenConfig = require("./config/duyen");
 const duyenPuzzles = require("./config/duyenPuzzles");
 const shop = require("./config/shop");
 const weaponConfig = require("./weapon");
@@ -296,7 +297,35 @@ function fmt(n) {
 function tag(id) {
     return `<@${id}>`;
 }
+function getDuyenNotifyRole(guild) {
+    if (!guild) {
+        return null;
+    }
 
+    const autoConfig = duyenConfig.autoOpen || {};
+    const roleId = autoConfig.notifyRoleId || duyenConfig.notifyRoleId;
+
+    if (roleId) {
+        return guild.roles.cache.get(String(roleId)) || null;
+    }
+
+    const roleName =
+        autoConfig.notifyRoleName ||
+        duyenConfig.notifyRoleName ||
+        "Lợn Tu Tiên";
+
+    return guild.roles.cache.find((role) => role.name === roleName) || null;
+}
+
+function buildDuyenAllowedMentions(event, shouldPingRole = false) {
+    if (!shouldPingRole) {
+        return { roles: [] };
+    }
+
+    const role = getDuyenNotifyRole(event.guild);
+
+    return role ? { roles: [role.id] } : { roles: [] };
+}
 function eventKey(guildId, channelId) {
     return `${guildId}_${channelId}`;
 }
@@ -399,7 +428,7 @@ function statsLine(team) {
     );
 }
 
-function buildLobbyText(event) {
+function buildLobbyText(event, shouldPingRole = false) {
     const teamsText =
         event.teams.length > 0
             ? event.teams
@@ -408,8 +437,10 @@ function buildLobbyText(event) {
                   })
                   .join("\n")
             : "Chưa có đội nào.";
-
+    const notifyRole = shouldPingRole ? getDuyenNotifyRole(event.guild) : null;
+    const notifyLine = notifyRole ? `${notifyRole}\n` : "";
     return (
+        notifyLine +
         "🌌 **BÍ CẢNH TRUYỀN THỪA MỞ RA**\n\n" +
         `⏳ Lập đội trong **10 phút**. Mỗi đội tối đa **${MAX_TEAM_SIZE} người**.\n` +
         "Bot sẽ tạo kênh riêng cho từng đội để bàn mưu.\n\n" +
@@ -663,8 +694,9 @@ async function start(interaction) {
     await createCategory(interaction, event);
 
     await interaction.reply({
-        content: buildLobbyText(event),
+        content: buildLobbyText(event, true),
         components: buildLobbyRows(event),
+        allowedMentions: buildDuyenAllowedMentions(event, true),
     });
 
     event.message = await interaction.fetchReply();
@@ -680,7 +712,61 @@ async function start(interaction) {
 
     return undefined;
 }
+async function autoStart(client) {
+    const autoConfig = duyenConfig.autoOpen || {};
 
+    if (!autoConfig.enabled) {
+        return false;
+    }
+
+    const channel = await client.channels
+        .fetch(autoConfig.channelId)
+        .catch(() => null);
+
+    if (!channel || !channel.guild) {
+        console.error(
+            "[DUYEN AUTO] Không tìm thấy channel:",
+            autoConfig.channelId,
+        );
+        return false;
+    }
+
+    const key = eventKey(channel.guildId, channel.id);
+
+    if (events.has(key)) {
+        console.log("[DUYEN AUTO] Kênh này đang có Cơ Duyên rồi, bỏ qua.");
+        return false;
+    }
+
+    let sentMessage = null;
+
+    const fakeInteraction = {
+        guild: channel.guild,
+        guildId: channel.guildId,
+        channel,
+        channelId: channel.id,
+        client,
+        user: client.user,
+
+        reply: async (payload) => {
+            const cleanPayload =
+                typeof payload === "string"
+                    ? { content: payload }
+                    : { ...payload };
+
+            delete cleanPayload.ephemeral;
+
+            sentMessage = await channel.send(cleanPayload);
+            return sentMessage;
+        },
+
+        fetchReply: async () => sentMessage,
+    };
+
+    await start(fakeInteraction);
+
+    return true;
+}
 async function createTeam(interaction, event, solo = false) {
     const userId = String(interaction.user.id);
 
@@ -2346,5 +2432,6 @@ async function handleButton(interaction) {
 
 module.exports = {
     start,
+    autoStart,
     handleButton,
 };
