@@ -7,9 +7,13 @@ const {
     getCurrencyEmoji,
     getShop,
     addShopItem,
+    updateUser,
+    getSystemValue,
+    setSystemValue,
 } = require("./database");
 
 const adminConfig = require("./config/admin");
+const tuTienConfig = require("./config/tutien");
 
 const activityStats = new Map();
 const activeRains = new Map();
@@ -36,6 +40,165 @@ const AUTO_ACTIVE_RAIN_MIN_DELAY_MS = 60 * 60 * 1000;
 const AUTO_ACTIVE_RAIN_MAX_DELAY_MS = 3 * 60 * 60 * 1000;
 
 const COMMAND_ACTIVITY_SCORE = 3;
+const COMPENSATION_SYSTEM_KEY = "compensations";
+const COMPENSATION_BUTTON_PREFIX = "admin_compensation_claim_";
+const DEFAULT_COMPENSATION_DAYS = 7;
+const MAX_COMPENSATION_DAYS = 30;
+
+function formatNumber(number) {
+    return Number(number || 0).toLocaleString("vi-VN");
+}
+
+function createCompensationId() {
+    return `${Date.now().toString(36)}_${Math.random()
+        .toString(36)
+        .slice(2, 8)}`;
+}
+
+function ensureCompensationState() {
+    const state = getSystemValue(COMPENSATION_SYSTEM_KEY) || {};
+
+    if (!state.events) {
+        state.events = {};
+    }
+
+    return state;
+}
+
+function saveCompensationState(state) {
+    return setSystemValue(COMPENSATION_SYSTEM_KEY, state);
+}
+
+function ensureUserTuTienProfile(user) {
+    if (!user.tuTienProfile) {
+        user.tuTienProfile = JSON.parse(
+            JSON.stringify(tuTienConfig.defaultProfile || {}),
+        );
+    }
+
+    user.tuTienProfile.exp = Number(user.tuTienProfile.exp || 0);
+
+    return user.tuTienProfile;
+}
+
+function getTowerCompensationReward(user) {
+    const highestFloor = Math.max(
+        Number(user?.tower?.highestFloor || 0),
+        Number(user?.tower?.floor || 0),
+    );
+
+    if (highestFloor <= 0) {
+        return {
+            eligible: false,
+            message:
+                "Bạn chưa có dữ liệu leo tháp nên không nhận đền bù đợt này.",
+        };
+    }
+
+    const money = Math.min(150000, 10000 + highestFloor * 650);
+    const exp = Math.min(30000, 1500 + highestFloor * 80);
+    const items = [];
+
+    if (highestFloor >= 10) {
+        items.push({
+            itemId: "tu_luyen_chest",
+            amount: highestFloor >= 80 ? 2 : 1,
+        });
+    }
+
+    return {
+        eligible: true,
+        highestFloor,
+        money,
+        exp,
+        items,
+    };
+}
+
+function getFixedCompensationReward(event) {
+    const reward = event.reward || {};
+    const items = Array.isArray(reward.items) ? reward.items : [];
+
+    return {
+        eligible: true,
+        money: Math.max(0, Math.floor(Number(reward.money || 0))),
+        exp: Math.max(0, Math.floor(Number(reward.exp || 0))),
+        items: items
+            .map((item) => ({
+                itemId: String(item.itemId || ""),
+                amount: Math.max(1, Math.floor(Number(item.amount || 1))),
+            }))
+            .filter((item) => item.itemId),
+    };
+}
+
+function getCompensationReward(event, user) {
+    if (event.type === "tower") {
+        return getTowerCompensationReward(user);
+    }
+
+    return getFixedCompensationReward(event);
+}
+
+function applyCompensationReward(user, reward) {
+    if (reward.money > 0) {
+        user.money = Number(user.money || 0) + reward.money;
+    }
+
+    if (reward.exp > 0) {
+        const profile = ensureUserTuTienProfile(user);
+        profile.exp = Number(profile.exp || 0) + reward.exp;
+    }
+
+    if (!user.inventory) {
+        user.inventory = {};
+    }
+
+    for (const item of reward.items || []) {
+        user.inventory[item.itemId] =
+            Number(user.inventory[item.itemId] || 0) + Number(item.amount || 1);
+    }
+}
+
+function formatCompensationReward(reward) {
+    const parts = [];
+    const coin = getCurrencyEmoji();
+    const shopData = getShop();
+
+    if (reward.money > 0) {
+        parts.push(`${coin} **${formatMoney(reward.money)}**`);
+    }
+
+    if (reward.exp > 0) {
+        parts.push(`✨ **${formatNumber(reward.exp)} tu vi**`);
+    }
+
+    for (const item of reward.items || []) {
+        const shopItem = shopData[item.itemId];
+
+        parts.push(
+            `${shopItem?.emoji || "🎁"} **${
+                shopItem?.name || item.itemId
+            }** x${formatNumber(item.amount)}`,
+        );
+    }
+
+    return parts.length > 0 ? parts.join("\n") : "Không có quà.";
+}
+
+function buildCompensationDescription(event) {
+    if (event.type === "tower") {
+        return (
+            `📌 Lý do: **${event.reason}**\n` +
+            "🎁 Quà sẽ tính theo tầng cao nhất từng leo:\n" +
+            "- Từ tầng 10 trở lên nhận thêm `Rương WorldBoss x1`; tầng 80+ nhận `x2`."
+        );
+    }
+
+    const rewardText = formatCompensationReward(event.reward || {});
+
+    return `📌 Lý do: **${event.reason}**\n🎁 Quà:\n${rewardText}`;
+}
 
 function isAllowed(userId) {
     const allowedUserIds = Array.isArray(adminConfig.allowedUserIds)
@@ -1184,6 +1347,187 @@ class AdminManager {
             ephemeral: true,
         });
     }
+    async createCompensation(interaction) {
+        if (!isAllowed(interaction.user.id)) {
+            return interaction.reply({
+                content: adminConfig.messages.noPermission,
+                ephemeral: true,
+            });
+        }
+
+        const type = interaction.options.getString("loai", true);
+        const reason = interaction.options
+            .getString("lydo", true)
+            .slice(0, 180);
+        const targetChannel =
+            interaction.options.getChannel("kenh") || interaction.channel;
+        const daysInput =
+            interaction.options.getInteger("ngay") || DEFAULT_COMPENSATION_DAYS;
+        const days = Math.min(MAX_COMPENSATION_DAYS, Math.max(1, daysInput));
+        const expiresAt = Date.now() + days * 24 * 60 * 60 * 1000;
+        const eventId = createCompensationId();
+
+        if (!targetChannel || !targetChannel.isTextBased()) {
+            return interaction.reply({
+                content: "❌ Kênh này không gửi nút đền bù được.",
+                ephemeral: true,
+            });
+        }
+
+        const event = {
+            id: eventId,
+            type,
+            reason,
+            createdBy: interaction.user.id,
+            createdAt: Date.now(),
+            expiresAt,
+            reward: {
+                money: 0,
+                exp: 0,
+                items: [],
+            },
+        };
+
+        if (type === "fixed") {
+            const money = Math.max(
+                0,
+                interaction.options.getInteger("sotien") || 0,
+            );
+            const exp = Math.max(
+                0,
+                interaction.options.getInteger("tuvi") || 0,
+            );
+            const itemId = interaction.options.getString("vatpham");
+            const itemAmount = Math.max(
+                1,
+                interaction.options.getInteger("soluong") || 1,
+            );
+
+            event.reward.money = money;
+            event.reward.exp = exp;
+
+            if (itemId) {
+                const shopData = getShop();
+
+                if (!shopData[itemId]) {
+                    return interaction.reply({
+                        content: `❌ Không tìm thấy vật phẩm: \`${itemId}\`.`,
+                        ephemeral: true,
+                    });
+                }
+
+                event.reward.items.push({ itemId, amount: itemAmount });
+            }
+
+            if (money <= 0 && exp <= 0 && event.reward.items.length <= 0) {
+                return interaction.reply({
+                    content:
+                        "❌ Đền bù cố định cần ít nhất 1 loại quà: tiền, tu vi hoặc vật phẩm.",
+                    ephemeral: true,
+                });
+            }
+        }
+
+        const state = ensureCompensationState();
+        state.events[eventId] = event;
+        saveCompensationState(state);
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`${COMPENSATION_BUTTON_PREFIX}${eventId}`)
+                .setLabel("Nhận quà đền bù")
+                .setEmoji("🎁")
+                .setStyle(ButtonStyle.Success),
+        );
+
+        await targetChannel.send({
+            content:
+                "## 🎁 Đền bù server\n" +
+                `${buildCompensationDescription(event)}\n\n` +
+                `⏳ Hết hạn: <t:${Math.floor(expiresAt / 1000)}:R>\n` +
+                "Bấm nút bên dưới để nhận. Mỗi người chỉ nhận được **1 lần**.",
+            components: [row],
+        });
+
+        return interaction.reply({
+            content: `✅ Đã tạo nút đền bù ở ${targetChannel}.`,
+            ephemeral: true,
+        });
+    }
+
+    async handleCompensationClaim(interaction) {
+        const eventId = interaction.customId.slice(
+            COMPENSATION_BUTTON_PREFIX.length,
+        );
+        const state = ensureCompensationState();
+        const event = state.events[eventId];
+
+        if (!event) {
+            return interaction.reply({
+                content: "❌ Đợt đền bù này không còn tồn tại.",
+                ephemeral: true,
+            });
+        }
+
+        if (event.expiresAt && Date.now() > Number(event.expiresAt)) {
+            return interaction.reply({
+                content: "⏳ Đợt đền bù này đã hết hạn.",
+                ephemeral: true,
+            });
+        }
+
+        const result = updateUser(interaction.user.id, (user) => {
+            if (!user.compensationClaims) {
+                user.compensationClaims = {};
+            }
+
+            if (user.compensationClaims[eventId]) {
+                return {
+                    success: false,
+                    message: "Bạn đã nhận quà đền bù này rồi.",
+                };
+            }
+
+            const reward = getCompensationReward(event, user);
+
+            if (!reward.eligible) {
+                return {
+                    success: false,
+                    message:
+                        reward.message ||
+                        "Bạn không đủ điều kiện nhận đền bù này.",
+                };
+            }
+
+            applyCompensationReward(user, reward);
+
+            user.compensationClaims[eventId] = {
+                claimedAt: Date.now(),
+                type: event.type,
+                reason: event.reason,
+                reward,
+            };
+
+            return {
+                success: true,
+                reward,
+            };
+        });
+
+        if (!result.success) {
+            return interaction.reply({
+                content: `❌ ${result.message}`,
+                ephemeral: true,
+            });
+        }
+
+        return interaction.reply({
+            content:
+                "✅ Đã nhận quà đền bù:\n" +
+                `${formatCompensationReward(result.reward)}`,
+            ephemeral: true,
+        });
+    }
 
     async handleButton(interaction) {
         if (!interaction.isButton()) {
@@ -1192,6 +1536,9 @@ class AdminManager {
 
         if (interaction.customId.startsWith("admin_active_rain_claim_")) {
             return this.handleActiveRainClaim(interaction);
+        }
+        if (interaction.customId.startsWith(COMPENSATION_BUTTON_PREFIX)) {
+            return this.handleCompensationClaim(interaction);
         }
 
         if (interaction.customId.startsWith("admin_rain_claim_")) {
