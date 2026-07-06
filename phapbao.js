@@ -1982,7 +1982,18 @@ function isSameWeaponForStarUpgrade(baseWeapon, materialWeapon) {
         return false;
     }
 
-    return baseWeapon.weaponId === materialWeapon.weaponId;
+    const baseName = normalizeSearchText(baseWeapon.name);
+    const materialName = normalizeSearchText(materialWeapon.name);
+
+    if (baseName && materialName && baseName === materialName) {
+        return true;
+    }
+
+    return Boolean(
+        baseWeapon.weaponId &&
+        materialWeapon.weaponId &&
+        baseWeapon.weaponId === materialWeapon.weaponId,
+    );
 }
 
 function findStarUpgradeMaterials(user, baseWeapon, amountNeeded) {

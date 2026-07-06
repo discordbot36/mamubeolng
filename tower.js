@@ -100,10 +100,6 @@ function buildMonster(floor) {
 
     const atk = Math.max(1, Math.floor(power * (isBossFloor ? 0.52 : 0.45)));
 
-    /*
-     * Công thức damage chung giảm damage rất mạnh theo DEF.
-     * Không dùng lại 0.28 vì DEF sẽ lên hàng chục nghìn.
-     */
     const defenseMultiplier = isBossFloor ? 0.024 : 0.018;
 
     const defense = Math.max(0, Math.floor(power * defenseMultiplier));
@@ -185,10 +181,12 @@ function addTuTienExp(userId, amount) {
 }
 
 function getTowerExpReward(floor) {
-    const baseExp = Math.floor(35 + floor * 10 + Math.pow(floor, 1.05) * 6);
+    const baseExp = Math.floor(
+        (35 + floor * 10 + Math.pow(floor, 1.05) * 6) * 1.12,
+    );
 
     if (isChestFloor(floor)) {
-        return Math.floor(baseExp * 1.25);
+        return Math.floor(baseExp * 1.35);
     }
 
     return baseExp;

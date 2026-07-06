@@ -41,14 +41,14 @@ module.exports = {
         skills: [],
     },
 
-    top10Rewards: [8050, 5750, 4025, 2300, 1955, 1725, 1380, 1150, 1035, 805],
+    top10Rewards: [9500, 6800, 4800, 2800, 2350, 2050, 1650, 1350, 1200, 950],
 
     attackCooldownMinutes: 5,
 
     respawnHours: 3.6,
     autoSpawnOnStartup: true,
 
-    consolationReward: 575,
+    consolationReward: 700,
 
     chestItemId: "tu_luyen_chest",
     chestTopRanks: 3,

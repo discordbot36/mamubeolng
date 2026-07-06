@@ -42,7 +42,7 @@ module.exports = {
     loi_chuc_phuc_thien_dao: {
         name: "Lời Chúc Phúc Của Thiên Đạo",
         emoji: "🌌",
-        price: 500000000,
+        price: 250000000,
         type: "dothach_channel_blessing",
         shopCategory: "dothach",
         sellable: false,

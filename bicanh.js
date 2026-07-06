@@ -615,8 +615,7 @@ function buildLobbyEmbed(realm) {
                 `${memberLines.join("\n")}\n\n` +
                 `🔥 Dị biến đã thông qua: **${formatBattleModNames(getApprovedBattleModIds(realm))}**\n` +
                 `Vote dị biến càng căng thì Bí Cảnh càng dễ ra độ khó cao, quà càng ngon nhưng có thể thua thật.\n\n` +
-                `Người chơi đủ điều kiện có thể bấm **Tham gia**.\n` +
-                `Khi đủ ${realm.maxMembers} người, Bí Cảnh sẽ tự bắt đầu.`,
+                `Người chơi đủ điều kiện có thể bấm **Tham gia**.\n`,
         )
         .setFooter({
             text: `ID: ${realm.id}`,
@@ -928,18 +927,7 @@ async function joinRealm(interaction, realm) {
     );
 
     if (realm.memberIds.length >= realm.maxMembers) {
-        realm.recruitmentClosed = true;
         saveRealm(realm);
-
-        await safeReply(interaction, {
-            content:
-                `✅ Đã tham gia Bí Cảnh.\n` +
-                `💪 Lực chiến gốc: **${formatNumber(stats.combatPower)}**\n` +
-                `⛓️ Lực chiến hiệu dụng: **${formatNumber(effectivePower)}**\n` +
-                `💤 Hiệu lực thưởng: **${rewardPercent}%**\n\n` +
-                `👥 Đội đã đủ **${realm.maxMembers}/${realm.maxMembers}** người, Bí Cảnh tự bắt đầu!`,
-            ephemeral: true,
-        });
 
         if (lobbyMessage) {
             await lobbyMessage
@@ -950,7 +938,16 @@ async function joinRealm(interaction, realm) {
                 .catch(() => null);
         }
 
-        return startRealmDirect(interaction.channel, realm, lobbyMessage);
+        return safeReply(interaction, {
+            content:
+                `✅ Đã tham gia Bí Cảnh.\n` +
+                `💪 Lực chiến gốc: **${formatNumber(stats.combatPower)}**\n` +
+                `⛓️ Lực chiến hiệu dụng: **${formatNumber(effectivePower)}**\n` +
+                `💤 Hiệu lực thưởng: **${rewardPercent}%**\n\n` +
+                `👥 Đội đã đủ **${realm.maxMembers}/${realm.maxMembers}** người. ` +
+                `Hãy vote dị biến xong rồi host bấm **Bắt đầu**.`,
+            ephemeral: true,
+        });
     }
 
     if (lobbyMessage) {
