@@ -741,9 +741,4 @@ module.exports = {
             },
         ],
     },
-    custom_role: {
-        name: "Role Tùy Chỉnh",
-        emoji: "<:utit:1328542656405438484>",
-        price: 360000,
-    },
 };

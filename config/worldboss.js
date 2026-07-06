@@ -5,13 +5,13 @@ module.exports = {
         {
             id: "lao_ga_kho",
             name: "Lão Gà Khô",
-            maxHp: 20000000,
+            maxHp: 63000000,
             imageUrl: "https://i.imgur.com/toV5hvO.jpeg",
         },
         {
             id: "huy_serum",
             name: "Huy serum",
-            maxHp: 20000000,
+            maxHp: 63000000,
             imageUrl:
                 "https://khoanhdep.com/wp-content/uploads/2025/10/huyforum-meme-2.jpg",
         },
@@ -19,7 +19,7 @@ module.exports = {
 
     defaultBoss: {
         name: "Lão Gà Khô",
-        maxHp: 6300000,
+        maxHp: 63000000,
         imageUrl: "https://i.imgur.com/toV5hvO.jpeg",
     },
 
