@@ -17,6 +17,7 @@ const dungeon = require("../dungeon");
 const blackjack = require("../blackjack");
 const pigRoad = require("../pigRoad");
 const flip = require("../flip");
+const vecao = require("../vecao");
 const quest = require("../quest");
 const bicanh = require("../bicanh");
 const sanyeuthu = require("../sanyeuthu");
@@ -44,6 +45,7 @@ const modules = {
     dungeon,
     pigRoad,
     flip,
+    vecao,
     bicanh,
     sanyeuthu,
     phapbao,
@@ -146,6 +148,7 @@ async function handleButton(interaction) {
         duyen.handleButton.bind(duyen),
         sanyeuthu.handleButton.bind(sanyeuthu),
         flip.handleButton.bind(flip),
+        vecao.handleButton.bind(vecao),
         raidserver.handleButton.bind(raidserver),
     ];
 

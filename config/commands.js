@@ -999,7 +999,7 @@ module.exports = [
     },
     {
         name: "flip",
-        description: "Lật coin 40% thắng, payout x1.96",
+        description: "50-50 cược tiền, thắng gấp đôi",
         handler: "flip.play",
         options: [
             {
@@ -1009,6 +1009,21 @@ module.exports = [
                 required: true,
                 minValue: 100,
                 maxValue: GAMBLE_MAX_BET,
+            },
+        ],
+    },
+    {
+        name: "vecao",
+        description: "Mua Vé Cào Thiên Đạo 3x3, cào từng ô để nhận thưởng",
+        handler: "vecao.start",
+        options: [
+            {
+                type: "integer",
+                name: "cuoc",
+                description: "Giá vé muốn mua, tối đa 500,000",
+                required: true,
+                minValue: 10000,
+                maxValue: 500000,
             },
         ],
     },
