@@ -18,7 +18,7 @@ const {
     formatMoney,
     getCurrencyEmoji,
 } = require("./database");
-
+const skillUtils = require("./utils/skillUtils");
 const SHOP_CATEGORY = "skill";
 const BUY_PREFIX = "skillbuy";
 const SHOP_PREFIX = "skillshop";
@@ -100,8 +100,8 @@ function buildSkillShopHomeEmbed(interaction) {
                 `Bí tịch dùng để mở kỹ năng chủ động sau này.\n\n` +
                 `🧘 **Kỹ năng bị động**\n` +
                 `Bí tịch dùng để mở kỹ năng bị động sau này.\n\n` +
-                `Hiện tại shop chỉ hỗ trợ **mua bí tịch và cất vào kho**.\n` +
-                `Tính năng **mở bí tịch** sẽ thêm sau.`,
+                `Sau khi mua, dùng lệnh \`/dungkynang\` để mở bí tịch.\n` +
+                `Nếu mở trùng kỹ năng, bạn sẽ nhận **mảnh kỹ năng** để nâng Lv.`,
         )
         .setTimestamp();
 }
@@ -123,7 +123,8 @@ function buildSkillShopListEmbed(interaction, type) {
         .setDescription(
             `Bấm nút bên dưới để mua trực tiếp.\n` +
                 `Mỗi lần bấm sẽ mua **x1 bí tịch** và cất vào **/khodo**.\n\n` +
-                `Chưa mở bí tịch ở đây. Khi có nút **Mở Bí Tịch**, lúc đó mới random kỹ năng.`,
+                `Dùng lệnh \`/dungkynang\` để mở bí tịch.\n` +
+                `Mở trùng kỹ năng sẽ nhận **mảnh kỹ năng** để nâng Lv.`,
         )
         .setTimestamp();
 
@@ -206,7 +207,7 @@ async function buySkillScrollByButton(interaction) {
             `📦 Số lượng: **x1**\n` +
             `${coin} Tổng tiền: **${formatMoney(result.totalPrice)}**\n\n` +
             `🎒 Đã cất vào kho đồ. Xem bằng \`/khodo\`.\n` +
-            `📖 Chưa mở bí tịch. Tính năng mở sẽ thêm sau.`,
+            `📖 Dùng \`/dungkynang\` để mở bí tịch.`,
         ephemeral: true,
     });
 }
@@ -326,7 +327,53 @@ function buildUnequipSelectMenu(profile, userId) {
             .addOptions(options),
     );
 }
+function buildUpgradeSelectMenu(profile, userId) {
+    const skills = ensureSkillData(profile);
+    const ownedSkills = [...skills.active, ...skills.passive];
 
+    const options = ownedSkills
+        .map((owned) => {
+            const skill = getSkillDef(owned.id);
+
+            if (!skill) return null;
+
+            const level = owned.level || 1;
+            const cap = skillUtils.getSkillLevelCap(skill.tier);
+            const cost = skillUtils.getSkillUpgradeCost(skill.tier, level);
+
+            if (!cost || level >= cap) {
+                return null;
+            }
+
+            if ((owned.shards || 0) < cost) {
+                return null;
+            }
+
+            return {
+                label: `${skill.name} Lv.${level} → ${level + 1}`.slice(0, 100),
+                description:
+                    `${getTypeText(skill.type)} | ${skill.tier} | Mảnh ${owned.shards || 0}/${cost}`.slice(
+                        0,
+                        100,
+                    ),
+                value: owned.id,
+                emoji: skill.emoji || "🧩",
+            };
+        })
+        .filter(Boolean)
+        .slice(0, 25);
+
+    if (options.length <= 0) {
+        return null;
+    }
+
+    return new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+            .setCustomId(`skill_select_upgrade_${userId}`)
+            .setPlaceholder("Chọn kỹ năng đủ mảnh để nâng Lv")
+            .addOptions(options),
+    );
+}
 async function handleSkillManageButton(interaction) {
     const parts = interaction.customId.split("_");
     const action = parts[2];
@@ -387,6 +434,34 @@ async function handleSkillManageButton(interaction) {
 
         return interaction.reply({
             content: "❌ Chọn kỹ năng muốn tháo:",
+            components: [menu],
+            ephemeral: true,
+        });
+    }
+    if (action === "upgrade") {
+        const userId = parts[3];
+
+        if (interaction.user.id !== userId) {
+            return interaction.reply({
+                content: "❌ Đây không phải bảng kỹ năng của bạn.",
+                ephemeral: true,
+            });
+        }
+
+        const profile = ensureTuTienProfile(interaction.user.id);
+        const menu = buildUpgradeSelectMenu(profile, userId);
+
+        if (!menu) {
+            return interaction.reply({
+                content:
+                    "❌ Chưa có kỹ năng nào đủ mảnh để nâng cấp.\n" +
+                    "Mở trùng bí tịch để nhận thêm mảnh kỹ năng.",
+                ephemeral: true,
+            });
+        }
+
+        return interaction.reply({
+            content: "🧩 Chọn kỹ năng muốn nâng cấp:",
             components: [menu],
             ephemeral: true,
         });
@@ -540,7 +615,83 @@ async function handleSkillSelectMenu(interaction) {
             components: [],
         });
     }
+    if (mode === "upgrade") {
+        const userId = parts[3];
 
+        if (interaction.user.id !== userId) {
+            return interaction.reply({
+                content: "❌ Đây không phải menu kỹ năng của bạn.",
+                ephemeral: true,
+            });
+        }
+
+        const skillId = interaction.values[0];
+        const skill = getSkillDef(skillId);
+
+        if (!skill) {
+            return interaction.reply({
+                content: "❌ Kỹ năng này không tồn tại.",
+                ephemeral: true,
+            });
+        }
+
+        let resultMessage = "";
+
+        updateTuTienProfile(interaction.user.id, (profile) => {
+            const owned = skillUtils.findOwnedSkill(
+                profile,
+                skillId,
+                skill.type,
+            );
+
+            if (!owned) {
+                resultMessage = "❌ Bạn chưa sở hữu kỹ năng này.";
+                return;
+            }
+
+            const currentLevel = owned.level || 1;
+            const cap = skillUtils.getSkillLevelCap(skill.tier);
+            const cost = skillUtils.getSkillUpgradeCost(
+                skill.tier,
+                currentLevel,
+            );
+
+            if (!cost || currentLevel >= cap) {
+                owned.level = cap;
+                resultMessage = `⚠️ **${skill.name}** đã đạt Lv.MAX (${cap}).`;
+                return;
+            }
+
+            if ((owned.shards || 0) < cost) {
+                resultMessage =
+                    `❌ Không đủ mảnh để nâng **${skill.name}**.\n` +
+                    `🧩 Cần: **${cost}** | Đang có: **${owned.shards || 0}**`;
+                return;
+            }
+
+            owned.shards = (owned.shards || 0) - cost;
+            owned.level = currentLevel + 1;
+
+            const nextCost = skillUtils.getSkillUpgradeCost(
+                skill.tier,
+                owned.level,
+            );
+
+            resultMessage =
+                `✅ Nâng cấp thành công **${skill.emoji || "✨"} ${skill.name}**\n` +
+                `📈 Lv.${currentLevel} → **Lv.${owned.level}** / ${cap}\n` +
+                `🧩 Tốn: **${cost}** mảnh | Còn: **${owned.shards || 0}**\n` +
+                (nextCost
+                    ? `📌 Lv tiếp theo cần: **${nextCost}** mảnh\n`
+                    : `🏁 Đã đạt Lv tối đa.\n`) +
+                `💪 Hiệu lực kỹ năng tăng nhẹ theo Lv.`;
+        });
+
+        return interaction.update({
+            content: resultMessage,
+            components: [],
+        });
+    }
     return undefined;
 }
 
@@ -664,17 +815,7 @@ function ensureSkillData(profile) {
 }
 
 function getDuplicateShards(tier) {
-    const map = {
-        F: 5,
-        E: 8,
-        D: 12,
-        C: 18,
-        B: 25,
-        A: 40,
-        S: 80,
-    };
-
-    return map[tier] || 5;
+    return skillUtils.getDuplicateShards(tier);
 }
 
 async function useSkillScroll(interaction) {
@@ -725,6 +866,8 @@ async function useSkillScroll(interaction) {
     const skill = pickRandomItem(pool);
     let duplicate = false;
     let shardsGained = 0;
+    let shardsTotal = 0;
+    let nextUpgradeCost = null;
 
     updateTuTienProfile(interaction.user.id, (profile) => {
         const skills = ensureSkillData(profile);
@@ -735,6 +878,11 @@ async function useSkillScroll(interaction) {
             duplicate = true;
             shardsGained = getDuplicateShards(skill.tier);
             ownedSkill.shards = (ownedSkill.shards || 0) + shardsGained;
+            shardsTotal = ownedSkill.shards;
+            nextUpgradeCost = skillUtils.getSkillUpgradeCost(
+                skill.tier,
+                ownedSkill.level || 1,
+            );
         } else {
             list.push({
                 id: skill.id,
@@ -770,7 +918,11 @@ async function useSkillScroll(interaction) {
                 `🎲 Phẩm chất: **${skill.tier} - ${tierName}**\n` +
                 `📌 Loại: **${typeName}**\n` +
                 `${skill.emoji || "✨"} Trùng kỹ năng: **${skill.name}**\n` +
-                `🧩 Nhận mảnh kỹ năng: **+${shardsGained}**\n\n` +
+                `🧩 Nhận mảnh kỹ năng: **+${shardsGained}** | Tổng: **${shardsTotal}**\n` +
+                (nextUpgradeCost
+                    ? `📈 Cần **${nextUpgradeCost}** mảnh để nâng Lv tiếp theo.\n`
+                    : `📈 Kỹ năng này đã đạt Lv tối đa.\n`) +
+                `👉 Vào \`/kynang\` → **Nâng Lv** để dùng mảnh.\n\n` +
                 `${skill.description}`,
         });
     }
@@ -804,7 +956,11 @@ function buildSkillManageButtons(userId) {
             .setLabel("Tháo kỹ năng")
             .setEmoji("❌")
             .setStyle(ButtonStyle.Danger),
-
+        new ButtonBuilder()
+            .setCustomId(`skill_manage_upgrade_${userId}`)
+            .setLabel("Nâng Lv")
+            .setEmoji("🧩")
+            .setStyle(ButtonStyle.Secondary),
         new ButtonBuilder()
             .setCustomId(`skill_manage_refresh_${userId}`)
             .setLabel("Làm mới")
@@ -849,23 +1005,42 @@ function ensureEquippedSkillData(profile) {
 }
 
 function getAllSkillDefs() {
-    const skillConfig = require("./config/kynang");
-
-    const active = Array.isArray(skillConfig.activeSkills)
-        ? skillConfig.activeSkills
-        : [];
-
-    const passive = Array.isArray(skillConfig.passiveSkills)
-        ? skillConfig.passiveSkills
-        : [];
-
-    return [...active, ...passive];
+    return skillUtils.getAllSkillDefs();
 }
 
 function getSkillDef(skillId) {
-    return getAllSkillDefs().find((skill) => skill.id === skillId);
+    return skillUtils.getSkillDef(skillId);
 }
 
+function formatOwnedSkillList(ownedList) {
+    if (!Array.isArray(ownedList) || ownedList.length <= 0) {
+        return "Chưa sở hữu kỹ năng nào.";
+    }
+
+    return ownedList
+        .map((owned, index) => {
+            const skill = getSkillDef(owned.id);
+
+            if (!skill) {
+                return `${index + 1}. ❓ ${owned.id}`;
+            }
+
+            const level = owned.level || 1;
+            const cap = skillUtils.getSkillLevelCap(skill.tier);
+            const cost = skillUtils.getSkillUpgradeCost(skill.tier, level);
+
+            const shardText = cost
+                ? `${owned.shards || 0}/${cost}`
+                : `${owned.shards || 0}/MAX`;
+
+            return (
+                `${index + 1}. ${skill.emoji || "✨"} **${skill.name}** | ` +
+                `${skill.tier} | Lv.${level}/${cap} | 🧩 ${shardText}`
+            );
+        })
+        .join("\n")
+        .slice(0, 1024);
+}
 function buildSkillProfileEmbed(interaction, profile) {
     const skills = ensureSkillData(profile);
     const equipped = ensureEquippedSkillData(profile);
@@ -877,8 +1052,21 @@ function buildSkillProfileEmbed(interaction, profile) {
             ? equipped.active
                   .map((skillId, index) => {
                       const skill = getSkillDef(skillId);
-                      if (!skill) return `${index + 1}. ❓ ${skillId}`;
-                      return `${index + 1}. ${skill.emoji || "⚔️"} **${skill.name}** | ${skill.tier}`;
+
+                      if (!skill) {
+                          return `${index + 1}. ❓ ${skillId}`;
+                      }
+
+                      const owned = skillUtils.findOwnedSkill(
+                          profile,
+                          skillId,
+                          "active",
+                      );
+
+                      return (
+                          `${index + 1}. ${skill.emoji || "⚔️"} **${skill.name}** | ` +
+                          `${skill.tier} | Lv.${owned?.level || 1}`
+                      );
                   })
                   .join("\n")
             : "Chưa trang bị kỹ năng chủ động.";
@@ -888,8 +1076,21 @@ function buildSkillProfileEmbed(interaction, profile) {
             ? equipped.passive
                   .map((skillId, index) => {
                       const skill = getSkillDef(skillId);
-                      if (!skill) return `${index + 1}. ❓ ${skillId}`;
-                      return `${index + 1}. ${skill.emoji || "🧘"} **${skill.name}** | ${skill.tier}`;
+
+                      if (!skill) {
+                          return `${index + 1}. ❓ ${skillId}`;
+                      }
+
+                      const owned = skillUtils.findOwnedSkill(
+                          profile,
+                          skillId,
+                          "passive",
+                      );
+
+                      return (
+                          `${index + 1}. ${skill.emoji || "🧘"} **${skill.name}** | ` +
+                          `${skill.tier} | Lv.${owned?.level || 1}`
+                      );
                   })
                   .join("\n")
             : "Chưa trang bị kỹ năng bị động.";
@@ -905,7 +1106,8 @@ function buildSkillProfileEmbed(interaction, profile) {
                 `🧘 Bị động: **${equipped.passive.length}/${passiveSlotCount}**\n\n` +
                 `📦 Sở hữu:\n` +
                 `⚔️ Chủ động: **${skills.active.length}** kỹ năng\n` +
-                `🧘 Bị động: **${skills.passive.length}** kỹ năng`,
+                `🧘 Bị động: **${skills.passive.length}** kỹ năng\n\n` +
+                `🧩 Mở trùng bí tịch để nhận mảnh. Dùng nút **Nâng Lv** để nâng kỹ năng.`,
         )
         .addFields(
             {
@@ -918,10 +1120,19 @@ function buildSkillProfileEmbed(interaction, profile) {
                 value: equippedPassiveText.slice(0, 1024),
                 inline: false,
             },
+            {
+                name: "📚 Kỹ năng chủ động sở hữu",
+                value: formatOwnedSkillList(skills.active),
+                inline: false,
+            },
+            {
+                name: "📚 Kỹ năng bị động sở hữu",
+                value: formatOwnedSkillList(skills.passive),
+                inline: false,
+            },
         )
         .setTimestamp();
 }
-
 async function listSkills(interaction) {
     const profile = ensureTuTienProfile(interaction.user.id);
     const embed = buildSkillProfileEmbed(interaction, profile);

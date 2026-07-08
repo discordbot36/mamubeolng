@@ -28,6 +28,8 @@ const PUZZLE_CHANCE_ON_TRAN_PATH = 100;
 const MINI_BOSS_CHANCE = 45;
 const MAJOR_BOSS_CHANCE = 80;
 const BOSS_TURN_MS = 35_000;
+const DUYEN_ENCOUNTER_CHANCE = 48;
+const BONUS_PATH_OPTION_CLUE = 5;
 
 const PATHS = {
     linh: [
@@ -309,12 +311,23 @@ function getDuyenNotifyRole(guild) {
         return guild.roles.cache.get(String(roleId)) || null;
     }
 
-    const roleName =
+    const roleName = String(
         autoConfig.notifyRoleName ||
-        duyenConfig.notifyRoleName ||
-        "Lợn Tu Tiên";
+            duyenConfig.notifyRoleName ||
+            "Lợn Tu Tiên",
+    )
+        .trim()
+        .toLowerCase();
 
-    return guild.roles.cache.find((role) => role.name === roleName) || null;
+    return (
+        guild.roles.cache.find((role) => {
+            return (
+                String(role.name || "")
+                    .trim()
+                    .toLowerCase() === roleName
+            );
+        }) || null
+    );
 }
 
 function buildDuyenAllowedMentions(event, shouldPingRole = false) {
@@ -325,6 +338,60 @@ function buildDuyenAllowedMentions(event, shouldPingRole = false) {
     const role = getDuyenNotifyRole(event.guild);
 
     return role ? { roles: [role.id] } : { roles: [] };
+}
+async function clearDuyenPublicChannel(channel) {
+    const autoConfig = duyenConfig.autoOpen || {};
+
+    if (autoConfig.clearChannelBeforeOpen === false) {
+        return;
+    }
+
+    if (!channel?.isTextBased?.() || !channel.messages?.fetch) {
+        return;
+    }
+
+    const permissions = channel.permissionsFor?.(channel.guild.members.me);
+
+    if (!permissions?.has(PermissionFlagsBits.ManageMessages)) {
+        console.warn(
+            `[DUYEN CLEAN] Bot thiếu quyền Manage Messages ở channel ${channel.id}.`,
+        );
+        return;
+    }
+
+    const maxBatches = Number(autoConfig.clearChannelMaxBatches || 20);
+    const reason =
+        autoConfig.clearChannelReason || "Dọn kênh trước khi mở Cơ Duyên";
+
+    for (let batch = 0; batch < maxBatches; batch += 1) {
+        const messages = await channel.messages
+            .fetch({ limit: 100 })
+            .catch(() => null);
+
+        if (!messages || messages.size <= 0) {
+            break;
+        }
+
+        const deleted = await channel
+            .bulkDelete(messages, true)
+            .catch((error) => {
+                console.error("[DUYEN CLEAN] Không thể bulk delete:", error);
+                return null;
+            });
+
+        if (!deleted || deleted.size <= 0) {
+            break;
+        }
+    }
+
+    await channel
+        .send("🧹 Thiên Đạo vừa quét sạch tạp âm. Cơ duyên mới sắp mở...")
+        .then((message) => {
+            setTimeout(() => {
+                message.delete().catch(() => undefined);
+            }, 3500);
+        })
+        .catch(() => undefined);
 }
 function eventKey(guildId, channelId) {
     return `${guildId}_${channelId}`;
@@ -438,14 +505,14 @@ function buildLobbyText(event, shouldPingRole = false) {
                   .join("\n")
             : "Chưa có đội nào.";
     const notifyRole = shouldPingRole ? getDuyenNotifyRole(event.guild) : null;
-    const notifyLine = notifyRole ? `${notifyRole}\n` : "";
+    const notifyLine = notifyRole ? `<@&${notifyRole.id}>\n` : "";
     return (
         notifyLine +
         "🌌 **BÍ CẢNH TRUYỀN THỪA MỞ RA**\n\n" +
         `⏳ Lập đội trong **10 phút**. Mỗi đội tối đa **${MAX_TEAM_SIZE} người**.\n` +
         "Bot sẽ tạo kênh riêng cho từng đội để bàn mưu.\n\n" +
         `${teamsText}\n\n` +
-        "Mỗi round chỉ chọn 1 trong 3 đường. Không quá đau đầu, nhưng chọn ngu vẫn ăn nghiệp."
+        "Mỗi round chỉ chọn 1 trong 3 đường. Hãy làm con lợn thông minh"
     );
 }
 
@@ -806,6 +873,7 @@ async function createTeam(interaction, event, solo = false) {
         hp: 0,
         maxHp: 0,
         channelId: null,
+        pathHistory: [],
     };
     setupTeamHp(team, true);
     event.teams.push(team);
@@ -1866,6 +1934,13 @@ function grantTeamRewards(team, tier = "loser") {
 
     return lines;
 }
+function teamDramaName(team) {
+    const members = Array.isArray(team.members)
+        ? team.members.map(tag).join(" ")
+        : "";
+
+    return members ? `Đội ${team.no} (${members})` : `Đội ${team.no}`;
+}
 
 function buildResultText(event, winner, finder) {
     const topText = [...event.teams]
@@ -1878,7 +1953,7 @@ function buildResultText(event, winner, finder) {
 
             return (
                 `${team.id === winner.id ? "🏆" : `${index + 1}.`} ` +
-                `**Đội ${team.no}** — ${team.finalScore} điểm — ` +
+                `**${teamDramaName(team)}** — ${team.finalScore} điểm — ` +
                 `${choice?.[0]} ${choice?.[1]}`
             );
         })
@@ -1896,44 +1971,44 @@ function buildResultText(event, winner, finder) {
 
     if (finder.finalChoice === "hide") {
         drama.push(
-            `🕶️ Đội ${finder.no} che giấu khí tức, khiến vài đội mò đường như tìm nyc.`,
+            `🕶️ ${teamDramaName(finder)} che giấu khí tức, khiến vài đội mò đường như tìm nyc.`,
         );
     }
 
     if (finder.finalChoice === "bait") {
         drama.push(
-            `🩸 Đội ${finder.no} đặt bẫy quanh Linh Trì. Ai lao vào quá hăng đều có mùi ăn nghiệp.`,
+            `🩸 ${teamDramaName(finder)} đặt bẫy quanh Linh Trì. Ai lao vào quá hăng đều thành con lợn chết.`,
         );
     }
 
     if (attackers.length >= 2) {
         drama.push(
-            `⚔️ ${attackers.map((team) => `Đội ${team.no}`).join(", ")} lao vào tranh trực diện, bí cảnh ồn như cái chợ.`,
+            `⚔️ ${attackers.map(teamDramaName).join(", ")} lao vào tranh trực diện, quá nhiều con lợn phải trả giá.`,
         );
     }
 
     if (sneakers.length > 0) {
         drama.push(
-            `🕶️ ${sneakers.map((team) => `Đội ${team.no}`).join(", ")} chọn chim sẻ sau lưng.`,
+            `🕶️ ${sneakers.map(teamDramaName).join(", ")} chọn chim sẻ sau lưng.`,
         );
     }
 
     if (ambushers.length > 0) {
         drama.push(
-            `🪤 ${ambushers.map((team) => `Đội ${team.no}`).join(", ")} mai phục đường rút.`,
+            `🪤 ${ambushers.map(teamDramaName).join(", ")} mai phục đường rút.`,
         );
     }
 
     if (winner.id !== finder.id) {
         drama.push(
-            `💀 Đội ${finder.no} tìm ra cơ duyên trước nhưng không giữ được hết.`,
+            `💀 ${teamDramaName(finder)} tìm ra cơ duyên trước nhưng không giữ được hết.`,
         );
     }
 
     return (
         "🌌 **BÍ CẢNH TRUYỀN THỪA KHÉP LẠI**\n\n" +
-        `🏆 **Đội thắng lớn: Đội ${winner.no}**\n` +
-        `🔎 Đội phát hiện cơ duyên: **Đội ${finder.no}**\n\n` +
+        `🏆 **Đội thắng lớn:** ${teamDramaName(winner)}\n` +
+        `🔎 **Đội phát hiện cơ duyên:** ${teamDramaName(finder)}\n\n` +
         `**BXH tranh đoạt:**\n${topText || "Không có đội tranh đoạt."}\n\n` +
         `**Diễn biến:**\n${drama.slice(0, 6).join("\n") || "Thiên Đạo thấy hơi ít drama."}\n\n` +
         "**Thiên Đạo kết luận:** Mạnh không sai. Mạnh mà không biết chọn thời cơ thì vẫn ăn cám."

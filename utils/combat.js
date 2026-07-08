@@ -1,15 +1,5 @@
 const tuTienConfig = require("../config/tutien");
-const skillConfig = require("../config/kynang");
-
-const activeSkills = Array.isArray(skillConfig.activeSkills)
-    ? skillConfig.activeSkills
-    : [];
-
-const passiveSkills = Array.isArray(skillConfig.passiveSkills)
-    ? skillConfig.passiveSkills
-    : [];
-
-const allSkills = [...activeSkills, ...passiveSkills];
+const { getSkillDef, getScaledSkillDef } = require("./skillUtils");
 
 const MAX_REALM_FLOOR = 10;
 
@@ -79,12 +69,6 @@ function getRootById(rootId) {
 
     return roots.find((root) => {
         return root.id === rootId;
-    });
-}
-
-function getSkillDef(skillId) {
-    return allSkills.find((skill) => {
-        return skill.id === skillId;
     });
 }
 
@@ -167,7 +151,7 @@ function getEquippedPassiveSkillBonuses(profile) {
     };
 
     for (const skillId of equipped.passive) {
-        const skill = getSkillDef(skillId);
+        const skill = getScaledSkillDef(skillId, profile);
 
         if (!skill || skill.type !== "passive") {
             continue;
@@ -224,7 +208,7 @@ function getEquippedActiveSkills(profile) {
     const equipped = ensureEquippedSkillData(profile);
 
     return equipped.active
-        .map((skillId) => getSkillDef(skillId))
+        .map((skillId) => getScaledSkillDef(skillId, profile))
         .filter((skill) => {
             return skill && skill.type === "active";
         });

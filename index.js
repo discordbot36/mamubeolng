@@ -92,21 +92,60 @@ function isInAvoidWindow(date, window, timezone = "Asia/Ho_Chi_Minh") {
         return nowMinutes >= start && nowMinutes <= end;
     }
 
-    // Trường hợp window qua ngày, ví dụ 23:00 - 01:00
     return nowMinutes >= start || nowMinutes <= end;
 }
 
-function isInDuyenAvoidTime() {
+function isInDuyenAvoidTime(date = new Date()) {
     const autoConfig = duyenConfig.autoOpen || {};
     const avoidWindows = Array.isArray(autoConfig.avoidWindows)
         ? autoConfig.avoidWindows
         : [];
 
-    const now = new Date();
     const timezone = autoConfig.timezone || "Asia/Ho_Chi_Minh";
 
     return avoidWindows.some((window) =>
-        isInAvoidWindow(now, window, timezone),
+        isInAvoidWindow(date, window, timezone),
+    );
+}
+
+function getDelayAfterAvoidWindow(date, window, timezone = "Asia/Ho_Chi_Minh") {
+    const nowMinutes = getMinutesOfDay(date, timezone);
+    const start =
+        Number(window.startHour || 0) * 60 + Number(window.startMinute || 0);
+    const end =
+        Number(window.endHour || 0) * 60 + Number(window.endMinute || 0);
+
+    let minutesUntilEnd = 0;
+
+    if (start <= end) {
+        minutesUntilEnd = end - nowMinutes;
+    } else if (nowMinutes >= start) {
+        minutesUntilEnd = 24 * 60 - nowMinutes + end;
+    } else {
+        minutesUntilEnd = end - nowMinutes;
+    }
+
+    return Math.max(1, minutesUntilEnd + randomInt(5, 20)) * 60 * 1000;
+}
+
+function normalizeDuyenDelay(delay) {
+    const autoConfig = duyenConfig.autoOpen || {};
+    const avoidWindows = Array.isArray(autoConfig.avoidWindows)
+        ? autoConfig.avoidWindows
+        : [];
+    const timezone = autoConfig.timezone || "Asia/Ho_Chi_Minh";
+    const targetDate = new Date(Date.now() + delay);
+
+    const matchedWindow = avoidWindows.find((window) => {
+        return isInAvoidWindow(targetDate, window, timezone);
+    });
+
+    if (!matchedWindow) {
+        return delay;
+    }
+
+    return (
+        delay + getDelayAfterAvoidWindow(targetDate, matchedWindow, timezone)
     );
 }
 
@@ -120,7 +159,8 @@ function scheduleAutoDuyen(client) {
 
     const minDelay = Number(autoConfig.minDelayMs || 3 * 60 * 60 * 1000);
     const maxDelay = Number(autoConfig.maxDelayMs || 6 * 60 * 60 * 1000);
-    const delay = randomInt(minDelay, maxDelay);
+    const rawDelay = randomInt(minDelay, maxDelay);
+    const delay = normalizeDuyenDelay(rawDelay);
 
     console.log(
         `[DUYEN AUTO] Lần mở tiếp theo sau khoảng ${Math.round(delay / 60000)} phút.`,
