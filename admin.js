@@ -516,29 +516,27 @@ class AdminManager {
             return undefined;
         }
 
-        const uniqueSelectedUsers = Array.from(
-            new Map(
-                selectedUsers.map((user) => {
-                    return [String(user.userId), user];
-                }),
-            ).values(),
-        );
-
-        for (const user of uniqueSelectedUsers) {
-            addMoney(user.userId, AUTO_ACTIVE_RAIN_REWARD);
-        }
-
-        const coin = getCurrencyEmoji();
-
         const rainDonorId = "1442869815847948470";
 
         const uniqueSelectedUsers = Array.from(
             new Map(
-                selectedUsers.map((user) => {
-                    return [String(user.userId), user];
-                }),
+                selectedUsers
+                    .filter((user) => {
+                        return String(user.userId) !== String(rainDonorId);
+                    })
+                    .map((user) => {
+                        return [String(user.userId), user];
+                    }),
             ).values(),
         );
+
+        if (uniqueSelectedUsers.length <= 0) {
+            return undefined;
+        }
+
+        for (const user of uniqueSelectedUsers) {
+            addMoney(user.userId, AUTO_ACTIVE_RAIN_REWARD);
+        }
 
         const receiverLines = uniqueSelectedUsers
             .map((user) => {
@@ -548,7 +546,7 @@ class AdminManager {
 
         const mentionUserIds = Array.from(
             new Set([
-                rainDonorId,
+                String(rainDonorId),
                 ...uniqueSelectedUsers.map((user) => String(user.userId)),
             ]),
         );
@@ -556,6 +554,7 @@ class AdminManager {
         await channel.send({
             content: `<@${rainDonorId}> tặng cơn mưa\n${receiverLines}`,
             allowedMentions: {
+                parse: [],
                 users: mentionUserIds,
             },
         });
