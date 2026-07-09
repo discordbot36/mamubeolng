@@ -1253,7 +1253,12 @@ class WorldBossManager {
                         : "";
 
                 if (action.type === "skill" && action.result?.skillName) {
-                    actionText = `✨ Bạn thi triển **${action.result.skillName}** lên **${boss.name}**`;
+                    const skillLvText =
+                        action.result.skillLevel && action.result.skillLevel > 1
+                            ? ` Lv.${action.result.skillLevel} (+${action.result.skillEffectBonusPercent || 0}% hiệu lực)`
+                            : "";
+
+                    actionText = `✨ Bạn thi triển **${action.result.skillName}${skillLvText}** lên **${boss.name}**`;
                 } else if (action.type === "basic_attack") {
                     actionText = `⚔️ Bạn đánh thường vào **${boss.name}**`;
                 }

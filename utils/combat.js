@@ -2192,6 +2192,15 @@ function performSkill({
 
         skillId: skill.id,
         skillName: skill.name || skill.id,
+        skillLevel: Math.max(1, toSafeInteger(skill.level, 1)),
+        skillPowerMultiplier: Math.max(
+            1,
+            toSafeNumber(skill.powerMultiplier, 1),
+        ),
+        skillEffectBonusPercent:
+            Math.round(
+                Math.max(0, toSafeNumber(skill.powerMultiplier, 1) - 1) * 1000,
+            ) / 10,
 
         hitsPlanned: hits,
         hitsPerformed: hitResults.length,

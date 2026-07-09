@@ -516,7 +516,15 @@ class AdminManager {
             return undefined;
         }
 
-        for (const user of selectedUsers) {
+        const uniqueSelectedUsers = Array.from(
+            new Map(
+                selectedUsers.map((user) => {
+                    return [String(user.userId), user];
+                }),
+            ).values(),
+        );
+
+        for (const user of uniqueSelectedUsers) {
             addMoney(user.userId, AUTO_ACTIVE_RAIN_REWARD);
         }
 
@@ -524,19 +532,31 @@ class AdminManager {
 
         const rainDonorId = "1442869815847948470";
 
-        const receiverLines = selectedUsers
+        const uniqueSelectedUsers = Array.from(
+            new Map(
+                selectedUsers.map((user) => {
+                    return [String(user.userId), user];
+                }),
+            ).values(),
+        );
+
+        const receiverLines = uniqueSelectedUsers
             .map((user) => {
                 return `- <@${user.userId}>`;
             })
             .join("\n");
 
+        const mentionUserIds = Array.from(
+            new Set([
+                rainDonorId,
+                ...uniqueSelectedUsers.map((user) => String(user.userId)),
+            ]),
+        );
+
         await channel.send({
-            content: `<@${rainDonorId}> tặng cơn mưa\n` + `${receiverLines}`,
+            content: `<@${rainDonorId}> tặng cơn mưa\n${receiverLines}`,
             allowedMentions: {
-                users: [
-                    rainDonorId,
-                    ...selectedUsers.map((user) => user.userId),
-                ],
+                users: mentionUserIds,
             },
         });
 

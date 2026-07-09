@@ -1924,11 +1924,134 @@ function giveSecretRealmReward(realm, userId) {
     };
 }
 
+function buildSecretRealmRewardText(reward) {
+    const parts = [];
+
+    for (const [itemId, amount] of Object.entries(reward.items || {})) {
+        const item = shopConfig[itemId] || {};
+
+        parts.push(
+            `${item.emoji || "🎁"} ` +
+                `**${item.name || itemId}** ` +
+                `x${formatNumber(amount)}`,
+        );
+    }
+
+    let phapBaoFragmentAmount = 0;
+    const phapBaoChestAmounts = {};
+    const phapBaoWeaponAmounts = {};
+    const otherPhapBaoRewardLines = [];
+
+    for (const phapBaoReward of reward.phapBaoRewards || []) {
+        if (!phapBaoReward) {
+            continue;
+        }
+
+        if (phapBaoReward.type === "fragment") {
+            phapBaoFragmentAmount += Number(phapBaoReward.amount || 0);
+            continue;
+        }
+
+        if (phapBaoReward.type === "chest") {
+            const itemId = phapBaoReward.itemId;
+
+            phapBaoChestAmounts[itemId] =
+                Number(phapBaoChestAmounts[itemId] || 0) +
+                Number(phapBaoReward.amount || 1);
+            continue;
+        }
+
+        if (phapBaoReward.type === "unidentified_weapon") {
+            const rarity = phapBaoReward.rarity || "F";
+
+            phapBaoWeaponAmounts[rarity] =
+                Number(phapBaoWeaponAmounts[rarity] || 0) +
+                Number(phapBaoReward.amount || 1);
+            continue;
+        }
+
+        const line = formatPhapBaoFarmReward(phapBaoReward);
+
+        if (line) {
+            otherPhapBaoRewardLines.push(line);
+        }
+    }
+
+    if (phapBaoFragmentAmount > 0) {
+        parts.push(
+            `🧩 **Mảnh Pháp Bảo** x${formatNumber(phapBaoFragmentAmount)}`,
+        );
+    }
+
+    for (const [itemId, amount] of Object.entries(phapBaoChestAmounts)) {
+        const item = shopConfig[itemId] || {};
+
+        parts.push(
+            `${item.emoji || "📦"} ` +
+                `**${item.name || itemId}** ` +
+                `x${formatNumber(amount)}`,
+        );
+    }
+
+    const rarityOrder = ["SSS", "SS", "S", "A", "B", "C", "D", "E", "F"];
+
+    for (const rarity of rarityOrder) {
+        const amount = Number(phapBaoWeaponAmounts[rarity] || 0);
+
+        if (amount <= 0) {
+            continue;
+        }
+
+        const line = formatPhapBaoFarmReward({
+            type: "unidentified_weapon",
+            rarity,
+        });
+
+        if (line) {
+            parts.push(`${line} x${formatNumber(amount)}`);
+        }
+    }
+
+    for (const line of otherPhapBaoRewardLines) {
+        parts.push(line);
+    }
+
+    if (reward.moneyReward > 0) {
+        parts.push(`💰 **${formatNumber(reward.moneyReward)}** đồng`);
+    }
+
+    if (reward.expReward > 0) {
+        parts.push(`✨ **${formatNumber(reward.expReward)}** tu vi`);
+    }
+
+    if (parts.length <= 0) {
+        return "Không nhận được vật phẩm";
+    }
+
+    const visibleParts = parts.slice(0, 8);
+    const hiddenCount = parts.length - visibleParts.length;
+
+    return (
+        visibleParts.join(" | ") +
+        (hiddenCount > 0 ? ` | ... +${hiddenCount} loại khác` : "")
+    );
+}
+const BICANH_RESULT_DESCRIPTION_LIMIT = 3900;
+
+function limitBicanhResultDescription(text) {
+    const content = String(text || "");
+
+    if (content.length <= BICANH_RESULT_DESCRIPTION_LIMIT) {
+        return content;
+    }
+
+    return (
+        content.slice(0, BICANH_RESULT_DESCRIPTION_LIMIT - 120) +
+        "\n\n... Kết quả quá dài nên đã được rút gọn. Phần thưởng vẫn đã cộng đủ vào túi."
+    );
+}
+
 async function finishBattle(channel, realm, success) {
-    /*
-     * Chống kết thúc và chia thưởng
-     * hai lần.
-     */
     const latestRealm = getRealm(realm.id);
 
     if (
@@ -2004,44 +2127,10 @@ async function finishBattle(channel, realm, success) {
 
             const contribution = battle.contributions?.[userId] || {};
 
-            const rewardParts = [];
-
-            for (const [itemId, amount] of Object.entries(reward.items || {})) {
-                const item = shopConfig[itemId] || {};
-
-                rewardParts.push(
-                    `${item.emoji || "🎁"} ` +
-                        `**${item.name || itemId}** ` +
-                        `x${formatNumber(amount)}`,
-                );
-            }
-            for (const phapBaoReward of reward.phapBaoRewards || []) {
-                const line = formatPhapBaoFarmReward(phapBaoReward);
-
-                if (line) {
-                    rewardParts.push(line);
-                }
-            }
-
-            if (rewardParts.length === 0) {
-                rewardParts.push("Không nhận được vật phẩm");
-            }
-
-            if (reward.moneyReward > 0) {
-                rewardParts.push(
-                    `💰 **${formatNumber(reward.moneyReward)}** đồng`,
-                );
-            }
-
-            if (reward.expReward > 0) {
-                rewardParts.push(
-                    `✨ **${formatNumber(reward.expReward)}** tu vi`,
-                );
-            }
+            const rewardText = buildSecretRealmRewardText(reward);
 
             resultLines.push(
-                `<@${userId}> — ` +
-                    `${rewardParts.join(" | ")}\n` +
+                `<@${userId}> — ${rewardText}\n` +
                     `> Đóng góp: **${formatNumber(
                         contribution.totalScore || 0,
                     )}** | ` +
@@ -2080,7 +2169,26 @@ async function finishBattle(channel, realm, success) {
     }
 
     clearRealmUsers(realm);
-
+    const finalDescription = limitBicanhResultDescription(
+        (success
+            ? `Đội đã hoàn thành Bí Cảnh trong **${battle.turn}/${battle.maxTurns} lượt**.`
+            : `Đội đã không thể vượt qua Bí Cảnh.`) +
+            `\n\n` +
+            `🔥 Độ khó: **${battle.difficulty?.name || "Thường"}**\n` +
+            `💢 Dị biến: **${formatBattleModNames(battle.selectedBattleModIds || [])}**\n` +
+            `🎁 Hệ số quà: **x${Number(battle.difficulty?.rewardMultiplier || 1).toFixed(2)}**\n` +
+            `✅ Lượt hoàn hảo: **${formatNumber(battle.perfectTurns || 0)}**\n` +
+            `⚠️ Cơ chế thất bại: **${formatNumber(battle.failedMechanics || 0)}**\n` +
+            `❌ Hành động lệch nhịp: **${formatNumber(battle.wrongActions || 0)}**\n` +
+            `📈 Tiến độ: **${formatNumber(battle.progress)}/${formatNumber(
+                battle.requiredProgress,
+            )}**\n` +
+            `❤️ Sinh lực còn lại: **${formatNumber(
+                battle.teamHp,
+            )}/${formatNumber(battle.maxTeamHp)}**\n\n` +
+            `### Kết quả thành viên\n` +
+            resultLines.join("\n\n"),
+    );
     const finalEmbed = new EmbedBuilder()
         .setColor(success ? 0x2ecc71 : 0xe74c3c)
         .setTitle(
@@ -2088,26 +2196,7 @@ async function finishBattle(channel, realm, success) {
                 ? "🏆 CHINH PHỤC BÍ CẢNH THÀNH CÔNG"
                 : "💀 BÍ CẢNH THẤT BẠI",
         )
-        .setDescription(
-            (success
-                ? `Đội đã hoàn thành Bí Cảnh trong **${battle.turn}/${battle.maxTurns} lượt**.`
-                : `Đội đã không thể vượt qua Bí Cảnh.`) +
-                `\n\n` +
-                `🔥 Độ khó: **${battle.difficulty?.name || "Thường"}**\n` +
-                `💢 Dị biến: **${formatBattleModNames(battle.selectedBattleModIds || [])}**\n` +
-                `🎁 Hệ số quà: **x${Number(battle.difficulty?.rewardMultiplier || 1).toFixed(2)}**\n` +
-                `✅ Lượt hoàn hảo: **${formatNumber(battle.perfectTurns || 0)}**\n` +
-                `⚠️ Cơ chế thất bại: **${formatNumber(battle.failedMechanics || 0)}**\n` +
-                `❌ Hành động lệch nhịp: **${formatNumber(battle.wrongActions || 0)}**\n` +
-                `📈 Tiến độ: **${formatNumber(battle.progress)}/${formatNumber(
-                    battle.requiredProgress,
-                )}**\n` +
-                `❤️ Sinh lực còn lại: **${formatNumber(
-                    battle.teamHp,
-                )}/${formatNumber(battle.maxTeamHp)}**\n\n` +
-                `### Kết quả thành viên\n` +
-                resultLines.join("\n\n"),
-        )
+        .setDescription(finalDescription)
         .setFooter({
             text: "Channel Bí Cảnh sẽ tự động đóng.",
         })

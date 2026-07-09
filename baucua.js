@@ -151,7 +151,72 @@ function createBetModal(gameId, itemId) {
 
     return modal;
 }
+const MAX_BAUCUA_MESSAGE_LENGTH = 1900;
 
+function limitBauCuaContent(content) {
+    const text = String(content || "");
+
+    if (text.length <= MAX_BAUCUA_MESSAGE_LENGTH) {
+        return text;
+    }
+
+    return (
+        text.slice(0, MAX_BAUCUA_MESSAGE_LENGTH - 80) +
+        "\n\n... Nội dung quá dài, đã rút gọn."
+    );
+}
+
+async function editBauCuaMessage(message, payload, scope = "unknown") {
+    const safePayload = {
+        ...payload,
+        content: limitBauCuaContent(payload.content),
+    };
+
+    try {
+        return await message.edit(safePayload);
+    } catch (error) {
+        console.error(`[BAUCUA EDIT ERROR] ${scope}`, {
+            messageId: message?.id,
+            channelId: message?.channelId,
+            code: error?.code,
+            status: error?.status,
+            message: error?.message,
+        });
+
+        if (error?.stack) {
+            console.error(error.stack);
+        }
+
+        const channel = message?.channel;
+
+        if (!channel?.isTextBased?.()) {
+            return null;
+        }
+
+        try {
+            return await channel.send(safePayload);
+        } catch (sendError) {
+            console.error(`[BAUCUA SEND FALLBACK ERROR] ${scope}`, {
+                code: sendError?.code,
+                status: sendError?.status,
+                message: sendError?.message,
+            });
+
+            try {
+                return await channel.send({
+                    content:
+                        safePayload.content || "❌ Bầu cua bị lỗi hiển thị.",
+                });
+            } catch (finalError) {
+                console.error(
+                    `[BAUCUA FINAL FALLBACK ERROR] ${scope}`,
+                    finalError,
+                );
+                return null;
+            }
+        }
+    }
+}
 class BauCuaManager {
     async start(interaction) {
         const key = getGameKey(interaction.guildId, interaction.channelId);
@@ -184,7 +249,19 @@ class BauCuaManager {
 
         setTimeout(() => {
             this.run(interaction, gameMessage, game).catch((error) => {
-                console.error(error);
+                console.error("[BAUCUA RUN ERROR]", {
+                    gameId: game.id,
+                    key,
+                    channelId: game.channelId,
+                    betCount: game.bets.length,
+                });
+
+                if (error?.stack) {
+                    console.error(error.stack);
+                } else {
+                    console.error(error);
+                }
+
                 games.delete(key);
             });
         }, baucuaConfig.countdownMs);
@@ -281,12 +358,16 @@ class BauCuaManager {
         const message = await interaction.channel.messages
             .fetch(game.messageId)
             .catch(() => null);
-            
+
         if (message) {
-            await message.edit({
-                content: buildTableContent(game),
-                components: createButtons(game),
-            });
+            await editBauCuaMessage(
+                message,
+                {
+                    content: buildTableContent(game),
+                    components: createButtons(game),
+                },
+                "update-bet-table",
+            );
         }
 
         return undefined;
@@ -296,53 +377,81 @@ class BauCuaManager {
         game.closed = true;
         games.delete(game.key);
 
+        let displayMessage = gameMessage;
+
         if (game.bets.length <= 0) {
-            return gameMessage.edit({
-                content: "🏁 Bàn bầu cua hủy vì không ai xuống tiền",
-                components: createButtons(game, true),
-            });
+            await editBauCuaMessage(
+                displayMessage,
+                {
+                    content: "🏁 Bàn bầu cua hủy vì không ai xuống tiền",
+                    components: createButtons(game, true),
+                },
+                "cancel-no-bets",
+            );
+
+            return;
         }
 
-        await gameMessage.edit({
-            content:
-                `🎲 Bàn bầu cua đã khóa cược\n\n` +
-                `${getBetListText(game)}\n\n` +
-                `🥣 Đang úp bát...`,
-            components: createButtons(game, true),
-        });
+        displayMessage =
+            (await editBauCuaMessage(
+                displayMessage,
+                {
+                    content:
+                        `🎲 Bàn bầu cua đã khóa cược\n\n` +
+                        `${getBetListText(game)}\n\n` +
+                        `🥣 Đang úp bát...`,
+                    components: createButtons(game, true),
+                },
+                "lock-table",
+            )) || displayMessage;
 
         const results = rollBauCua();
 
         for (const frame of baucuaConfig.effect.frames) {
             await sleep(baucuaConfig.effect.rollingDelayMs);
 
-            await gameMessage.edit({
-                content:
-                    `🎲 Bàn bầu cua đã khóa cược\n\n` +
-                    `${getBetListText(game)}\n\n` +
-                    `${frame}\n` +
-                    `🧧 ${getRandomRollingText()}`,
-                components: createButtons(game, true),
-            });
+            displayMessage =
+                (await editBauCuaMessage(
+                    displayMessage,
+                    {
+                        content:
+                            `🎲 Bàn bầu cua đã khóa cược\n\n` +
+                            `${getBetListText(game)}\n\n` +
+                            `${frame}\n` +
+                            `🧧 ${getRandomRollingText()}`,
+                        components: createButtons(game, true),
+                    },
+                    "rolling-frame",
+                )) || displayMessage;
         }
 
         await sleep(baucuaConfig.effect.openDelayMs);
 
-        await gameMessage.edit({
-            content:
-                `🥣 Mở bát...\n\n` +
-                `🎲 ${formatResultSlot(results[0])} | ❔ | ❔`,
-            components: createButtons(game, true),
-        });
+        displayMessage =
+            (await editBauCuaMessage(
+                displayMessage,
+                {
+                    content:
+                        `🥣 Mở bát...\n\n` +
+                        `🎲 ${formatResultSlot(results[0])} | ❔ | ❔`,
+                    components: createButtons(game, true),
+                },
+                "open-slot-1",
+            )) || displayMessage;
 
         await sleep(baucuaConfig.effect.openDelayMs);
 
-        await gameMessage.edit({
-            content:
-                `🥣 Mở bát...\n\n` +
-                `🎲 ${formatResultSlot(results[0])} | ${formatResultSlot(results[1])} | ❔`,
-            components: createButtons(game, true),
-        });
+        displayMessage =
+            (await editBauCuaMessage(
+                displayMessage,
+                {
+                    content:
+                        `🥣 Mở bát...\n\n` +
+                        `🎲 ${formatResultSlot(results[0])} | ${formatResultSlot(results[1])} | ❔`,
+                    components: createButtons(game, true),
+                },
+                "open-slot-2",
+            )) || displayMessage;
 
         await sleep(baucuaConfig.effect.openDelayMs);
 
@@ -372,13 +481,17 @@ class BauCuaManager {
             }
         }
 
-        return gameMessage.edit({
-            content:
-                `🎲 Kết quả: ${resultText}\n\n` +
-                `${resultLines.join("\n")}\n\n` +
-                `🏁 Xong kèo, đời là thế thôi`,
-            components: createButtons(game, true),
-        });
+        await editBauCuaMessage(
+            displayMessage,
+            {
+                content:
+                    `🎲 Kết quả: ${resultText}\n\n` +
+                    `${resultLines.join("\n")}\n\n` +
+                    `🏁 Xong kèo, đời là thế thôi`,
+                components: createButtons(game, true),
+            },
+            "final-result",
+        );
     }
 }
 

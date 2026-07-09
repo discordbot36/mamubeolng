@@ -375,8 +375,13 @@ function formatTowerAction(actorName, action) {
             return lines;
         }
 
+        const skillLvText =
+            result.skillLevel && result.skillLevel > 1
+                ? ` Lv.${result.skillLevel} (+${result.skillEffectBonusPercent || 0}% hiệu lực)`
+                : "";
+
         lines.push(
-            `✨ **${actorName}** thi triển **${result.skillName}**, gây **${formatNumber(
+            `✨ **${actorName}** thi triển **${result.skillName}${skillLvText}**, gây **${formatNumber(
                 result.totalHpDamage || 0,
             )}** sát thương HP` +
                 (result.totalShieldDamage > 0

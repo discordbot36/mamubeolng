@@ -20,7 +20,7 @@ const DUPLICATE_SHARDS_BY_TIER = {
     S: 80,
 };
 
-const LEVEL_GROWTH_PER_LEVEL = 0.03;
+const LEVEL_GROWTH_PER_LEVEL = 0.05;
 
 const SCALABLE_SKILL_FIELDS = new Set([
     "damageMultiplier",
@@ -99,7 +99,37 @@ function getSkillUpgradeCost(tier, currentLevel) {
 function getSkillGrowthMultiplier(level) {
     return 1 + (toSafeLevel(level) - 1) * LEVEL_GROWTH_PER_LEVEL;
 }
+function getSkillMaxUpgradePlan(tier, currentLevel, currentShards) {
+    const cap = getSkillLevelCap(tier);
+    let level = toSafeLevel(currentLevel);
+    let shards = Math.max(0, Math.floor(Number(currentShards || 0)));
+    let totalCost = 0;
+    let upgradedLevels = 0;
 
+    while (level < cap) {
+        const cost = getSkillUpgradeCost(tier, level);
+
+        if (!cost || shards < cost) {
+            break;
+        }
+
+        shards -= cost;
+        totalCost += cost;
+        level += 1;
+        upgradedLevels += 1;
+    }
+
+    return {
+        fromLevel: toSafeLevel(currentLevel),
+        toLevel: level,
+        upgradedLevels,
+        totalCost,
+        remainingShards: shards,
+        cap,
+        isMaxed: level >= cap,
+        nextCost: getSkillUpgradeCost(tier, level),
+    };
+}
 function roundSkillNumber(value) {
     return Math.round(Number(value || 0) * 10000) / 10000;
 }
@@ -197,7 +227,7 @@ module.exports = {
     getSkillLevelCap,
     getSkillUpgradeCost,
     getSkillGrowthMultiplier,
-
+    getSkillMaxUpgradePlan,
     ensureSkillData,
     findOwnedSkill,
     getOwnedSkillLevel,

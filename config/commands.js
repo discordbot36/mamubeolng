@@ -841,6 +841,16 @@ module.exports = [
         name: "shopkynang",
         description: "Xem shop kỹ năng",
         handler: "kynang.shop",
+        options: [
+            {
+                type: "integer",
+                name: "soluong",
+                description: "Số lượng bí tịch muốn mua mỗi lần bấm nút",
+                required: false,
+                minValue: 1,
+                maxValue: 100,
+            },
+        ],
     },
     {
         name: "dungkynang",
@@ -855,6 +865,14 @@ module.exports = [
                 required: true,
                 autocomplete: true,
             },
+            {
+    type: "integer",
+    name: "soluong",
+    description: "Số lượng bí tịch muốn mở",
+    required: false,
+    minValue: 1,
+    maxValue: 100,
+},
         ],
     },
     {
