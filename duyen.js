@@ -2033,7 +2033,6 @@ async function resolveFinal(event) {
 
     if (!finder) {
         events.delete(event.key);
-        return cleanup(event, 30_000);
     }
 
     for (const team of event.teams) {
@@ -2137,7 +2136,6 @@ async function resolveFinal(event) {
 
     events.delete(event.key);
 
-    cleanup(event, 5 * 60_000);
 }
 
 async function cleanup(event, delay) {
