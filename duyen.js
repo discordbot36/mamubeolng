@@ -4226,6 +4226,7 @@ module.exports = {
      * bắt đầu bằng customId duyen_.
      */
     handleInteraction,
+    handleButton: handleInteraction,
 
     /*
      * Hiển thị kết quả gần nhất.
