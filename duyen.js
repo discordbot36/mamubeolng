@@ -523,9 +523,6 @@ function buildDuyenAllowedMentions(event, shouldPingRole = false) {
           };
 }
 
-async function clearDuyenPublicChannel(channel) {
-    return undefined;
-}
 function eventKey(guildId, channelId) {
     return `${guildId}_${channelId}`;
 }
@@ -553,6 +550,131 @@ function pickRandom(list, count) {
     }
 
     return result;
+}
+
+async function deferEphemeral(interaction) {
+    if (
+        typeof interaction?.deferReply === "function" &&
+        !interaction.replied &&
+        !interaction.deferred
+    ) {
+        await interaction.deferReply({ ephemeral: true });
+    }
+}
+
+async function replyEphemeral(interaction, payload) {
+    const data =
+        typeof payload === "string" ? { content: payload } : { ...payload };
+
+    delete data.ephemeral;
+
+    if (interaction.deferred) {
+        return interaction.editReply(data);
+    }
+
+    if (interaction.replied) {
+        return interaction.followUp({ ...data, ephemeral: true });
+    }
+
+    return interaction.reply({ ...data, ephemeral: true });
+}
+
+async function withEventQueue(event, key, task) {
+    const previous = event[key] || Promise.resolve();
+
+    let release;
+
+    const gate = new Promise((resolve) => {
+        release = resolve;
+    });
+
+    const current = previous.catch(() => undefined).then(() => gate);
+
+    event[key] = current;
+
+    await previous.catch(() => undefined);
+
+    try {
+        return await task();
+    } finally {
+        release();
+
+        if (event[key] === current) {
+            event[key] = null;
+        }
+    }
+}
+
+function getNextTeamNo(event) {
+    const used = new Set(
+        event.teams.map((team) => Number(team.no)).filter(Number.isInteger),
+    );
+
+    for (let no = 1; no <= MAX_TEAMS; no += 1) {
+        if (!used.has(no)) {
+            return no;
+        }
+    }
+
+    return Math.max(0, ...used) + 1;
+}
+
+function buildTeamState(userId, solo, options = {}) {
+    return {
+        id:
+            options.id ||
+            `team${Date.now()}${Math.random().toString(36).slice(2, 8)}`,
+        no: Number(options.no || 1),
+        leaderId: String(userId),
+        members: [String(userId)],
+        locked: Boolean(solo),
+        stats: buildBaseStats([String(userId)]),
+        votes: {},
+        choices: {},
+        pathOptions: [],
+        finalChoice: null,
+        finalScore: 0,
+        hp: 0,
+        maxHp: 0,
+        channelId: options.channelId || null,
+        pathHistory: [],
+        pathMessageId: null,
+        finalMessageId: null,
+        choiceDetails: {},
+        finalVoteDetails: null,
+        activeMembers: new Set(),
+    };
+}
+
+function resetTeamToEmpty(team) {
+    const preserved = {
+        id: team.id,
+        no: team.no,
+        channelId: team.channelId,
+    };
+
+    Object.assign(team, {
+        ...preserved,
+        leaderId: null,
+        members: [],
+        locked: false,
+        stats: buildBaseStats([]),
+        votes: {},
+        choices: {},
+        pathOptions: [],
+        finalChoice: null,
+        finalScore: 0,
+        hp: 0,
+        maxHp: 0,
+        pathHistory: [],
+        pathMessageId: null,
+        finalMessageId: null,
+        choiceDetails: {},
+        finalVoteDetails: null,
+        activeMembers: new Set(),
+    });
+
+    setupTeamHp(team, true);
 }
 
 function buildBaseStats(memberIds) {
@@ -642,10 +764,15 @@ function buildLobbyText(event, shouldPingRole = false) {
         event.teams.length > 0
             ? event.teams
                   .map((team) => {
+                      const membersText =
+                          team.members.length > 0
+                              ? team.members.map(tag).join(" ")
+                              : "*Trống — có thể vào đội này*";
+
                       return (
                           `**Đội ${team.no}** ` +
                           `(${team.members.length}/${MAX_TEAM_SIZE}): ` +
-                          team.members.map(tag).join(" ")
+                          membersText
                       );
                   })
                   .join("\n")
@@ -848,17 +975,17 @@ function resolveVote(team, bucket, fallbackIds) {
         return counts[id] === maxVotes;
     });
 
-    /*
-     * Chỉ có đúng một lựa chọn đạt số phiếu cao nhất.
-     * Trường hợp này luôn lấy lựa chọn đó.
-     *
-     * Ví dụ:
-     * đường 1 = 1 phiếu
-     * đường 2 = 0 phiếu
-     * đường 3 = 3 phiếu
-     *
-     * Bot chắc chắn chọn đường 3.
-     */
+    
+
+
+
+
+
+
+
+
+
+
     if (tiedIds.length === 1) {
         return {
             choice: tiedIds[0],
@@ -868,9 +995,9 @@ function resolveVote(team, bucket, fallbackIds) {
         };
     }
 
-    /*
-     * Chỉ dùng phiếu đội trưởng khi có hòa phiếu.
-     */
+    
+
+
     const leaderVote = votes[String(team.leaderId)];
 
     if (leaderVote && tiedIds.includes(leaderVote)) {
@@ -882,21 +1009,17 @@ function resolveVote(team, bucket, fallbackIds) {
         };
     }
 
-    /*
-     * Nếu hòa và đội trưởng không vote vào
-     * một lựa chọn đang hòa, ưu tiên lựa chọn
-     * xuất hiện trước trên giao diện.
-     */
+    
+
+
+
+
     return {
         choice: tiedIds[0],
         counts,
         totalVotes,
         reason: "display_order_tiebreak",
     };
-}
-
-function pickVoteWinner(team, bucket, fallbackIds) {
-    return resolveVote(team, bucket, fallbackIds).choice;
 }
 
 function formatPathVoteResolution(team, resolution) {
@@ -935,22 +1058,19 @@ function formatPathVoteResolution(team, resolution) {
     );
 }
 
+
 async function createCategory(interaction, event) {
     const category = await interaction.guild.channels
         .create({
-            name: `🌌 Bí Cảnh ` + `${event.shortId}`,
-
+            name: `🌌 Bí Cảnh ${event.shortId}`,
             type: ChannelType.GuildCategory,
-
             permissionOverwrites: [
                 {
                     id: interaction.guild.roles.everyone.id,
-
                     deny: [PermissionFlagsBits.ViewChannel],
                 },
                 {
                     id: interaction.client.user.id,
-
                     allow: [
                         PermissionFlagsBits.ViewChannel,
                         PermissionFlagsBits.SendMessages,
@@ -960,23 +1080,27 @@ async function createCategory(interaction, event) {
                 },
             ],
         })
-        .catch(() => null);
+        .catch((error) => {
+            console.error("[Duyen createCategory]", error);
+            return null;
+        });
 
     if (category) {
         event.categoryId = category.id;
     }
+
+    return category;
 }
+
 
 async function createTeamChannel(event, team) {
     const overwrites = [
         {
             id: event.guild.roles.everyone.id,
-
             deny: [PermissionFlagsBits.ViewChannel],
         },
         {
             id: event.guild.client.user.id,
-
             allow: [
                 PermissionFlagsBits.ViewChannel,
                 PermissionFlagsBits.SendMessages,
@@ -984,7 +1108,6 @@ async function createTeamChannel(event, team) {
                 PermissionFlagsBits.ReadMessageHistory,
             ],
         },
-
         ...team.members.map((id) => {
             return {
                 id,
@@ -999,23 +1122,25 @@ async function createTeamChannel(event, team) {
 
     const channel = await event.guild.channels.create({
         name: `duyen-doi-${team.no}`,
-
         type: ChannelType.GuildText,
-
         parent: event.categoryId || null,
-
         permissionOverwrites: overwrites,
     });
 
     team.channelId = channel.id;
 
-    await channel.send(
-        `🌌 **ĐỘI ${team.no} TIẾN VÀO BÍ CẢNH**\n` +
-            `Thành viên: ${team.members.map(tag).join(" ")}\n\n` +
-            `${statsLine(team)}\n\n` +
-            "Bàn ở đây rồi vote. " +
-            "Kênh này chỉ đội bạn thấy.",
-    );
+    await channel
+        .send(
+            `🌌 **ĐỘI ${team.no} TIẾN VÀO BÍ CẢNH**\n` +
+                `Thành viên: ${team.members.map(tag).join(" ")}\n\n` +
+                `${statsLine(team)}\n\n` +
+                "Bàn ở đây rồi vote. Kênh này chỉ đội bạn thấy.",
+        )
+        .catch((error) => {
+            console.error("[Duyen createTeamChannel intro]", error);
+        });
+
+    return channel;
 }
 
 async function refreshLobby(event) {
@@ -1027,61 +1152,94 @@ async function refreshLobby(event) {
         })
         .catch(() => undefined);
 }
+
 async function start(interaction) {
     const key = eventKey(interaction.guildId, interaction.channelId);
 
     if (events.has(key)) {
-        return interaction.reply({
+        return replyEphemeral(interaction, {
             content: "❌ Kênh này đang có Bí Cảnh rồi.",
-            ephemeral: true,
         });
     }
 
+    if (
+        typeof interaction.deferReply === "function" &&
+        !interaction.replied &&
+        !interaction.deferred
+    ) {
+        await interaction.deferReply();
+    }
+
     const event = {
-        id: `${Date.now()}` + `${Math.random().toString(36).slice(2, 7)}`,
-
+        id: `${Date.now()}${Math.random().toString(36).slice(2, 7)}`,
         shortId: Math.random().toString(36).slice(2, 6).toUpperCase(),
-
         key,
         guild: interaction.guild,
         channelId: interaction.channelId,
-
         status: "lobby",
         teams: [],
         round: 0,
         finderId: null,
         message: null,
         categoryId: null,
-
         roundLocked: false,
         resolvingRound: null,
+        teamMutationQueue: null,
     };
 
     events.set(key, event);
 
-    await createCategory(interaction, event);
+    try {
+        const category = await createCategory(interaction, event);
 
-    await interaction.reply({
-        content: buildLobbyText(event, true),
+        if (!category) {
+            throw new Error("Không thể tạo category Bí Cảnh.");
+        }
 
-        components: buildLobbyRows(event),
+        const payload = {
+            content: buildLobbyText(event, true),
+            components: buildLobbyRows(event),
+            allowedMentions: buildDuyenAllowedMentions(event, true),
+        };
 
-        allowedMentions: buildDuyenAllowedMentions(event, true),
-    });
+        if (interaction.deferred && typeof interaction.editReply === "function") {
+            event.message = await interaction.editReply(payload);
+        } else {
+            event.message = await interaction.reply(payload);
+        }
 
-    event.message = await interaction.fetchReply();
+        if (!event.message && typeof interaction.fetchReply === "function") {
+            event.message = await interaction.fetchReply();
+        }
 
-    timers.set(
-        `lobby_${event.id}`,
+        timers.set(
+            `lobby_${event.id}`,
+            setTimeout(() => {
+                beginExplore(event).catch(async (error) => {
+                    console.error("[Duyen beginExplore]", error);
+                    await finishEventWithError(event).catch(() => undefined);
+                });
+            }, LOBBY_MS),
+        );
 
-        setTimeout(() => {
-            beginExplore(event).catch((error) => {
-                console.error("[Duyen beginExplore]", error);
-            });
-        }, LOBBY_MS),
-    );
+        return undefined;
+    } catch (error) {
+        events.delete(key);
+        console.error("[Duyen start]", error);
 
-    return undefined;
+        const payload = {
+            content:
+                "❌ Không thể mở Bí Cảnh. Hãy kiểm tra quyền tạo category/kênh của bot.",
+        };
+
+        if (interaction.deferred && typeof interaction.editReply === "function") {
+            await interaction.editReply(payload).catch(() => undefined);
+        } else if (typeof interaction.reply === "function") {
+            await replyEphemeral(interaction, payload).catch(() => undefined);
+        }
+
+        return undefined;
+    }
 }
 
 async function autoStart(client) {
@@ -1144,92 +1302,95 @@ async function autoStart(client) {
 
     await start(fakeInteraction);
 
-    return true;
+    return events.has(key);
 }
 
+
 async function createTeam(interaction, event, solo = false) {
-    const userId = String(interaction.user.id);
+    await deferEphemeral(interaction);
 
-    if (isBlockedByAfkBan(event, userId)) {
-        return interaction.reply({
-            content:
-                "⛔ Bạn đã AFK ở lượt trước nên bị cấm tham gia Cơ Duyên lần này.",
-            ephemeral: true,
+    return withEventQueue(event, "teamMutationQueue", async () => {
+        const userId = String(interaction.user.id);
+
+        if (isBlockedByAfkBan(event, userId)) {
+            return replyEphemeral(interaction, {
+                content:
+                    "⛔ Bạn đã AFK ở lượt trước nên bị cấm tham gia Cơ Duyên lần này.",
+            });
+        }
+
+        if (event.status !== "lobby") {
+            return replyEphemeral(interaction, {
+                content: "❌ Bí cảnh đã bắt đầu.",
+            });
+        }
+
+        if (getUserTeam(event, userId)) {
+            return replyEphemeral(interaction, {
+                content: "❌ Bạn đã có đội.",
+            });
+        }
+
+        let team = event.teams.find((item) => item.members.length === 0);
+
+        if (team) {
+            const candidate = buildTeamState(userId, solo, {
+                id: team.id,
+                no: team.no,
+                channelId: team.channelId,
+            });
+
+            let channel = candidate.channelId
+                ? await event.guild.channels
+                      .fetch(candidate.channelId)
+                      .catch(() => null)
+                : null;
+
+            if (!channel) {
+                channel = await createTeamChannel(event, candidate);
+            } else {
+                await channel.permissionOverwrites.edit(userId, {
+                    ViewChannel: true,
+                    SendMessages: true,
+                    ReadMessageHistory: true,
+                });
+            }
+
+            Object.assign(team, candidate);
+
+            await channel
+                .send(
+                    `🧍 ${tag(userId)} đã kích hoạt lại **Đội ${team.no}**.` +
+                        (solo ? " Đội này đi solo." : ""),
+                )
+                .catch(() => undefined);
+        } else {
+            if (event.teams.length >= MAX_TEAMS) {
+                return replyEphemeral(interaction, {
+                    content: "❌ Đã đủ số đội.",
+                });
+            }
+
+            team = buildTeamState(userId, solo, {
+                no: getNextTeamNo(event),
+            });
+
+            setupTeamHp(team, true);
+
+            await createTeamChannel(event, team);
+
+            event.teams.push(team);
+        }
+
+        setupTeamHp(team, true);
+
+        await refreshLobby(event);
+
+        return replyEphemeral(interaction, {
+            content: solo
+                ? `🚪 Bạn đi solo ở **Đội ${team.no}**.`
+                : `🧍 Bạn đã tạo **Đội ${team.no}**.`,
         });
-    }
-
-    if (event.status !== "lobby") {
-        return interaction.reply({
-            content: "❌ Bí cảnh đã bắt đầu.",
-            ephemeral: true,
-        });
-    }
-
-    if (getUserTeam(event, userId)) {
-        return interaction.reply({
-            content: "❌ Bạn đã có đội.",
-            ephemeral: true,
-        });
-    }
-
-    if (event.teams.length >= MAX_TEAMS) {
-        return interaction.reply({
-            content: "❌ Đã đủ số đội.",
-            ephemeral: true,
-        });
-    }
-
-    const team = {
-        id: `team` + `${event.teams.length + 1}`,
-
-        no: event.teams.length + 1,
-
-        leaderId: userId,
-        members: [userId],
-        locked: solo,
-
-        stats: buildBaseStats([userId]),
-
-        votes: {},
-        choices: {},
-        pathOptions: [],
-
-        finalChoice: null,
-        finalScore: 0,
-
-        hp: 0,
-        maxHp: 0,
-
-        channelId: null,
-        pathHistory: [],
-        pathMessageId: null,
-
-        choiceDetails: {},
-        finalVoteDetails: null,
-
-        /*
-         * Thành viên có thao tác trong Bí Cảnh.
-         *
-         * Người chơi chỉ cần thực hiện ít nhất
-         * một hành động hợp lệ để không bị AFK.
-         */
-        activeMembers: new Set(),
-    };
-
-    setupTeamHp(team, true);
-
-    event.teams.push(team);
-
-    await createTeamChannel(event, team);
-
-    await refreshLobby(event);
-
-    return interaction.reply({
-        content: solo
-            ? `🚪 Bạn đi solo ở **Đội ${team.no}**.`
-            : `🧍 Bạn đã tạo **Đội ${team.no}**.`,
-
-        ephemeral: true,
     });
 }
 
@@ -1295,191 +1456,205 @@ async function showJoinMenu(interaction, event) {
     });
 }
 
+
 async function joinTeam(interaction, event, teamId) {
-    const userId = String(interaction.user.id);
-
-    if (isBlockedByAfkBan(event, userId)) {
-        return interaction.reply({
-            content:
-                "⛔ Bạn đã AFK ở lượt trước nên bị cấm tham gia Cơ Duyên lần này.",
-            ephemeral: true,
-        });
+    if (!interaction.replied && !interaction.deferred) {
+        await interaction.deferUpdate();
     }
 
-    if (event.status !== "lobby") {
-        return interaction.reply({
-            content: "❌ Bí cảnh đã bắt đầu.",
-            ephemeral: true,
-        });
-    }
+    return withEventQueue(event, "teamMutationQueue", async () => {
+        const userId = String(interaction.user.id);
 
-    const team = event.teams.find((item) => item.id === teamId);
+        if (isBlockedByAfkBan(event, userId)) {
+            return replyEphemeral(interaction, {
+                content:
+                    "⛔ Bạn đã AFK ở lượt trước nên bị cấm tham gia Cơ Duyên lần này.",
+                components: [],
+            });
+        }
 
-    if (!team || team.locked || team.members.length >= MAX_TEAM_SIZE) {
-        return interaction.reply({
-            content: "❌ Đội này không vào được.",
-            ephemeral: true,
-        });
-    }
+        if (event.status !== "lobby") {
+            return replyEphemeral(interaction, {
+                content: "❌ Bí cảnh đã bắt đầu.",
+                components: [],
+            });
+        }
 
-    if (getUserTeam(event, userId)) {
-        return interaction.reply({
-            content: "❌ Bạn đã có đội.",
-            ephemeral: true,
-        });
-    }
+        if (getUserTeam(event, userId)) {
+            return replyEphemeral(interaction, {
+                content: "❌ Bạn đã có đội.",
+                components: [],
+            });
+        }
 
-    team.members.push(userId);
+        const team = event.teams.find((item) => item.id === teamId);
 
-    team.stats = buildBaseStats(team.members);
+        if (!team || team.locked || team.members.length >= MAX_TEAM_SIZE) {
+            return replyEphemeral(interaction, {
+                content: "❌ Đội này không vào được.",
+                components: [],
+            });
+        }
 
-    setupTeamHp(team, true);
+        const channel = await event.guild.channels
+            .fetch(team.channelId)
+            .catch(() => null);
 
-    const channel = await event.guild.channels
-        .fetch(team.channelId)
-        .catch(() => null);
+        if (!channel) {
+            return replyEphemeral(interaction, {
+                content: "❌ Kênh của đội này không còn tồn tại.",
+                components: [],
+            });
+        }
 
-    await channel?.permissionOverwrites
-        .edit(userId, {
+        await channel.permissionOverwrites.edit(userId, {
             ViewChannel: true,
             SendMessages: true,
             ReadMessageHistory: true,
-        })
-        .catch(() => undefined);
-
-    await channel
-        ?.send(
-            `🤝 ${tag(userId)} đã vào đội. ` +
-                "Cơ duyên bắt đầu có mùi chia phần.",
-        )
-        .catch(() => undefined);
-
-    await refreshLobby(event);
-
-    return interaction.update({
-        content: `✅ Bạn đã vào ` + `**Đội ${team.no}**.`,
-
-        components: [],
-    });
-}
-
-async function leaveTeam(interaction, event) {
-    const userId = String(interaction.user.id);
-
-    if (event.status !== "lobby") {
-        return interaction.reply({
-            content: "❌ Chỉ có thể rời đội khi Bí Cảnh chưa bắt đầu.",
-            ephemeral: true,
         });
-    }
 
-    const team = getUserTeam(event, userId);
+        team.members.push(userId);
 
-    if (!team) {
-        return interaction.reply({
-            content: "❌ Bạn chưa ở trong đội nào.",
-            ephemeral: true,
-        });
-    }
-
-    const wasLeader = team.leaderId === userId;
-
-    team.members = team.members.filter((id) => id !== userId);
-
-    const channel = await event.guild.channels
-        .fetch(team.channelId)
-        .catch(() => null);
-
-    /*
-     * Xóa quyền xem kênh đội của
-     * người vừa rời.
-     */
-    await channel?.permissionOverwrites.delete(userId).catch(() => undefined);
-
-    if (team.members.length === 0) {
-        event.teams = event.teams.filter((item) => item.id !== team.id);
-
-        /*
-         * Không xóa kênh chat để giữ
-         * nguyên lịch sử.
-         */
-        await channel
-            ?.send(
-                "↩️ Đội đã giải tán. " +
-                    "Kênh được giữ lại, bot không xóa lịch sử chat.",
-            )
-            .catch(() => undefined);
-    } else {
-        /*
-         * Nếu đội trưởng rời, chuyển
-         * quyền đội trưởng cho thành
-         * viên đầu tiên còn lại.
-         */
-        if (wasLeader) {
-            team.leaderId = team.members[0];
+        if (!team.leaderId) {
+            team.leaderId = userId;
         }
 
         team.stats = buildBaseStats(team.members);
-
         setupTeamHp(team, true);
 
-        const leaderText = wasLeader
-            ? `\n👑 Đội trưởng mới: ${tag(team.leaderId)}.`
-            : "";
-
         await channel
-            ?.send(`↩️ ${tag(userId)} đã rời đội.` + leaderText)
+            .send(
+                `🤝 ${tag(userId)} đã vào đội. Cơ duyên bắt đầu có mùi chia phần.`,
+            )
             .catch(() => undefined);
-    }
 
-    await refreshLobby(event);
+        await refreshLobby(event);
 
-    return interaction.reply({
-        content: `✅ Bạn đã rời ` + `**Đội ${team.no}**.`,
-
-        ephemeral: true,
+        return replyEphemeral(interaction, {
+            content: `✅ Bạn đã vào **Đội ${team.no}**.`,
+            components: [],
+        });
     });
 }
-async function beginExplore(event) {
-    if (event.status !== "lobby") {
-        return;
-    }
 
-    const timer = timers.get(`lobby_${event.id}`);
 
-    if (timer) {
-        clearTimeout(timer);
+async function leaveTeam(interaction, event) {
+    await deferEphemeral(interaction);
 
-        timers.delete(`lobby_${event.id}`);
-    }
+    return withEventQueue(event, "teamMutationQueue", async () => {
+        const userId = String(interaction.user.id);
 
-    if (event.teams.length <= 0) {
-        events.delete(event.key);
+        if (event.status !== "lobby") {
+            return replyEphemeral(interaction, {
+                content: "❌ Chỉ có thể rời đội khi Bí Cảnh chưa bắt đầu.",
+            });
+        }
 
-        await event.message
-            ?.edit({
-                content:
-                    "🌌 Bí cảnh đóng lại vì không ai vào. Cơ duyên không chờ người lười.",
+        const team = getUserTeam(event, userId);
 
-                components: [],
-            })
+        if (!team) {
+            return replyEphemeral(interaction, {
+                content: "❌ Bạn chưa ở trong đội nào.",
+            });
+        }
+
+        const teamNo = team.no;
+        const wasLeader = team.leaderId === userId;
+
+        const channel = await event.guild.channels
+            .fetch(team.channelId)
+            .catch(() => null);
+
+        team.members = team.members.filter((id) => id !== userId);
+
+        await channel?.permissionOverwrites
+            .delete(userId)
             .catch(() => undefined);
 
-        return cleanup(event, 15_000);
+        if (team.members.length === 0) {
+            resetTeamToEmpty(team);
+
+            await channel
+                ?.send(
+                    "↩️ Đội hiện không còn thành viên. " +
+                        "Đội và kênh chat được giữ lại để người khác sử dụng.",
+                )
+                .catch(() => undefined);
+        } else {
+            if (wasLeader) {
+                team.leaderId = team.members[0];
+            }
+
+            team.stats = buildBaseStats(team.members);
+            setupTeamHp(team, true);
+
+            const leaderText = wasLeader
+                ? `\n👑 Đội trưởng mới: ${tag(team.leaderId)}.`
+                : "";
+
+            await channel
+                ?.send(`↩️ ${tag(userId)} đã rời đội.${leaderText}`)
+                .catch(() => undefined);
+        }
+
+        await refreshLobby(event);
+
+        return replyEphemeral(interaction, {
+            content: `✅ Bạn đã rời **Đội ${teamNo}**.`,
+        });
+    });
+}
+
+
+async function beginExplore(event) {
+    let shouldStart = false;
+
+    await withEventQueue(event, "teamMutationQueue", async () => {
+        if (event.status !== "lobby") {
+            return;
+        }
+
+        const timer = timers.get(`lobby_${event.id}`);
+
+        if (timer) {
+            clearTimeout(timer);
+            timers.delete(`lobby_${event.id}`);
+        }
+
+        event.teams = event.teams.filter((team) => team.members.length > 0);
+
+        if (event.teams.length <= 0) {
+            events.delete(event.key);
+
+            await event.message
+                ?.edit({
+                    content:
+                        "🌌 Bí cảnh đóng lại vì không ai vào. Cơ duyên không chờ người lười.",
+                    components: [],
+                })
+                .catch(() => undefined);
+
+            await cleanup(event);
+            return;
+        }
+
+        event.status = "explore";
+        shouldStart = true;
+
+        await refreshLobby(event);
+
+        await event.message
+            ?.reply(
+                `🔒 Bí cảnh đã khóa. **${event.teams.length} đội** tiến vào động phủ.`,
+            )
+            .catch(() => undefined);
+    });
+
+    if (shouldStart) {
+        return startRound(event, 1);
     }
 
-    event.status = "explore";
-
-    await refreshLobby(event);
-
-    await event.message
-        ?.reply(
-            `🔒 Bí cảnh đã khóa. ` +
-                `**${event.teams.length} đội** tiến vào động phủ.`,
-        )
-        .catch(() => undefined);
-
-    return startRound(event, 1);
+    return undefined;
 }
 
 async function startRound(event, round) {
@@ -1517,11 +1692,11 @@ async function startRound(event, round) {
             })
             .catch(() => null);
 
-        /*
-         * Bắt buộc phải lưu ID tin nhắn.
-         * Nếu không lưu, nút chọn đường
-         * sẽ không được khóa khi hết giờ.
-         */
+        
+
+
+
+
         team.pathMessageId = pathMessage?.id || null;
     }
 
@@ -1529,8 +1704,9 @@ async function startRound(event, round) {
         `round_${event.id}_${round}`,
 
         setTimeout(() => {
-            resolveRound(event).catch((error) => {
+            resolveRound(event).catch(async (error) => {
                 console.error("[Duyen resolveRound]", error);
+                await finishEventWithError(event).catch(() => undefined);
             });
         }, ROUND_MS),
     );
@@ -1573,10 +1749,10 @@ function grantPuzzleReward(team, puzzle, eligibleUserIds = team.members) {
 
     const money = rnd(moneyRange[0], moneyRange[1]);
 
-    /*
-     * Chỉ người thực sự vote câu đố
-     * mới nhận tiền câu đố.
-     */
+    
+
+
+
     for (const userId of eligibleUserIds) {
         db.addMoney(userId, money);
     }
@@ -1589,18 +1765,16 @@ function applyPuzzleFail(team) {
     team.stats.noise += 18;
 }
 
+
 async function runPuzzle(event, team) {
     const puzzle = pickPuzzle();
-
-    const puzzleKey =
-        `${Date.now()}` + `${Math.random().toString(36).slice(2, 7)}`;
-
+    const puzzleKey = `${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
     const channel = await event.guild.channels
         .fetch(team.channelId)
         .catch(() => null);
 
     if (!channel) {
-        return "🧩 Cổ trận xuất hiện " + "nhưng kênh đội không còn tồn tại.";
+        return "🧩 Cổ trận xuất hiện nhưng kênh đội không còn tồn tại.";
     }
 
     const state = {
@@ -1610,9 +1784,10 @@ async function runPuzzle(event, team) {
         puzzle,
         votes: {},
         message: null,
+        timer: null,
+        cancel: null,
+        settled: false,
     };
-
-    activePuzzles.set(puzzleKey, state);
 
     const message = await channel.send({
         content:
@@ -1623,46 +1798,106 @@ async function runPuzzle(event, team) {
             `${formatPuzzleChoices(puzzle)}\n\n` +
             `⏳ Có **${PUZZLE_MS / 1000}s** để vote. ` +
             "Đáp án nhiều vote nhất sẽ được chọn.",
-
         components: buildPuzzleRows(event, team, puzzleKey),
     });
 
     state.message = message;
+    activePuzzles.set(puzzleKey, state);
 
     return new Promise((resolve) => {
-        setTimeout(async () => {
+        const finish = (text) => {
+            if (state.settled) {
+                return;
+            }
+
+            state.settled = true;
+            resolve(text);
+        };
+
+        state.cancel = async () => {
+            if (state.timer) {
+                clearTimeout(state.timer);
+            }
+
             activePuzzles.delete(puzzleKey);
 
-            const chosenIndex = pickPuzzleVote(state);
+            await message
+                .edit({
+                    components: buildPuzzleRows(
+                        event,
+                        team,
+                        puzzleKey,
+                        true,
+                    ),
+                })
+                .catch(() => undefined);
 
-            const correct = chosenIndex === Number(puzzle.answerIndex);
+            finish("🛑 Cổ Trận bị hủy vì Bí Cảnh đã dừng.");
+        };
 
-            if (correct) {
-                /*
-                 * Object.keys(state.votes)
-                 * là danh sách người đã vote.
-                 * Người không vote không nhận
-                 * tiền câu đố.
-                 */
-                const eligibleUserIds = Object.keys(state.votes);
+        state.timer = setTimeout(async () => {
+            activePuzzles.delete(puzzleKey);
 
-                const money = grantPuzzleReward(team, puzzle, eligibleUserIds);
+            if (event.status !== "explore") {
+                await state.cancel();
+                return;
+            }
 
-                const rewardMemberText =
-                    eligibleUserIds.length > 0
-                        ? eligibleUserIds.map(tag).join(" ")
-                        : "Không có ai";
+            try {
+                const chosenIndex = pickPuzzleVote(state);
+                const correct = chosenIndex === Number(puzzle.answerIndex);
+
+                if (correct) {
+                    const eligibleUserIds = Object.keys(state.votes);
+                    const money = grantPuzzleReward(
+                        team,
+                        puzzle,
+                        eligibleUserIds,
+                    );
+                    const rewardMemberText =
+                        eligibleUserIds.length > 0
+                            ? eligibleUserIds.map(tag).join(" ")
+                            : "Không có ai";
+
+                    await message
+                        .edit({
+                            content:
+                                message.content +
+                                "\n\n✅ **Cổ trận được phá giải.**\n" +
+                                `Đội chọn **${formatPuzzleAnswer(chosenIndex)}** và đã đúng.\n` +
+                                `🧩 +${puzzle.reward?.clue || 1} manh mối, ` +
+                                `🪤 +${puzzle.reward?.formation || 3} trận pháp.\n` +
+                                `💰 Người nhận ${fmt(money)}: ${rewardMemberText}`,
+                            components: buildPuzzleRows(
+                                event,
+                                team,
+                                puzzleKey,
+                                true,
+                            ),
+                        })
+                        .catch(() => undefined);
+
+                    finish(
+                        `✅ Đội phá giải Cổ Trận thành công. ` +
+                            `Nhận +${puzzle.reward?.clue || 1} manh mối và quà cơ quan.`,
+                    );
+                    return;
+                }
+
+                applyPuzzleFail(team);
 
                 await message
                     .edit({
                         content:
                             message.content +
-                            "\n\n✅ **Cổ trận được phá giải.**\n" +
-                            `Đội chọn **${formatPuzzleAnswer(chosenIndex)}** và đã đúng.\n` +
-                            `🧩 +${puzzle.reward?.clue || 1} manh mối, ` +
-                            `🪤 +${puzzle.reward?.formation || 3} trận pháp.\n` +
-                            `💰 Người nhận ${fmt(money)}: ${rewardMemberText}`,
-
+                            "\n\n💀 **Cổ trận phản phệ.**\n" +
+                            (chosenIndex >= 0
+                                ? `Đội chọn **${formatPuzzleAnswer(chosenIndex)}**, ` +
+                                  `đáp án đúng là **${formatPuzzleAnswer(puzzle.answerIndex)}**.\n`
+                                : `Không ai chọn đáp án. ` +
+                                  `Đáp án đúng là **${formatPuzzleAnswer(puzzle.answerIndex)}**.\n`) +
+                            "Đội bị 😵 +12 mệt mỏi, 🔊 +18 dấu vết.\n" +
+                            "Thiên Đạo kết luận: câu này không khó, người khó là đội bạn.",
                         components: buildPuzzleRows(
                             event,
                             team,
@@ -1672,35 +1907,15 @@ async function runPuzzle(event, team) {
                     })
                     .catch(() => undefined);
 
-                return resolve(
-                    `✅ Đội phá giải Cổ Trận thành công. ` +
-                        `Nhận +${puzzle.reward?.clue || 1} manh mối và quà cơ quan.`,
-                );
+                finish("💀 Đội giải sai Cổ Trận, bị phản phệ.");
+            } catch (error) {
+                console.error("[Duyen runPuzzle]", error);
+                finish("⚠️ Cổ Trận gặp lỗi và đã được bỏ qua.");
             }
-
-            applyPuzzleFail(team);
-
-            await message
-                .edit({
-                    content:
-                        message.content +
-                        "\n\n💀 **Cổ trận phản phệ.**\n" +
-                        (chosenIndex >= 0
-                            ? `Đội chọn **${formatPuzzleAnswer(chosenIndex)}**, ` +
-                              `đáp án đúng là **${formatPuzzleAnswer(puzzle.answerIndex)}**.\n`
-                            : `Không ai chọn đáp án. ` +
-                              `Đáp án đúng là **${formatPuzzleAnswer(puzzle.answerIndex)}**.\n`) +
-                        "Đội bị 😵 +12 mệt mỏi, 🔊 +18 dấu vết.\n" +
-                        "Thiên Đạo kết luận: câu này không khó, người khó là đội bạn.",
-
-                    components: buildPuzzleRows(event, team, puzzleKey, true),
-                })
-                .catch(() => undefined);
-
-            return resolve("💀 Đội giải sai Cổ Trận, bị phản phệ.");
         }, PUZZLE_MS);
     });
 }
+
 function buildBossRows(
     event,
     team,
@@ -1783,10 +1998,10 @@ function grantDuyenBossReward(
         team.stats.noise += type === "major" ? 16 : 8;
     }
 
-    /*
-     * Chỉ những thành viên đã thực hiện
-     * hành động trong trận boss mới nhận quà.
-     */
+    
+
+
+
     for (const userId of eligibleUserIds) {
         const money = success
             ? rnd(bossConfig.money[0], bossConfig.money[1])
@@ -1811,10 +2026,10 @@ function grantDuyenBossReward(
         );
     }
 
-    /*
-     * Người từ đội khác bấm trợ giúp
-     * vẫn nhận phần thưởng hỗ trợ.
-     */
+    
+
+
+
     for (const helperId of helperIds) {
         const money = rnd(7000, 15000);
 
@@ -1840,15 +2055,25 @@ function grantDuyenBossReward(
     return lines;
 }
 
+
 async function runBossEncounter(event, team, type = "mini") {
     const bossConfig = DUYEN_BOSSES[type] || DUYEN_BOSSES.mini;
-
     const channel = await event.guild.channels
         .fetch(team.channelId)
         .catch(() => null);
 
     if (!channel) {
-        return "👹 Boss xuất hiện " + "nhưng kênh đội không còn tồn tại.";
+        return "👹 Boss xuất hiện nhưng kênh đội không còn tồn tại.";
+    }
+
+    const isEncounterActive = () => {
+        return type === "major"
+            ? event.status === "boss"
+            : event.status === "explore";
+    };
+
+    if (!isEncounterActive()) {
+        return "🛑 Trận boss đã bị hủy.";
     }
 
     setupTeamHp(team, false);
@@ -1860,49 +2085,41 @@ async function runBossEncounter(event, team, type = "mini") {
                     (type === "major" ? 1.35 : 0.9) +
                 team.members.length * (type === "major" ? 55 : 25),
         ),
-
         maxHp: 0,
     };
 
     boss.maxHp = boss.hp;
 
     const helperIds = new Set();
-
     const bossParticipantIds = new Set();
-
     let helped = false;
 
     await channel.send(
-        `${bossConfig.emoji} ` +
-            `**${bossConfig.name.toUpperCase()} XUẤT HIỆN**\n` +
+        `${bossConfig.emoji} **${bossConfig.name.toUpperCase()} XUẤT HIỆN**\n` +
             "Máu đội sẽ giữ xuyên suốt Bí Cảnh. " +
             "Đánh ngu là round sau đau tiếp.\n\n" +
             bossHpLine(team, boss),
     );
 
     for (let turn = 1; turn <= bossConfig.turns; turn += 1) {
-        if (boss.hp <= 0 || team.hp <= 0) {
+        if (boss.hp <= 0 || team.hp <= 0 || !isEncounterActive()) {
             break;
         }
 
-        const bossKey =
-            `${Date.now()}` + `${Math.random().toString(36).slice(2, 7)}`;
-
+        const bossKey = `${Date.now()}${Math.random().toString(36).slice(2, 7)}`;
         const state = {
             eventId: event.id,
             teamId: team.id,
             bossKey,
             bossType: type,
-
             votes: {},
             helpers: new Set(),
-
             supportPower: 0,
             helpCalled: false,
             publicMessage: null,
+            timer: null,
+            cancel: null,
         };
-
-        activeBosses.set(bossKey, state);
 
         const message = await channel.send({
             content:
@@ -1910,7 +2127,6 @@ async function runBossEncounter(event, team, type = "mini") {
                 `Chọn hành động trong **${BOSS_TURN_MS / 1000}s**. ` +
                 "Vote sau sẽ đè vote trước.\n\n" +
                 bossHpLine(team, boss),
-
             components: buildBossRows(
                 event,
                 team,
@@ -1919,9 +2135,36 @@ async function runBossEncounter(event, team, type = "mini") {
             ),
         });
 
-        await new Promise((resolve) => {
-            setTimeout(resolve, BOSS_TURN_MS);
+        activeBosses.set(bossKey, state);
+
+        const waitResult = await new Promise((resolve) => {
+            let settled = false;
+
+            const finish = (value) => {
+                if (settled) {
+                    return;
+                }
+
+                settled = true;
+                resolve(value);
+            };
+
+            state.cancel = () => {
+                if (state.timer) {
+                    clearTimeout(state.timer);
+                }
+
+                finish("cancelled");
+            };
+
+            state.timer = setTimeout(() => {
+                finish("timeout");
+            }, BOSS_TURN_MS);
         });
+
+        if (state.timer) {
+            clearTimeout(state.timer);
+        }
 
         activeBosses.delete(bossKey);
 
@@ -1937,10 +2180,16 @@ async function runBossEncounter(event, team, type = "mini") {
             })
             .catch(() => undefined);
 
-        /*
-         * Lưu tất cả thành viên đã bấm
-         * hành động boss ở bất kỳ turn nào.
-         */
+        if (state.publicMessage) {
+            await state.publicMessage
+                .edit({ components: [] })
+                .catch(() => undefined);
+        }
+
+        if (waitResult === "cancelled" || !isEncounterActive()) {
+            return "🛑 Trận boss bị hủy vì Bí Cảnh đã dừng.";
+        }
+
         for (const participantId of Object.keys(state.votes)) {
             bossParticipantIds.add(participantId);
         }
@@ -1955,16 +2204,12 @@ async function runBossEncounter(event, team, type = "mini") {
         }
 
         const attackCount = countBossActions(state.votes, "attack");
-
         const guardCount = countBossActions(state.votes, "guard");
-
         const healCount = countBossActions(state.votes, "heal");
-
         const afkCount = Math.max(
             0,
             team.members.length - Object.keys(state.votes).length,
         );
-
         const damage = Math.max(
             8,
             Math.round(
@@ -1975,12 +2220,10 @@ async function runBossEncounter(event, team, type = "mini") {
                     state.supportPower,
             ),
         );
-
         const protection = Math.round(
             guardCount *
                 (Number(team.stats.formation || 1) * 0.22 + rnd(10, 22)),
         );
-
         const receivedDamage = Math.max(
             0,
             Math.round(
@@ -1991,13 +2234,11 @@ async function runBossEncounter(event, team, type = "mini") {
                     healCount * 8,
             ),
         );
-
         const healAmount = healCount
             ? Math.round(team.maxHp * (0.08 + healCount * 0.035))
             : 0;
 
         boss.hp = Math.max(0, boss.hp - damage);
-
         team.hp = Math.max(
             0,
             Math.min(team.maxHp, team.hp - receivedDamage + healAmount),
@@ -2019,8 +2260,11 @@ async function runBossEncounter(event, team, type = "mini") {
         );
     }
 
-    const success = boss.hp <= 0;
+    if (!isEncounterActive()) {
+        return "🛑 Trận boss bị hủy vì Bí Cảnh đã dừng.";
+    }
 
+    const success = boss.hp <= 0;
     const rewardLines = grantDuyenBossReward(
         team,
         type,
@@ -2035,8 +2279,7 @@ async function runBossEncounter(event, team, type = "mini") {
 
     await channel.send(
         success
-            ? `✅ **${bossConfig.name} bị hạ.**\n` +
-                  `🎁 ${rewardLines.join("\n")}`
+            ? `✅ **${bossConfig.name} bị hạ.**\n🎁 ${rewardLines.join("\n")}`
             : `💀 **Không hạ được ${bossConfig.name}.** ` +
                   "Đội trọng thương nhưng vẫn lết tiếp.\n" +
                   `🎁 ${rewardLines.join("\n")}`,
@@ -2048,6 +2291,7 @@ async function runBossEncounter(event, team, type = "mini") {
         : `💀 Gặp **${bossConfig.name}** nhưng đánh không lại. ` +
               `Đội còn ❤️ ${fmt(team.hp)}/${fmt(team.maxHp)}.`;
 }
+
 async function resolvePath(event, team, pathId) {
     let text = applyPath(team, pathId);
 
@@ -2097,10 +2341,10 @@ function applyPath(team, pathId) {
 
     const path = PATHS[pathId];
 
-    /*
-     * Tránh lỗi nếu dữ liệu đường đi
-     * bị thiếu hoặc không hợp lệ.
-     */
+    
+
+
+
     if (!path) {
         return (
             "⚠️ Không xác định được lối đi. " +
@@ -2125,27 +2369,17 @@ function applyPath(team, pathId) {
     return `${path[0]} Đội chọn ` + `**${path[1]}**. ` + `${path[2]}`;
 }
 
+
 async function resolveRound(event) {
-    /*
-     * Chỉ được chốt một lần.
-     * Nếu timer hoặc thao tác khác gọi
-     * resolveRound lần hai thì bỏ qua.
-     */
     if (event.status !== "explore" || event.roundLocked) {
         return;
     }
 
     const resolvingRound = event.round;
-
-    /*
-     * Khóa round ngay lập tức trước
-     * khi chạy bất kỳ tác vụ async nào.
-     */
     event.roundLocked = true;
     event.resolvingRound = resolvingRound;
 
     const timerKey = `round_${event.id}_${resolvingRound}`;
-
     const timer = timers.get(timerKey);
 
     if (timer) {
@@ -2153,13 +2387,6 @@ async function resolveRound(event) {
         timers.delete(timerKey);
     }
 
-    /*
-     * Chụp toàn bộ phiếu đúng tại thời điểm
-     * round bị khóa.
-     *
-     * Sau đoạn này, phiếu gửi trễ sẽ không
-     * thể thay đổi kết quả.
-     */
     const snapshots = event.teams.map((team) => {
         const resolution = resolveVote(
             team,
@@ -2168,17 +2395,10 @@ async function resolveRound(event) {
         );
 
         team.choices[`r${resolvingRound}`] = resolution.choice;
-
-        if (!team.choiceDetails) {
-            team.choiceDetails = {};
-        }
-
+        team.choiceDetails = team.choiceDetails || {};
         team.choiceDetails[`r${resolvingRound}`] = resolution;
 
-        return {
-            team,
-            resolution,
-        };
+        return { team, resolution };
     });
 
     await lockPathVoteMessages(event, resolvingRound);
@@ -2186,14 +2406,21 @@ async function resolveRound(event) {
     const results = [];
 
     for (const { team, resolution } of snapshots) {
+        if (event.status !== "explore") {
+            return;
+        }
+
         try {
             const pathText = await resolvePath(event, team, resolution.choice);
+
+            if (event.status !== "explore") {
+                return;
+            }
 
             team.stats.noise = Math.max(
                 0,
                 Math.round(Number(team.stats.noise || 0)),
             );
-
             team.stats.fatigue = Math.max(
                 0,
                 Math.round(Number(team.stats.fatigue || 0)),
@@ -2201,22 +2428,23 @@ async function resolveRound(event) {
 
             results.push({
                 team,
-
                 text:
-                    `${formatPathVoteResolution(team, resolution)}` +
-                    `\n\n${pathText}`,
+                    `${formatPathVoteResolution(team, resolution)}\n\n` +
+                    pathText,
             });
         } catch (error) {
+            if (event.status !== "explore") {
+                return;
+            }
+
             console.error(
-                `[Duyen resolveRound] ` +
-                    `Lỗi xử lý đội ${team.no}, ` +
+                `[Duyen resolveRound] Lỗi xử lý đội ${team.no}, ` +
                     `round ${resolvingRound}:`,
                 error,
             );
 
             results.push({
                 team,
-
                 text:
                     `${formatPathVoteResolution(team, resolution)}\n\n` +
                     "⚠️ Có lỗi khi xử lý hiệu ứng lối đi. " +
@@ -2225,14 +2453,22 @@ async function resolveRound(event) {
         }
     }
 
+    if (event.status !== "explore") {
+        return;
+    }
+
     for (const result of results) {
         const channel = await event.guild.channels
             .fetch(result.team.channelId)
             .catch(() => null);
 
         await channel
-            ?.send(`${result.text}\n\n` + `${statsLine(result.team)}`)
+            ?.send(`${result.text}\n\n${statsLine(result.team)}`)
             .catch(() => undefined);
+    }
+
+    if (event.status !== "explore") {
+        return;
     }
 
     if (resolvingRound >= ROUND_MAX) {
@@ -2253,11 +2489,15 @@ function getDiscoveryScore(team) {
     );
 }
 
+
 async function discoverOpportunity(event) {
+    if (event.status !== "explore") {
+        return;
+    }
+
     event.status = "boss";
 
     let finder = event.teams[0];
-
     let bestScore = -999999;
 
     for (const team of event.teams) {
@@ -2265,9 +2505,12 @@ async function discoverOpportunity(event) {
 
         if (team.discoveryScore > bestScore) {
             bestScore = team.discoveryScore;
-
             finder = team;
         }
+    }
+
+    if (!finder) {
+        return finishEventWithError(event);
     }
 
     event.finderId = finder.id;
@@ -2279,14 +2522,16 @@ async function discoverOpportunity(event) {
 
         await publicChannel
             ?.send(
-                `🐉 Đội ${finder.no} vừa chạm ` +
-                    "**Boss Cơ Duyên**. " +
-                    "Nếu kẹt quá có thể bấm " +
-                    "**Gọi trợ giúp** trong kênh đội.",
+                `🐉 Đội ${finder.no} vừa chạm **Boss Cơ Duyên**. ` +
+                    "Nếu kẹt quá có thể bấm **Gọi trợ giúp** trong kênh đội.",
             )
             .catch(() => undefined);
 
         await runBossEncounter(event, finder, "major");
+    }
+
+    if (event.status !== "boss") {
+        return;
     }
 
     event.status = "final";
@@ -2295,31 +2540,24 @@ async function discoverOpportunity(event) {
         team.votes.final = {};
 
         const isFinder = team.id === finder.id;
-
         const source = isFinder ? FINDER : REACT;
-
         const lines = Object.values(source)
             .map((option) => {
-                return `${option[0]} ` + `**${option[1]}** — ` + `${option[2]}`;
+                return `${option[0]} **${option[1]}** — ${option[2]}`;
             })
             .join("\n");
-
         const channel = await event.guild.channels
             .fetch(team.channelId)
             .catch(() => null);
-
         const finalMessage = await channel
             ?.send({
                 content: isFinder
                     ? "🌌 **ĐỘI BẠN PHÁT HIỆN LINH TRÌ TRUYỀN THỪA**\n\n" +
                       `${lines}\n\n` +
-                      "Tìm được chưa chắc giữ được. " +
-                      "Vote cách xử lý."
+                      "Tìm được chưa chắc giữ được. Vote cách xử lý."
                     : "⚠️ **DAO ĐỘNG LINH KHÍ CỰC MẠNH**\n\n" +
-                      "Có đội đã phát hiện Cơ Duyên Lớn. " +
-                      "Vị trí chưa rõ.\n\n" +
-                      `${lines}`,
-
+                      "Có đội đã phát hiện Cơ Duyên Lớn. Vị trí chưa rõ.\n\n" +
+                      lines,
                 components: buildFinalRows(event, team, isFinder),
             })
             .catch(() => null);
@@ -2329,14 +2567,12 @@ async function discoverOpportunity(event) {
 
     await event.message
         ?.reply(
-            "⚠️ Dao động linh khí cực mạnh! " +
-                "Một đội đã phát hiện Cơ Duyên Lớn.",
+            "⚠️ Dao động linh khí cực mạnh! Một đội đã phát hiện Cơ Duyên Lớn.",
         )
         .catch(() => undefined);
 
     timers.set(
         `final_${event.id}`,
-
         setTimeout(() => {
             resolveFinal(event).catch((error) => {
                 console.error("[Duyen resolveFinal]", error);
@@ -2344,6 +2580,7 @@ async function discoverOpportunity(event) {
         }, FINAL_MS),
     );
 }
+
 function calculateFinalScore(event, team, finder) {
     const attackCount = event.teams.filter((item) => {
         return item.finalChoice === "attack";
@@ -2596,69 +2833,6 @@ function formatReward(reward) {
     return null;
 }
 
-function grantTeamRewards(
-    team,
-    tier = "loser",
-    eligibleUserIds = team.members,
-) {
-    const config = DUYEN_REWARD_POOLS[tier] || DUYEN_REWARD_POOLS.loser;
-
-    const lines = [];
-
-    /*
-     * Chỉ người có hoạt động mới nằm
-     * trong eligibleUserIds.
-     *
-     * Người AFK không được tiền,
-     * vật phẩm hoặc phôi pháp bảo.
-     */
-    for (const userId of eligibleUserIds) {
-        const money = rnd(config.money[0], config.money[1]);
-
-        db.addMoney(userId, money);
-
-        const personalRewards = [
-            {
-                type: "money",
-                amount: money,
-            },
-        ];
-
-        for (let i = 0; i < Number(config.rolls || 1); i += 1) {
-            const rolled = rollWeighted(config.pool);
-
-            const given = giveRewardItem(userId, rolled);
-
-            if (given) {
-                personalRewards.push(given);
-            }
-        }
-
-        lines.push(
-            `${tag(userId)}: ` +
-                personalRewards.map(formatReward).filter(Boolean).join(" • "),
-        );
-    }
-
-    /*
-     * Phôi SS chỉ có thể rơi vào
-     * người không AFK.
-     */
-    if (eligibleUserIds.length > 0 && rollPercent(config.ssPhoiChance)) {
-        const luckyUserId = eligibleUserIds[rnd(0, eligibleUserIds.length - 1)];
-
-        giveUnidentifiedWeapon(luckyUserId, "SS");
-
-        lines.push(
-            `🌌 **ĐẠI CƠ DUYÊN NỔ LỚN:** ` +
-                `${tag(luckyUserId)} nhận ` +
-                "**Phôi Pháp Bảo SS Chưa Giám Định**.",
-        );
-    }
-
-    return lines;
-}
-
 function teamDramaName(team) {
     const members = Array.isArray(team.members)
         ? team.members.map(tag).join(" ")
@@ -2667,107 +2841,6 @@ function teamDramaName(team) {
     return members ? `Đội ${team.no} (${members})` : `Đội ${team.no}`;
 }
 
-function buildResultText(event, winner, finder) {
-    const topText = [...event.teams]
-        .filter((team) => {
-            return team.finalChoice !== "ignore";
-        })
-        .sort((a, b) => {
-            return b.finalScore - a.finalScore;
-        })
-        .slice(0, 5)
-        .map((team, index) => {
-            const source = team.id === finder.id ? FINDER : REACT;
-
-            const choice = source[team.finalChoice];
-
-            return (
-                `${team.id === winner.id ? "🏆" : `${index + 1}.`} ` +
-                `**${teamDramaName(team)}** — ` +
-                `${team.finalScore} điểm — ` +
-                `${choice?.[0]} ${choice?.[1]}`
-            );
-        })
-        .join("\n");
-
-    const drama = [];
-
-    const attackers = event.teams.filter((team) => {
-        return team.finalChoice === "attack";
-    });
-
-    const sneakers = event.teams.filter((team) => {
-        return team.finalChoice === "sneak";
-    });
-
-    const ambushers = event.teams.filter((team) => {
-        return team.finalChoice === "ambush";
-    });
-
-    if (finder.finalChoice === "hide") {
-        drama.push(
-            `🕶️ ${teamDramaName(finder)} che giấu khí tức, ` +
-                "khiến vài đội mò đường như tìm nyc.",
-        );
-    }
-
-    if (finder.finalChoice === "bait") {
-        drama.push(
-            `🩸 ${teamDramaName(finder)} đặt bẫy quanh Linh Trì. ` +
-                "Ai lao vào quá hăng đều thành con lợn chết.",
-        );
-    }
-
-    if (attackers.length >= 2) {
-        drama.push(
-            `⚔️ ${attackers.map(teamDramaName).join(", ")} ` +
-                "lao vào tranh trực diện, quá nhiều con lợn phải trả giá.",
-        );
-    }
-
-    if (sneakers.length > 0) {
-        drama.push(
-            `🕶️ ${sneakers.map(teamDramaName).join(", ")} ` +
-                "chọn chim sẻ sau lưng.",
-        );
-    }
-
-    if (ambushers.length > 0) {
-        drama.push(
-            `🪤 ${ambushers.map(teamDramaName).join(", ")} ` +
-                "mai phục đường rút.",
-        );
-    }
-
-    if (winner.id !== finder.id) {
-        drama.push(
-            `💀 ${teamDramaName(finder)} tìm ra cơ duyên trước ` +
-                "nhưng không giữ được hết.",
-        );
-    }
-
-    return (
-        "🌌 **BÍ CẢNH TRUYỀN THỪA KHÉP LẠI**\n\n" +
-        `🏆 **Đội thắng lớn:** ${teamDramaName(winner)}\n` +
-        `🔎 **Đội phát hiện cơ duyên:** ${teamDramaName(finder)}\n\n` +
-        `**BXH tranh đoạt:**\n` +
-        `${topText || "Không có đội tranh đoạt."}\n\n` +
-        `**Diễn biến:**\n` +
-        `${
-            drama.slice(0, 6).join("\n") || "Thiên Đạo thấy hơi ít drama."
-        }\n\n` +
-        "**Thiên Đạo kết luận:** Mạnh không sai. " +
-        "Mạnh mà không biết chọn thời cơ thì vẫn ăn cám."
-    );
-}
-/*
- * Hàm được giữ lại để tương thích với
- * các vị trí gọi cũ, nhưng không thực
- * hiện xóa kênh hay xóa tin nhắn.
- */
-async function cleanup(event, delay) {
-    return undefined;
-}
 async function handlePathVote(interaction, event, parts) {
     const teamId = parts[3];
 
@@ -2777,10 +2850,10 @@ async function handlePathVote(interaction, event, parts) {
 
     const userId = String(interaction.user.id);
 
-    /*
-     * Chỉ nhận phiếu trong giai đoạn
-     * khám phá.
-     */
+    
+
+
+
     if (event.status !== "explore") {
         return interaction.reply({
             content: "❌ Hiện tại không phải giai đoạn chọn đường.",
@@ -2788,10 +2861,10 @@ async function handlePathVote(interaction, event, parts) {
         });
     }
 
-    /*
-     * Không nhận phiếu của round cũ
-     * hoặc round chưa bắt đầu.
-     */
+    
+
+
+
     if (
         !Number.isInteger(round) ||
         round !== event.round ||
@@ -2817,10 +2890,10 @@ async function handlePathVote(interaction, event, parts) {
         });
     }
 
-    /*
-     * Chỉ thành viên của đúng đội
-     * mới được chọn đường.
-     */
+    
+
+
+
     if (!team.members.includes(userId)) {
         return interaction.reply({
             content: "❌ Bạn không thuộc đội này.",
@@ -2828,13 +2901,13 @@ async function handlePathVote(interaction, event, parts) {
         });
     }
 
-    /*
-     * Chỉ chấp nhận lối đi đang được
-     * hiển thị trong round hiện tại.
-     *
-     * Điều này ngăn người dùng tự sửa
-     * customId để vote đường khác.
-     */
+    
+
+
+
+
+
+
     if (!team.pathOptions.includes(pathId) || !PATHS[pathId]) {
         return interaction.reply({
             content: "❌ Lối đi này không hợp lệ trong round hiện tại.",
@@ -2850,12 +2923,12 @@ async function handlePathVote(interaction, event, parts) {
 
     const previousVote = team.votes[voteBucket][userId] || null;
 
-    /*
-     * Mỗi thành viên có đúng một phiếu.
-     * Vote mới sẽ ghi đè vote cũ của
-     * chính người đó, không ảnh hưởng
-     * phiếu của thành viên khác.
-     */
+    
+
+
+
+
+
     team.votes[voteBucket][userId] = pathId;
 
     markTeamActivity(team, userId);
@@ -3013,13 +3086,13 @@ async function handleFinalVote(interaction, event, parts, isFinderVote) {
 
     const teamIsFinder = team.id === event.finderId;
 
-    /*
-     * Đội tìm thấy cơ duyên chỉ được dùng
-     * nhóm lựa chọn FINDER.
-     *
-     * Các đội còn lại chỉ được dùng
-     * nhóm lựa chọn REACT.
-     */
+    
+
+
+
+
+
+
     if (teamIsFinder !== isFinderVote) {
         return interaction.reply({
             content: "❌ Loại lựa chọn này không dành cho đội của bạn.",
@@ -3114,11 +3187,11 @@ async function handleBossAction(interaction, event, parts) {
         });
     }
 
-    /*
-     * Nút gọi trợ giúp được xử lý riêng.
-     * Chỉ thành viên của đội đang đánh boss
-     * mới có quyền gọi.
-     */
+    
+
+
+
+
     if (action === "call") {
         if (!team.members.includes(userId)) {
             return interaction.reply({
@@ -3141,7 +3214,7 @@ async function handleBossAction(interaction, event, parts) {
             });
         }
 
-        state.helpCalled = true;
+        await deferEphemeral(interaction);
 
         markTeamActivity(team, userId);
 
@@ -3150,10 +3223,9 @@ async function handleBossAction(interaction, event, parts) {
             .catch(() => null);
 
         if (!publicChannel) {
-            return interaction.reply({
+            return replyEphemeral(interaction, {
                 content:
-                    "⚠️ Đã ghi nhận gọi trợ giúp nhưng không tìm thấy kênh chung.",
-                ephemeral: true,
+                    "⚠️ Không tìm thấy kênh chung để gửi lời kêu gọi trợ giúp.",
             });
         }
 
@@ -3181,9 +3253,16 @@ async function handleBossAction(interaction, event, parts) {
             })
             .catch(() => null);
 
+        if (!publicMessage) {
+            return replyEphemeral(interaction, {
+                content: "⚠️ Không thể gửi lời kêu gọi trợ giúp ra kênh chung.",
+            });
+        }
+
+        state.helpCalled = true;
         state.publicMessage = publicMessage;
 
-        return interaction.reply({
+        return replyEphemeral(interaction, {
             content:
                 "🆘 Đã phát tín hiệu gọi trợ giúp ra kênh chung.\n" +
                 "Việc gọi trợ giúp làm đội tăng dấu vết sau khi turn kết thúc.",
@@ -3192,10 +3271,10 @@ async function handleBossAction(interaction, event, parts) {
         });
     }
 
-    /*
-     * Công, thủ và hồi máu chỉ dành
-     * cho thành viên đội đang đánh boss.
-     */
+    
+
+
+
     if (!team.members.includes(userId)) {
         return interaction.reply({
             content: "❌ Bạn không thuộc đội đang đánh boss.",
@@ -3267,10 +3346,10 @@ async function handleBossSupport(interaction, event, parts) {
         });
     }
 
-    /*
-     * Thành viên đội đang đánh boss
-     * không thể tự bấm hỗ trợ đội mình.
-     */
+    
+
+
+
     if (targetTeam.members.includes(userId)) {
         return interaction.reply({
             content: "❌ Bạn không thể tự trợ giúp chính đội mình.",
@@ -3297,10 +3376,10 @@ async function handleBossSupport(interaction, event, parts) {
 
     state.helpers.add(userId);
 
-    /*
-     * Sức mạnh hỗ trợ dựa trên đội
-     * của người bấm trợ giúp.
-     */
+    
+
+
+
     const supportPower = Math.max(
         8,
         Math.round(
@@ -3348,37 +3427,32 @@ async function handleStartEarly(interaction, event) {
     return beginExplore(event);
 }
 
+
 async function handleInteraction(interaction) {
     if (!interaction.guildId) {
-        return false;
+        return undefined;
     }
 
     if (!interaction.isButton() && !interaction.isStringSelectMenu()) {
-        return false;
+        return undefined;
     }
 
     const customId = String(interaction.customId || "");
 
     if (!customId.startsWith("duyen_")) {
-        return false;
+        return undefined;
     }
 
     const parts = customId.split("_");
-
     const action = parts[1];
-
     const eventId = parts[2];
-
     const event = findEvent(eventId);
 
     if (!event) {
-        await interaction
-            .reply({
-                content:
-                    "⌛ Bí Cảnh này không còn hoạt động hoặc bot vừa khởi động lại.",
-                ephemeral: true,
-            })
-            .catch(() => undefined);
+        await replyEphemeral(interaction, {
+            content:
+                "⌛ Bí Cảnh này không còn hoạt động hoặc bot vừa khởi động lại.",
+        }).catch(() => undefined);
 
         return true;
     }
@@ -3403,11 +3477,10 @@ async function handleInteraction(interaction) {
             const teamId = interaction.values?.[0];
 
             if (!teamId) {
-                await interaction.reply({
+                await replyEphemeral(interaction, {
                     content: "❌ Bạn chưa chọn đội.",
-                    ephemeral: true,
+                    components: [],
                 });
-
                 return true;
             }
 
@@ -3455,32 +3528,24 @@ async function handleInteraction(interaction) {
             return true;
         }
 
-        await interaction.reply({
+        await replyEphemeral(interaction, {
             content: "❌ Không nhận diện được thao tác Bí Cảnh.",
-            ephemeral: true,
         });
 
         return true;
     } catch (error) {
         console.error("[Duyen handleInteraction]", error);
 
-        const payload = {
+        await replyEphemeral(interaction, {
             content:
                 "⚠️ Có lỗi khi xử lý thao tác Bí Cảnh. " +
                 "Phiếu hoặc hành động có thể chưa được ghi nhận.",
-
-            ephemeral: true,
-        };
-
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp(payload).catch(() => undefined);
-        } else {
-            await interaction.reply(payload).catch(() => undefined);
-        }
+        }).catch(() => undefined);
 
         return true;
     }
 }
+
 async function showLastResult(interaction) {
     if (!interaction.guildId) {
         return interaction.reply({
@@ -3651,41 +3716,7 @@ async function lockFinalVoteMessages(event, finder) {
     );
 }
 
-function getRewardPoolForTeam(team, winner, finder) {
-    if (team.id === winner.id) {
-        return {
-            id: "winner",
-            config: DUYEN_REWARD_POOLS.winner,
-        };
-    }
 
-    if (team.id !== finder.id && team.finalChoice === "ignore") {
-        return {
-            id: "ignore",
-            config: DUYEN_REWARD_POOLS.ignore,
-        };
-    }
-
-    const sortedTeams = [...winner.eventTeams].sort((a, b) => {
-        return b.finalScore - a.finalScore;
-    });
-
-    const position = sortedTeams.findIndex((item) => {
-        return item.id === team.id;
-    });
-
-    if (position === 1) {
-        return {
-            id: "runner",
-            config: DUYEN_REWARD_POOLS.runner,
-        };
-    }
-
-    return {
-        id: "loser",
-        config: DUYEN_REWARD_POOLS.loser,
-    };
-}
 
 function grantFinalReward(userId, poolConfig) {
     const rewards = [];
@@ -3765,11 +3796,35 @@ function formatUserRewardLine(userId, rewards) {
     );
 }
 
+function compareFinalTeams(a, b, finderId) {
+    const scoreDiff = Number(b.finalScore || 0) - Number(a.finalScore || 0);
+
+    if (scoreDiff !== 0) {
+        return scoreDiff;
+    }
+
+    if (a.id === finderId && b.id !== finderId) {
+        return -1;
+    }
+
+    if (b.id === finderId && a.id !== finderId) {
+        return 1;
+    }
+
+    return Number(a.no || 0) - Number(b.no || 0);
+}
+
+function getFinalRanking(event, finder) {
+    return [...event.teams].sort((a, b) => {
+        return compareFinalTeams(a, b, finder.id);
+    });
+}
+
+
 async function grantTeamFinalRewards(
     event,
     team,
-    winner,
-    finder,
+    ranking,
     activeOnly = true,
 ) {
     const activeIds = new Set(getActiveMemberIds(team));
@@ -3784,18 +3839,15 @@ async function grantTeamFinalRewards(
         return !activeIds.has(String(userId));
     });
 
-    const sortedTeams = [...event.teams].sort((a, b) => {
-        return b.finalScore - a.finalScore;
-    });
+    const position = ranking.findIndex((item) => item.id === team.id);
 
     let poolConfig = DUYEN_REWARD_POOLS.loser;
-
     let poolId = "loser";
 
-    if (team.id === winner.id) {
+    if (position === 0) {
         poolConfig = DUYEN_REWARD_POOLS.winner;
         poolId = "winner";
-    } else if (sortedTeams[1]?.id === team.id) {
+    } else if (position === 1) {
         poolConfig = DUYEN_REWARD_POOLS.runner;
         poolId = "runner";
     } else if (team.finalChoice === "ignore") {
@@ -3807,23 +3859,18 @@ async function grantTeamFinalRewards(
 
     for (const userId of eligibleIds) {
         const rewards = grantFinalReward(userId, poolConfig);
-
         rewardLines.push(formatUserRewardLine(userId, rewards));
     }
 
-    /*
-     * Người không thực hiện bất kỳ hành động
-     * hợp lệ nào trong toàn bộ Bí Cảnh:
-     *
-     * - Không nhận phần thưởng cuối.
-     * - Bị cấm tham gia Bí Cảnh kế tiếp.
-     */
     for (const userId of afkIds) {
         setAfkBanForNextEvent(event, userId);
-
         rewardLines.push(
             `😴 ${tag(userId)}: AFK, không nhận quà và bị cấm tham gia lượt kế tiếp.`,
         );
+    }
+
+    if (rewardLines.length === 0) {
+        rewardLines.push("Không có thành viên đủ điều kiện nhận phần thưởng.");
     }
 
     return {
@@ -3834,7 +3881,17 @@ async function grantTeamFinalRewards(
     };
 }
 
+
 async function resolveFinal(event) {
+    try {
+        return await resolveFinalUnsafe(event);
+    } catch (error) {
+        console.error("[Duyen resolveFinal]", error);
+        return finishEventWithError(event);
+    }
+}
+
+async function resolveFinalUnsafe(event) {
     if (event.status !== "final") {
         return;
     }
@@ -3842,7 +3899,6 @@ async function resolveFinal(event) {
     event.status = "resolving_final";
 
     const timerKey = `final_${event.id}`;
-
     const timer = timers.get(timerKey);
 
     if (timer) {
@@ -3850,67 +3906,35 @@ async function resolveFinal(event) {
         timers.delete(timerKey);
     }
 
-    const finder = event.teams.find((team) => {
-        return team.id === event.finderId;
-    });
+    const finder = event.teams.find((team) => team.id === event.finderId);
 
     if (!finder) {
         console.error("[Duyen resolveFinal] Không tìm thấy đội finder.");
-
         return finishEventWithError(event);
     }
 
     for (const team of event.teams) {
         const source =
             team.id === finder.id ? Object.keys(FINDER) : Object.keys(REACT);
-
         const resolution = resolveVote(team, "final", source);
 
         team.finalChoice = resolution.choice;
-
         team.finalVoteDetails = resolution;
     }
 
     await lockFinalVoteMessages(event, finder);
 
-    // Tính điểm
     for (const team of event.teams) {
         team.finalScore = calculateFinalScore(event, team, finder);
     }
 
-    // Xếp hạng: điểm cao hơn thắng
-    const ranking = [...event.teams].sort((a, b) => {
-        // 1. Điểm cao hơn đứng trước
-        if (b.finalScore !== a.finalScore) {
-            return b.finalScore - a.finalScore;
-        }
-
-        // 2. Nếu bằng điểm thì ưu tiên đội tìm thấy cơ duyên
-        if (a.id === finder.id && b.id !== finder.id) {
-            return -1;
-        }
-
-        if (b.id === finder.id && a.id !== finder.id) {
-            return 1;
-        }
-
-        // 3. Cuối cùng giữ thứ tự đội
-        return a.no - b.no;
-    });
-
+    const ranking = getFinalRanking(event, finder);
     const winner = ranking[0] || null;
-    const runner = ranking[1] || null;
-    /*
-     * Gắn tạm danh sách đội để một số hàm
-     * phần thưởng có thể xác định thứ hạng.
-     */
-    for (const team of event.teams) {
-        team.eventTeams = event.teams;
-    }
 
-    const sortedTeams = [...event.teams].sort((a, b) => {
-        return b.finalScore - a.finalScore;
-    });
+    if (!winner) {
+        console.error("[Duyen resolveFinal] Không xác định được đội thắng.");
+        return finishEventWithError(event);
+    }
 
     const teamRewardResults = new Map();
 
@@ -3918,8 +3942,7 @@ async function resolveFinal(event) {
         const rewardResult = await grantTeamFinalRewards(
             event,
             team,
-            winner,
-            finder,
+            ranking,
             true,
         );
 
@@ -3930,19 +3953,12 @@ async function resolveFinal(event) {
         const channel = await event.guild.channels
             .fetch(team.channelId)
             .catch(() => null);
-
         const rewardResult = teamRewardResults.get(team.id);
-
-        const position =
-            sortedTeams.findIndex((item) => {
-                return item.id === team.id;
-            }) + 1;
-
+        const position = ranking.findIndex((item) => item.id === team.id) + 1;
         const resultTitle =
             team.id === winner.id
                 ? "🏆 **ĐỘI BẠN GIÀNH ĐƯỢC CƠ DUYÊN**"
                 : `📊 **ĐỘI BẠN XẾP HẠNG #${position}**`;
-
         const resultText =
             `${resultTitle}\n\n` +
             `${buildFinalVoteResolution(team, finder)}\n\n` +
@@ -3955,7 +3971,7 @@ async function resolveFinal(event) {
         await sendLongMessage(channel, resultText).catch(() => undefined);
     }
 
-    const rankingLines = sortedTeams.map((team, index) => {
+    const rankingLines = ranking.map((team, index) => {
         const choiceLabel = getFinalChoiceLabel(team, finder);
 
         return (
@@ -3981,15 +3997,11 @@ async function resolveFinal(event) {
     const storedResult = {
         eventId: event.id,
         createdAt: Date.now(),
-
         channelId: event.channelId,
-
         winnerTeamNo: winner.no,
         winnerMembers: [...winner.members],
-
         finderTeamNo: finder.no,
-
-        rankings: sortedTeams.map((team, index) => {
+        rankings: ranking.map((team, index) => {
             return {
                 rank: index + 1,
                 teamNo: team.no,
@@ -3999,25 +4011,23 @@ async function resolveFinal(event) {
                 members: [...team.members],
             };
         }),
-
         summary:
             `🏆 Đội ${winner.no} chiến thắng với ` +
             `**${fmt(winner.finalScore)}** điểm.`,
     };
 
     db.setSystemValue(getDuyenResultKey(event.guild.id), storedResult);
-
     db.setSystemValue(
         getDuyenResultKey(event.guild.id, event.channelId),
         storedResult,
     );
 
     event.status = "finished";
-
     events.delete(event.key);
 
     return cleanup(event);
 }
+
 async function finishEventWithError(event) {
     if (!event) {
         return;
@@ -4025,10 +4035,10 @@ async function finishEventWithError(event) {
 
     event.status = "error";
 
-    /*
-     * Dừng toàn bộ timer liên quan
-     * đến Bí Cảnh hiện tại.
-     */
+    
+
+
+
     for (const [timerKey, timer] of timers.entries()) {
         if (!timerKey.includes(event.id)) {
             continue;
@@ -4050,9 +4060,9 @@ async function finishEventWithError(event) {
         )
         .catch(() => undefined);
 
-    /*
-     * Thông báo riêng trong từng kênh đội.
-     */
+    
+
+
     for (const team of event.teams || []) {
         const teamChannel = await event.guild.channels
             .fetch(team.channelId)
@@ -4071,13 +4081,14 @@ async function finishEventWithError(event) {
     return cleanup(event);
 }
 
-/*
- * Không xóa kênh, không xóa category
- * và không xóa kết quả.
- *
- * Hàm này chỉ dừng timer và dọn trạng thái
- * tạm đang nằm trong bộ nhớ.
- */
+
+
+
+
+
+
+
+
 async function cleanup(event, delay = 0) {
     if (!event) {
         return;
@@ -4089,9 +4100,6 @@ async function cleanup(event, delay = 0) {
         });
     }
 
-    /*
-     * Dừng tất cả timer thuộc event.
-     */
     for (const [timerKey, timer] of timers.entries()) {
         if (!timerKey.includes(event.id)) {
             continue;
@@ -4101,44 +4109,40 @@ async function cleanup(event, delay = 0) {
         timers.delete(timerKey);
     }
 
-    /*
-     * Xóa các câu đố tạm thuộc event.
-     */
+    const puzzleCancels = [];
+
     for (const [puzzleKey, state] of activePuzzles.entries()) {
         if (state.eventId !== event.id) {
             continue;
         }
 
         activePuzzles.delete(puzzleKey);
+
+        if (typeof state.cancel === "function") {
+            puzzleCancels.push(Promise.resolve(state.cancel()));
+        }
     }
 
-    /*
-     * Xóa các trạng thái boss tạm
-     * thuộc event.
-     */
+    await Promise.allSettled(puzzleCancels);
+
     for (const [bossKey, state] of activeBosses.entries()) {
         if (state.eventId !== event.id) {
             continue;
         }
 
+        if (typeof state.cancel === "function") {
+            state.cancel();
+        }
+
         if (state.publicMessage) {
             await state.publicMessage
-                .edit({
-                    components: [],
-                })
+                .edit({ components: [] })
                 .catch(() => undefined);
         }
 
         activeBosses.delete(bossKey);
     }
 
-    /*
-     * Chỉ xóa sự kiện khỏi bộ nhớ.
-     *
-     * Không gọi channel.delete().
-     * Không gọi message.delete().
-     * Không xóa category.
-     */
     events.delete(event.key);
 }
 
@@ -4211,44 +4215,44 @@ async function forceStop(interaction) {
 }
 
 module.exports = {
-    /*
-     * Mở Bí Cảnh bằng interaction.
-     */
+    
+
+
     start,
 
-    /*
-     * Mở Bí Cảnh tự động theo config.
-     */
+    
+
+
     autoStart,
 
-    /*
-     * Nhận và xử lý button/select menu
-     * bắt đầu bằng customId duyen_.
-     */
+    
+
+
+
     handleInteraction,
     handleButton: handleInteraction,
 
-    /*
-     * Hiển thị kết quả gần nhất.
-     */
+    
+
+
     showLastResult,
 
-    /*
-     * Dừng sự kiện thủ công.
-     */
+    
+
+
     forceStop,
 
-    /*
-     * Các hàm trạng thái hỗ trợ
-     * cho command hoặc scheduler.
-     */
+    
+
+
+
     hasActiveEvent,
     getActiveEvent,
     getActiveEvents,
 
-    /*
-     * Xuất ra để tương thích với
-     * những file cũ đang gọi trực tiếp.
-     */
+    
+
+
+
     cleanup,
 };
