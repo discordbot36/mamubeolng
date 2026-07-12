@@ -3908,26 +3908,6 @@ async function resolveFinal(event) {
         team.eventTeams = event.teams;
     }
 
-    const winner = [...event.teams].sort((a, b) => {
-        const scoreDiff = Number(b.finalScore || 0) - Number(a.finalScore || 0);
-
-        if (scoreDiff !== 0) {
-            return scoreDiff;
-        }
-
-        // Nếu hòa điểm, ưu tiên đội tìm thấy cơ duyên.
-        if (a.id === finder.id) {
-            return -1;
-        }
-
-        if (b.id === finder.id) {
-            return 1;
-        }
-
-        // Nếu vẫn hòa, ưu tiên đội có số nhỏ hơn.
-        return Number(a.no || 999) - Number(b.no || 999);
-    })[0];
-
     const sortedTeams = [...event.teams].sort((a, b) => {
         return b.finalScore - a.finalScore;
     });
