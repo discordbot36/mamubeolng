@@ -11,9 +11,11 @@ module.exports = {
 
         notifyRoleId: null,
         notifyRoleName: "Lợn Tu Tiên",
-        clearChannelBeforeOpen: true,
+        clearChannelBeforeOpen: false,
         clearChannelMaxBatches: 20,
         clearChannelReason: "Dọn kênh trước khi mở cơ duyên",
+        deleteTeamChannelsAfterFinish: false,
+        teamChannelRetentionMs: 24 * 60 * 60 * 1000,
         avoidWindows: [
             {
                 startHour: 20,
