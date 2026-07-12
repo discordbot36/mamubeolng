@@ -125,32 +125,36 @@ async function runInteractionHandler(handler, interaction) {
     }
 }
 async function handleButton(interaction) {
-    const handlers = [
-        admin.handleButton.bind(admin),
-        economy.handleButton.bind(economy),
-        race.handleButton.bind(race),
-        work.handleButton.bind(work),
-        dothachTournament.handleButton.bind(dothachTournament),
-        dothach.handleButton.bind(dothach),
-        baucua.handleButton.bind(baucua),
-        taixiu.handleButton.bind(taixiu),
-        tutien.handleButton.bind(tutien),
-        tower.handleButton.bind(tower),
-        kynang.handleButton.bind(kynang),
-        worldboss.handleButton.bind(worldboss),
-        leaderboard.handleButton.bind(leaderboard),
-        dungeon.handleButton.bind(dungeon),
-        blackjack.handleButton.bind(blackjack),
-        pigRoad.handleButton.bind(pigRoad),
-        quest.handleButton.bind(quest),
-        bicanh.handleButton.bind(bicanh),
-        phapbao.handleButton.bind(phapbao),
-        duyen.handleButton.bind(duyen),
-        sanyeuthu.handleButton.bind(sanyeuthu),
-        flip.handleButton.bind(flip),
-        vecao.handleButton.bind(vecao),
-        raidserver.handleButton.bind(raidserver),
+    const modulesWithButtons = [
+        admin,
+        economy,
+        race,
+        work,
+        dothachTournament,
+        dothach,
+        baucua,
+        taixiu,
+        tutien,
+        tower,
+        kynang,
+        worldboss,
+        leaderboard,
+        dungeon,
+        blackjack,
+        pigRoad,
+        quest,
+        bicanh,
+        phapbao,
+        duyen,
+        sanyeuthu,
+        flip,
+        vecao,
+        raidserver,
     ];
+
+    const handlers = modulesWithButtons
+        .filter((module) => typeof module.handleButton === "function")
+        .map((module) => module.handleButton.bind(module));
 
     for (const handler of handlers) {
         const result = await runInteractionHandler(handler, interaction);
