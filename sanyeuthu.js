@@ -2268,23 +2268,35 @@ async function selectAction(interaction, hunt, action) {
         });
     }
 
-    hunt.battle.actions[userId] = action;
-    saveHunt(hunt);
-
-    const selectedCount = Object.keys(hunt.battle.actions || {}).length;
-
-    await interaction.reply({
-        content: `${ACTIONS[action].emoji} Bạn đã chọn **${ACTIONS[action].label}**. (${selectedCount}/${hunt.memberIds.length})`,
+    await interaction.deferReply({
         ephemeral: true,
     });
 
-    if (selectedCount >= hunt.memberIds.length) {
-        const channel = interaction.channel;
+    try {
+        hunt.battle.actions[userId] = action;
+        saveHunt(hunt);
 
-        return resolveBattleRound(channel, hunt.id);
+        const selectedCount = Object.keys(hunt.battle.actions || {}).length;
+
+        await interaction.editReply({
+            content:
+                `${ACTIONS[action].emoji} Bạn đã chọn ` +
+                `**${ACTIONS[action].label}**. ` +
+                `(${selectedCount}/${hunt.memberIds.length})`,
+        });
+
+        if (selectedCount >= hunt.memberIds.length) {
+            return resolveBattleRound(interaction.channel, hunt.id);
+        }
+
+        return undefined;
+    } catch (error) {
+        console.error("[SanYeuThu Select Action]", error);
+
+        return interaction.editReply({
+            content: "❌ Có lỗi khi ghi nhận hành động. " + "Hãy thử lại.",
+        });
     }
-
-    return undefined;
 }
 
 async function handleButton(interaction) {
