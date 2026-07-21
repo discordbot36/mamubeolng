@@ -7,6 +7,20 @@ const stageNames = [
     "Mộ Trư Cổ",
     "Huyết Trì Lợn Ma",
     "Thiên Lao Mamu",
+
+    "Vực Trư Ma",
+    "Cổ Thành Linh Lợn",
+    "Địa Cung Hắc Trư",
+    "Ma Giới Mamu",
+    "Thiên Trư Thánh Địa",
+    "Vạn Trư Cổ Mộ",
+    "Hư Không Trư Vực",
+    "Đế Cung Mamu",
+
+    "Thần Mộ Trư Tổ",
+    "Tinh Hải Linh Trư",
+    "Thiên Ngoại Trư Giới",
+    "Mamu Thần Điện",
 ];
 
 const monsterNames = [
@@ -18,21 +32,44 @@ const monsterNames = [
     "Trư Hồn Tu La",
     "Lợn Ma Huyết Nhãn",
     "Mamu Cổ Thú",
+
+    "Trư Ma Vực Chủ",
+    "Linh Lợn Cổ Vương",
+    "Hắc Trư Địa Hoàng",
+    "Mamu Ma Đế",
+    "Thiên Trư Thánh Tướng",
+    "Vạn Trư Mộ Chủ",
+    "Hư Không Trư Thần",
+    "Mamu Đế Tôn",
+
+    "Trư Tổ Tàn Hồn",
+    "Tinh Hải Trư Vương",
+    "Thiên Ngoại Trư Đế",
+    "Mamu Thần Chủ",
 ];
 
 function getZoneMultiplier(stage) {
-    if (stage <= 10) return 0.9;
-    if (stage <= 20) return 1.25;
-    if (stage <= 30) return 1.85;
-    if (stage <= 40) return 2.65;
-    if (stage <= 50) return 3.75;
-    if (stage <= 60) return 5.25;
-    if (stage <= 70) return 7.2;
-    return 9.7;
+    const safeStage = Math.max(1, Number(stage || 1));
+
+    const zone = Math.floor((safeStage - 1) / 10);
+
+    const earlyMultipliers = [0.9, 1.25, 1.85, 2.65, 3.75, 5.25, 7.2, 9.7];
+
+    if (zone < earlyMultipliers.length) {
+        return earlyMultipliers[zone];
+    }
+    return (
+        earlyMultipliers[earlyMultipliers.length - 1] *
+        Math.pow(1.28, zone - (earlyMultipliers.length - 1))
+    );
 }
 
 function getRequiredPower(stage) {
-    return Math.floor(560 * Math.pow(stage, 1.52) * getZoneMultiplier(stage));
+    const safeStage = Math.max(1, Number(stage || 1));
+
+    return Math.floor(
+        560 * Math.pow(safeStage, 1.46) * getZoneMultiplier(safeStage),
+    );
 }
 
 function getFirstClearMoney(stage) {
@@ -132,22 +169,55 @@ function getFirstClearItems(stage) {
         return items;
     }
 
-    const items = [{ itemId: "cam_lon_xin_vl", amount: 2 }];
+    const zone = Math.floor((stage - 1) / 10);
+
+    const items = [
+        {
+            itemId: "cam_lon_xin_vl",
+            amount: Math.min(8, 2 + Math.floor(zone / 4)),
+        },
+    ];
 
     if (stage % 10 === 0) {
-        items.push({ itemId: "bi_tich_thien_giai_chu_dong", amount: 1 });
+        items.push({
+            itemId: "bi_tich_thien_giai_chu_dong",
+            amount: stage >= 150 ? 2 : 1,
+        });
     }
 
     if (stage % 20 === 0) {
-        items.push({ itemId: "bi_tich_thien_giai_bi_dong", amount: 1 });
+        items.push({
+            itemId: "bi_tich_thien_giai_bi_dong",
+            amount: stage >= 160 ? 2 : 1,
+        });
     }
 
     if (stage % 25 === 0) {
-        items.push({ itemId: "tay_tuy_linh_can_dan", amount: 1 });
+        items.push({
+            itemId: "tay_tuy_linh_can_dan",
+            amount: stage >= 100 ? 2 : 1,
+        });
+    }
+
+    if (stage % 50 === 0) {
+        items.push({
+            itemId: "ruong_phap_bao_tinh_anh",
+            amount: stage >= 150 ? 2 : 1,
+        });
+    }
+
+    if (stage % 100 === 0) {
+        items.push({
+            itemId: "ruong_phap_bao_mamu",
+            amount: 1,
+        });
     }
 
     if (stage % 80 === 0) {
-        items.push({ itemId: "bi_tich_mamu_cam_thuat_chu_dong", amount: 1 });
+        items.push({
+            itemId: "bi_tich_mamu_cam_thuat_chu_dong",
+            amount: 1,
+        });
     }
 
     return items;
@@ -183,12 +253,42 @@ function getSweepDrops(stage) {
         ];
     }
 
+    const highStageBonus = Math.min(
+        20,
+        Math.floor(Math.max(0, stage - 50) / 10) * 2,
+    );
+
     return [
-        { itemId: "cam_lon_xin_vl", amount: 1, chance: 62 },
-        { itemId: "cam_lon_xin_vl", amount: 2, chance: 18 },
-        { itemId: "bi_tich_thien_giai_chu_dong", amount: 1, chance: 5 },
-        { itemId: "bi_tich_thien_giai_bi_dong", amount: 1, chance: 5 },
-        { itemId: "tay_tuy_linh_can_dan", amount: 1, chance: 10 },
+        {
+            itemId: "cam_lon_xin_vl",
+            amount: 1,
+            chance: Math.max(35, 62 - highStageBonus),
+        },
+        {
+            itemId: "cam_lon_xin_vl",
+            amount: stage >= 150 ? 4 : stage >= 100 ? 3 : 2,
+            chance: 18 + highStageBonus,
+        },
+        {
+            itemId: "bi_tich_thien_giai_chu_dong",
+            amount: 1,
+            chance: 5,
+        },
+        {
+            itemId: "bi_tich_thien_giai_bi_dong",
+            amount: 1,
+            chance: 5,
+        },
+        {
+            itemId: "tay_tuy_linh_can_dan",
+            amount: 1,
+            chance: 8,
+        },
+        {
+            itemId: "ruong_phap_bao_tinh_anh",
+            amount: 1,
+            chance: stage >= 100 ? 3 : 1,
+        },
     ];
 }
 
@@ -225,10 +325,18 @@ function buildStage(stage) {
         },
     };
 }
+const MAX_DUNGEON_STAGE = 200;
 
 module.exports = {
     sweepCooldownMinutes: 30,
     activeSkillTriggerChance: 0.35,
-    maxStage: 80,
-    stages: Array.from({ length: 80 }, (_, index) => buildStage(index + 1)),
+
+    maxStage: MAX_DUNGEON_STAGE,
+
+    stages: Array.from(
+        {
+            length: MAX_DUNGEON_STAGE,
+        },
+        (_, index) => buildStage(index + 1),
+    ),
 };

@@ -32,7 +32,24 @@ const TOWER_EDIT_EVERY_TURNS = 2;
 function formatNumber(number) {
     return Number(number || 0).toLocaleString("vi-VN");
 }
+function getTowerCycleInfo(globalFloor) {
+    const safeFloor = Math.max(1, Number(globalFloor || 1));
 
+    const floorsPerCycle = Math.max(
+        10,
+        Number(towerConfig.floorsPerCycle || 100),
+    );
+
+    const cycle = Math.floor((safeFloor - 1) / floorsPerCycle) + 1;
+
+    const floorInCycle = ((safeFloor - 1) % floorsPerCycle) + 1;
+
+    return {
+        cycle,
+        floorInCycle,
+        floorsPerCycle,
+    };
+}
 function clamp(value, min, max) {
     return Math.max(min, Math.min(max, value));
 }
@@ -68,25 +85,35 @@ function getZoneMultiplier(floor) {
 }
 
 function getRecommendedPower(floor) {
+    const safeFloor = Math.max(1, Number(floor || 1));
+
     return Math.floor(
-        towerConfig.monster.basePower *
-            Math.pow(floor, towerConfig.monster.floorPower) *
-            getZoneMultiplier(floor),
+        Number(towerConfig.monster.basePower || 180) *
+            Math.pow(
+                safeFloor,
+                Number(towerConfig.monster.floorPower || 1.62),
+            ) *
+            getZoneMultiplier(safeFloor),
     );
 }
 
 function getMonsterName(floor) {
-    const names = Array.isArray(towerConfig.monsterNames)
-        ? towerConfig.monsterNames
-        : ["Trư Ma Hộ Tháp"];
+    const names = towerConfig.monsterNames || [];
 
-    const name = names[(floor - 1) % names.length];
+    const { cycle, floorInCycle, floorsPerCycle } = getTowerCycleInfo(floor);
 
-    if (floor % 10 === 0) {
-        return `Boss ${name}`;
+    const baseName =
+        names[(floorInCycle - 1) % names.length] || "Trư Ma Hộ Tháp";
+
+    if (floorInCycle === floorsPerCycle) {
+        return `Vòng ${cycle} ` + `Tháp Chủ ${baseName}`;
     }
 
-    return name;
+    if (floorInCycle % 10 === 0) {
+        return `Vòng ${cycle} ` + `Boss ${baseName}`;
+    }
+
+    return `Vòng ${cycle} ` + baseName;
 }
 
 function buildMonster(floor) {
@@ -94,7 +121,17 @@ function buildMonster(floor) {
 
     const isBossFloor = floor % Number(towerConfig.chestEveryFloor || 10) === 0;
 
-    const bossMultiplier = isBossFloor ? 1.25 : 1;
+    const { cycle, floorInCycle, floorsPerCycle } = getTowerCycleInfo(floor);
+
+    const isCycleBoss = floorInCycle === floorsPerCycle;
+
+    const normalBossMultiplier = isBossFloor ? 1.18 : 1;
+
+    const cycleBossMultiplier = isCycleBoss
+        ? Number(towerConfig.cycle?.bossMultiplier || 1.08)
+        : 1;
+
+    const bossMultiplier = normalBossMultiplier * cycleBossMultiplier;
 
     const power = Math.max(1, Math.floor(recommendedPower * bossMultiplier));
 
@@ -181,11 +218,13 @@ function addTuTienExp(userId, amount) {
 }
 
 function getTowerExpReward(floor) {
+    const safeFloor = Math.max(1, Number(floor || 1));
+
     const baseExp = Math.floor(
-        (35 + floor * 10 + Math.pow(floor, 1.05) * 6) * 1.12,
+        (35 + safeFloor * 10 + Math.pow(safeFloor, 1.05) * 6) * 1.12,
     );
 
-    if (isChestFloor(floor)) {
+    if (isChestFloor(safeFloor)) {
         return Math.floor(baseExp * 1.35);
     }
 
@@ -193,14 +232,16 @@ function getTowerExpReward(floor) {
 }
 
 function getMoneyReward(floor) {
+    const safeFloor = Math.max(1, Number(floor || 1));
+
     const reward = Math.floor(
-        Number(towerConfig.reward.base || 120) *
-            Math.pow(floor, Number(towerConfig.reward.power || 1.12)),
+        Number(towerConfig.reward.base || 160) *
+            Math.pow(safeFloor, Number(towerConfig.reward.power || 1.155)),
     );
 
-    if (isChestFloor(floor)) {
+    if (isChestFloor(safeFloor)) {
         return Math.floor(
-            reward * Number(towerConfig.reward.chestFloorMultiplier || 2),
+            reward * Number(towerConfig.reward.chestFloorMultiplier || 2.75),
         );
     }
 
@@ -210,10 +251,35 @@ function getMoneyReward(floor) {
 function getChestByFloor(floor) {
     const chests = towerConfig.chests;
 
-    if (floor >= 300) return chests.mamu;
-    if (floor >= 200) return chests.kim_cuong;
-    if (floor >= 100) return chests.vang;
-    if (floor >= 50) return chests.bac;
+    const { floorInCycle, floorsPerCycle } = getTowerCycleInfo(floor);
+
+    /*
+     * Boss cuối vòng luôn nhận
+     * rương Mamu.
+     */
+    if (floorInCycle === floorsPerCycle) {
+        return chests.mamu;
+    }
+
+    /*
+     * Các rương thông thường tăng theo
+     * tổng tiến độ, không reset theo vòng.
+     */
+    if (floor >= 300) {
+        return chests.kim_cuong;
+    }
+
+    if (floor >= 200) {
+        return chests.vang;
+    }
+
+    if (floor >= 100) {
+        return chests.bac;
+    }
+
+    if (floor >= 50) {
+        return chests.bac;
+    }
 
     return chests.dong;
 }
@@ -237,12 +303,18 @@ function getRewardText(floor) {
     return `${coin} **${formatMoney(moneyReward)}**\n✨ Tu vi **+${formatNumber(expReward)} exp**`;
 }
 
-function buildFightButton(userId, disabled = false) {
+function buildFightButton(userId, disabled = false, cooldownLeft = 0) {
+    const safeCooldown = Math.max(0, Number(cooldownLeft || 0));
+
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId(`tower_fight_${userId}`)
-            .setLabel("Đánh tầng tiếp theo")
-            .setEmoji("⚔️")
+            .setLabel(
+                safeCooldown > 0
+                    ? `Hồi phục ${formatTimeLeft(safeCooldown)}`
+                    : "Đánh tầng tiếp theo",
+            )
+            .setEmoji(safeCooldown > 0 ? "⏳" : "⚔️")
             .setStyle(ButtonStyle.Danger)
             .setDisabled(disabled),
     );
@@ -251,6 +323,11 @@ function buildFightButton(userId, disabled = false) {
 function buildTowerEmbed(interaction, tower, profile) {
     const now = Date.now();
     const nextFloor = (tower.floor || 0) + 1;
+    const currentInfo = getTowerCycleInfo(
+        Math.max(1, Number(tower.floor || 0)),
+    );
+
+    const nextInfo = getTowerCycleInfo(nextFloor);
     const monster = buildMonster(nextFloor);
     const playerPower = combat.calculateCombatPower(profile);
     const powerDiff = playerPower - monster.power;
@@ -939,6 +1016,9 @@ async function fight(interaction) {
         rewardText = `${coin} Nhận: **${formatMoney(reward)}**\n✨ Tu vi: **+${formatNumber(expReward)} exp**`;
     }
     const nextNextFloor = nextFloor + 1;
+    const clearedInfo = getTowerCycleInfo(nextFloor);
+
+    const nextFloorInfo = getTowerCycleInfo(nextNextFloor);
     const nextMonster = buildMonster(nextNextFloor);
 
     const resultText =

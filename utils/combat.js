@@ -249,29 +249,14 @@ function calculateActiveSkillPowerBonus(profile) {
     return Math.min(0.35, Math.max(0, score));
 }
 
+const POWER_PER_FLOOR = 1.055;
+const MAX_EXP_POWER_RATE = 0.04;
+
 function calculateRealmPower(realmIndex) {
     const safeRealmIndex = Math.max(0, Number(realmIndex || 0));
+    const absoluteFloor = safeRealmIndex * MAX_REALM_FLOOR;
 
-    const rawPower = Math.floor(1000 * Math.pow(safeRealmIndex + 1, 2.45));
-
-    if (safeRealmIndex <= 0) {
-        return rawPower;
-    }
-
-    const previousRawPower = Math.floor(1000 * Math.pow(safeRealmIndex, 2.45));
-
-    const previousMaxFloorBonus = 1 + (MAX_REALM_FLOOR - 1) * 0.04;
-    const previousMaxExpBonus = 1.1;
-    const breakthroughBonus = 1.08;
-
-    const minimumPowerAfterBreakthrough = Math.floor(
-        previousRawPower *
-            previousMaxFloorBonus *
-            previousMaxExpBonus *
-            breakthroughBonus,
-    );
-
-    return Math.max(rawPower, minimumPowerAfterBreakthrough);
+    return Math.floor(1000 * Math.pow(POWER_PER_FLOOR, absoluteFloor));
 }
 
 function calculateFloorPower(realmPower, floor) {
@@ -280,7 +265,9 @@ function calculateFloorPower(realmPower, floor) {
         Math.min(MAX_REALM_FLOOR, Number(floor || 1)),
     );
 
-    return Math.floor(realmPower * ((safeFloor - 1) * 0.04));
+    return Math.floor(
+        realmPower * (Math.pow(POWER_PER_FLOOR, safeFloor - 1) - 1),
+    );
 }
 
 function calculateExpPower(profile, realmPower, floorPower) {
@@ -296,7 +283,9 @@ function calculateExpPower(profile, realmPower, floorPower) {
 
     const expRate = Math.max(0, Math.min(1, Number(profile.exp || 0) / maxExp));
 
-    const expPowerCap = Math.floor((realmPower + floorPower) * 0.1);
+    const expPowerCap = Math.floor(
+        (realmPower + floorPower) * MAX_EXP_POWER_RATE,
+    );
 
     return Math.floor(expPowerCap * expRate);
 }

@@ -159,6 +159,23 @@ function ensureUserHuntStats(user) {
 
     return stats;
 }
+function getRemainingHuntRuns(userId) {
+    const user = getUser(userId);
+    const stats = ensureUserHuntStats(user);
+
+    const usedRuns = Math.max(0, Number(stats.dailyRuns || 0));
+
+    const maxRuns = Math.max(0, Number(config.cooldown.maxRunsPerDay || 0));
+
+    return Math.max(0, maxRuns - usedRuns);
+}
+
+function getHuntRunText(userId) {
+    const remaining = getRemainingHuntRuns(userId);
+    const maxRuns = Number(config.cooldown.maxRunsPerDay || 0);
+
+    return `🎟️ Lượt săn còn lại: **${remaining}/${maxRuns}**`;
+}
 function getTimeLeftText(ms) {
     const totalSeconds = Math.ceil(Math.max(0, Number(ms || 0)) / 1000);
     const minutes = Math.floor(totalSeconds / 60);
@@ -319,9 +336,12 @@ async function getBlockingActiveHunt(userId, client) {
 
         if (!channel) {
             activeHunt.status = "cancelled";
+            activeHunt.recruitmentClosed = true;
             activeHunt.cancelledAt = Date.now();
+
+            clearHuntTimer(activeHunt.id);
+            clearRoundTimer(activeHunt.id);
             clearHuntUsers(activeHunt);
-            saveHunt(activeHunt);
 
             return null;
         }
@@ -547,11 +567,18 @@ function createBattleState(hunt) {
 function buildLobbyEmbed(hunt) {
     const memberLines = hunt.memberIds.map((userId, index) => {
         const member = hunt.members[userId];
+        const remainingRuns = getRemainingHuntRuns(userId);
+
+        const supportText =
+            member?.supportOnly === true || member?.supportReward === true
+                ? " • 🆘 **Hỗ trợ 10% quà**"
+                : ` • 🎟️ **${remainingRuns} lượt**`;
 
         return (
             `${index + 1}. <@${userId}>` +
             (userId === hunt.hostId ? " 👑" : "") +
-            ` — lực chiến **${formatNumber(member?.power || 0)}**`
+            ` — lực chiến **${formatNumber(member?.power || 0)}**` +
+            supportText
         );
     });
 
@@ -588,7 +615,7 @@ function buildLobbyButtons(hunt) {
             .setDisabled(cannotJoin),
         new ButtonBuilder()
             .setCustomId(`syt_leave_${hunt.id}`)
-            .setLabel("Rời đội")
+            .setLabel("Rời đội / Giải tán")
             .setEmoji("🚪")
             .setStyle(ButtonStyle.Secondary)
             .setDisabled(cannotLeave),
@@ -1756,7 +1783,15 @@ async function startHuntDirect(channel, hunt, lobbyMessage = null) {
             hunt.members[userId]?.supportOnly === true,
         );
     }
+    const runStatusLines = hunt.memberIds.map((userId) => {
+        const member = hunt.members[userId];
 
+        if (member?.supportOnly === true) {
+            return `<@${userId}>: 🆘 hỗ trợ, nhận **10% quà**`;
+        }
+
+        return `<@${userId}>: ${getHuntRunText(userId)}`;
+    });
     await lockHuntChannel(channel, hunt);
 
     const message =
@@ -1773,7 +1808,8 @@ async function startHuntDirect(channel, hunt, lobbyMessage = null) {
                         .setTitle("🔒 KÊNH SĂN ĐÃ KHÓA")
                         .setDescription(
                             `Đội hình **${hunt.memberIds.length} người** đã khóa.\n` +
-                                "Chỉ thành viên trong đội mới còn xem và chat được.",
+                                "Chỉ thành viên trong đội mới còn xem và chat được.\n\n" +
+                                `${runStatusLines.join("\n")}`,
                         ),
                 ],
                 components: [],
@@ -1868,10 +1904,26 @@ async function createHunt(interaction, mode) {
     }
 
     const available = checkRunAvailable(userId, mode);
+    const remainingRuns = getRemainingHuntRuns(userId);
 
     if (!available.ok) {
         return interaction.reply({
-            content: `❌ ${available.message}`,
+            content: `❌ ${available.message}\n` + `${getHuntRunText(userId)}`,
+            ephemeral: true,
+        });
+    }
+
+    if (
+        mode === "party" &&
+        (available.supportOnly === true || remainingRuns <= 0)
+    ) {
+        return interaction.reply({
+            content:
+                "❌ Bạn đã hết lượt săn thưởng chính hôm nay.\n" +
+                "Bạn không thể tạo tổ đội hoặc làm host, " +
+                "nhưng vẫn có thể tham gia party của người khác " +
+                "để hỗ trợ và nhận **10% quà**.\n\n" +
+                `${getHuntRunText(userId)}`,
             ephemeral: true,
         });
     }
@@ -1912,9 +1964,10 @@ async function createHunt(interaction, mode) {
     const channel = await createHuntChannel(interaction, hunt);
 
     await interaction.editReply({
-        content: `✅ Đã mở kênh săn yêu thú: ${channel}`,
+        content:
+            `✅ Đã mở kênh săn yêu thú: ${channel}\n` +
+            `${getHuntRunText(userId)}`,
     });
-
     if (mode === "solo") {
         return startHuntDirect(channel, hunt);
     }
@@ -2044,10 +2097,11 @@ async function joinHunt(interaction, hunt) {
 
     return interaction.reply({
         content:
-            `✅ Đã tham gia tổ đội săn yêu thú. Lực chiến: **${formatNumber(power)}**` +
-            (available.supportOnly
-                ? "\n⚠️ Bạn đã hết lượt thưởng chính, lần này chỉ nhận 10% quà hỗ trợ."
-                : ""),
+            `✅ Đã tham gia tổ đội săn yêu thú.\n` +
+            `💪 Lực chiến: **${formatNumber(power)}**\n` +
+            (joinsAsSupport
+                ? "⚠️ Bạn đã hết lượt thưởng chính, lần này chỉ nhận **10% quà hỗ trợ**."
+                : getHuntRunText(userId)),
         ephemeral: true,
     });
 }
@@ -2063,11 +2117,49 @@ async function leaveHunt(interaction, hunt) {
     }
 
     if (userId === hunt.hostId) {
-        return interaction.reply({
+        hunt.status = "cancelled";
+        hunt.recruitmentClosed = true;
+        hunt.cancelledAt = Date.now();
+
+        clearHuntTimer(hunt.id);
+        clearRoundTimer(hunt.id);
+        clearHuntUsers(hunt);
+
+        const message = await interaction.channel.messages
+            .fetch(hunt.messageId)
+            .catch(() => null);
+
+        if (message) {
+            await message
+                .edit({
+                    embeds: [
+                        new EmbedBuilder()
+                            .setColor(0x95a5a6)
+                            .setTitle("🌫️ TỔ ĐỘI ĐÃ GIẢI TÁN")
+                            .setDescription(
+                                `Host <@${userId}> đã hủy cuộc săn.\n` +
+                                    "Tất cả thành viên đã được giải phóng và có thể tham gia party khác.",
+                            ),
+                    ],
+                    components: [],
+                })
+                .catch(() => null);
+        }
+
+        await interaction.reply({
             content:
-                "❌ Host không thể rời đội. Hãy để lobby hết giờ hoặc không bấm bắt đầu.",
+                "✅ Đã giải tán tổ đội săn yêu thú. " +
+                "Tất cả thành viên có thể tham gia phòng khác.",
             ephemeral: true,
         });
+
+        setTimeout(() => {
+            interaction.channel
+                .delete("Host giải tán tổ đội săn yêu thú")
+                .catch(() => null);
+        }, 3_000);
+
+        return;
     }
 
     if (!hunt.memberIds.includes(userId)) {
@@ -2261,8 +2353,13 @@ async function recover(client) {
 
         if (!channel) {
             hunt.status = "cancelled";
+            hunt.recruitmentClosed = true;
+            hunt.cancelledAt = Date.now();
+
+            clearHuntTimer(hunt.id);
+            clearRoundTimer(hunt.id);
             clearHuntUsers(hunt);
-            saveHunt(hunt);
+
             continue;
         }
 

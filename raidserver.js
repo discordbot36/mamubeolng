@@ -1982,16 +1982,30 @@ class RaidServerManager {
             )
             .catch(() => null);
 
+        const registeredIds = [
+            ...new Set(registered.map((player) => String(player.userId))),
+        ];
+
+        const mentionText = registeredIds
+            .map((userId) => `<@${userId}>`)
+            .join(" ");
+
         await channel
-            ?.send(
-                [
+            ?.send({
+                content: [
+                    mentionText,
+                    "",
                     `🐷 **${raidConfig.battleDisplayName || "Mamu 3 tạ 6 18m"} đã thức tỉnh!**`,
                     "🔒 **RAID ĐÃ KHÓA**",
                     `Người đăng ký: **${registered.length}**`,
                     `Độ khó scale theo: **${scaleCount}** người`,
                     "Ai không bấm hành động sẽ bị tính AFK và không nhận quà.",
                 ].join("\n"),
-            )
+
+                allowedMentions: {
+                    users: registeredIds,
+                },
+            })
             .catch(() => null);
 
         return this.startNextPhase(client, raid.id);

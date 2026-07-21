@@ -20,6 +20,13 @@ module.exports = {
     },
 
     chestEveryFloor: 10,
+    floorsPerCycle: 100,
+
+    cycle: {
+        powerMultiplier: 1.32,
+        rewardMultiplier: 1.18,
+        bossMultiplier: 1.08,
+    },
 
     chests: {
         dong: {
