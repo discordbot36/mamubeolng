@@ -1760,20 +1760,30 @@ class RaidServerManager {
             });
         }
 
-        if (!raid.players[interaction.user.id]) {
+        const alreadyJoined = Boolean(raid.players[interaction.user.id]);
+
+        if (!alreadyJoined) {
             raid.players[interaction.user.id] = createRaidPlayer(
                 interaction.user.id,
             );
+
+            setCurrentRaid(raid);
         }
 
-        setCurrentRaid(raid);
-
-        await refreshRegisterMessage(interaction.client, raid);
-
-        return interaction.reply({
-            content: "✅ Bạn đã đăng ký Raid Server.",
+        // Trả lời ngay, không chờ Discord cập nhật bảng đăng ký
+        await interaction.reply({
+            content: alreadyJoined
+                ? "✅ Bạn đã đăng ký Raid Server từ trước rồi."
+                : "✅ Bạn đã đăng ký Raid Server.",
             ephemeral: true,
         });
+
+        // Cập nhật bảng ở nền, lỗi cũng không làm treo interaction
+        refreshRegisterMessage(interaction.client, raid).catch((error) => {
+            console.error("[RAID] Không cập nhật được bảng đăng ký:", error);
+        });
+
+        return true;
     }
 
     async leaveRaid(interaction) {
@@ -1786,15 +1796,25 @@ class RaidServerManager {
             });
         }
 
-        delete raid.players[interaction.user.id];
-        setCurrentRaid(raid);
+        const wasRegistered = Boolean(raid.players[interaction.user.id]);
 
-        await refreshRegisterMessage(interaction.client, raid);
+        if (wasRegistered) {
+            delete raid.players[interaction.user.id];
+            setCurrentRaid(raid);
+        }
 
-        return interaction.reply({
-            content: "🚪 Đã hủy đăng ký raid.",
+        await interaction.reply({
+            content: wasRegistered
+                ? "🚪 Đã hủy đăng ký raid."
+                : "❌ Bạn chưa đăng ký raid.",
             ephemeral: true,
         });
+
+        refreshRegisterMessage(interaction.client, raid).catch((error) => {
+            console.error("[RAID] Không cập nhật được bảng đăng ký:", error);
+        });
+
+        return true;
     }
 
     async readyRaid(interaction) {
@@ -1832,12 +1852,16 @@ class RaidServerManager {
         raid.players[interaction.user.id].ready = true;
         setCurrentRaid(raid);
 
-        await refreshPrepareMessage(interaction.client, raid);
-
-        return interaction.reply({
+        await interaction.reply({
             content: "✅ Bạn đã sẵn sàng. Mamu đã ghi tên bạn vào sổ vác heo.",
             ephemeral: true,
         });
+
+        refreshPrepareMessage(interaction.client, raid).catch((error) => {
+            console.error("[RAID] Không cập nhật được bảng sẵn sàng:", error);
+        });
+
+        return true;
     }
 
     async showList(interaction) {

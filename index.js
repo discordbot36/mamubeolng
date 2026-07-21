@@ -59,6 +59,10 @@ process.on("unhandledRejection", (error) => {
 
 process.on("uncaughtException", (error) => {
     console.error("[Uncaught Exception]", error);
+
+    setTimeout(() => {
+        process.exit(1);
+    }, 1000);
 });
 function randomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -263,9 +267,9 @@ client.on("interactionCreate", async (interaction) => {
 
 client.on("messageCreate", async (message) => {
     try {
-        return router.handleMessage(message);
+        return await router.handleMessage(message);
     } catch (error) {
-        console.error(error);
+        console.error("[MessageCreate Error]", error);
         return undefined;
     }
 });

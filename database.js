@@ -41,8 +41,12 @@ function loadData() {
     return data;
 }
 
-function saveData(data) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+async function saveData(data) {
+    const content = JSON.stringify(data, null, 2);
+    const tempFile = `${DATA_FILE}.tmp`;
+
+    await fs.promises.writeFile(tempFile, content, "utf8");
+    await fs.promises.rename(tempFile, DATA_FILE);
 }
 
 function getDataCache() {
@@ -52,9 +56,10 @@ function getDataCache() {
 
     return dataCache;
 }
+let isSaving = false;
 
-function flushData() {
-    if (!dataCache || !dirty) {
+async function flushData() {
+    if (!dataCache || !dirty || isSaving) {
         return;
     }
 
@@ -63,8 +68,21 @@ function flushData() {
         saveTimer = null;
     }
 
-    saveData(dataCache);
+    isSaving = true;
     dirty = false;
+
+    try {
+        await saveData(dataCache);
+    } catch (error) {
+        dirty = true;
+        console.error("[DATABASE] Không thể lưu dữ liệu:", error);
+    } finally {
+        isSaving = false;
+
+        if (dirty) {
+            scheduleSaveData();
+        }
+    }
 }
 
 function scheduleSaveData() {
@@ -76,7 +94,10 @@ function scheduleSaveData() {
 
     saveTimer = setTimeout(() => {
         saveTimer = null;
-        flushData();
+
+        flushData().catch((error) => {
+            console.error("[DATABASE] Lỗi flush:", error);
+        });
     }, SAVE_DEBOUNCE_MS);
 }
 
@@ -344,6 +365,11 @@ function ensureUser(data, userId) {
     return user;
 }
 
+function readData(reader) {
+    const data = getDataCache();
+    return reader(data);
+}
+
 function withData(mutator) {
     const data = getDataCache();
     const result = mutator(data);
@@ -366,9 +392,15 @@ function createUser(userId) {
 }
 
 function getUser(userId) {
-    return withData((data) => ensureUser(data, userId));
-}
+    const data = getDataCache();
 
+    if (!data.users[userId]) {
+        data.users[userId] = createDefaultUser();
+        scheduleSaveData();
+    }
+
+    return ensureUser(data, userId);
+}
 function updateUser(userId, updater) {
     return withData((data) => {
         const user = ensureUser(data, userId);
@@ -1295,7 +1327,7 @@ function getAllUsers() {
 }
 
 function getSystemValue(key) {
-    return withData((data) => {
+    return readData((data) => {
         if (!data.system) {
             data.system = {};
         }
