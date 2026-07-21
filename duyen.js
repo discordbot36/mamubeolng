@@ -698,7 +698,7 @@ function setupTeamHp(team, reset = false) {
 
     team.hp = Math.max(1, Math.min(newMaxHp, Math.round(newMaxHp * ratio)));
 }
-
+function formatTeamStats(team, hpText = "") {
 return (
     `💪 LC ${fmt(team.stats.totalPower)} | ` +
     `⚔️ ${fmt(team.stats.combat)} | ` +
@@ -710,7 +710,7 @@ return (
     `😵 ${fmt(team.stats.fatigue)}` +
     hpText
 );
-
+}
 function buildLobbyText(event, shouldPingRole = false) {
     const teamsText =
         event.teams.length > 0
