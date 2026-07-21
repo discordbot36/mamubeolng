@@ -699,17 +699,17 @@ function setupTeamHp(team, reset = false) {
     team.hp = Math.max(1, Math.min(newMaxHp, Math.round(newMaxHp * ratio)));
 }
 function formatTeamStats(team, hpText = "") {
-return (
-    `💪 LC ${fmt(team.stats.totalPower)} | ` +
-    `⚔️ ${fmt(team.stats.combat)} | ` +
-    `🕶️ ${fmt(team.stats.trick)} | ` +
-    `🪤 ${fmt(team.stats.formation)} | ` +
-    `🍀 ${fmt(team.stats.luck)} | ` +
-    `🔊 ${fmt(team.stats.noise)} | ` +
-    `🧩 ${fmt(team.stats.clue)} | ` +
-    `😵 ${fmt(team.stats.fatigue)}` +
-    hpText
-);
+    return (
+        `💪 LC ${fmt(team.stats.totalPower)} | ` +
+        `⚔️ ${fmt(team.stats.combat)} | ` +
+        `🕶️ ${fmt(team.stats.trick)} | ` +
+        `🪤 ${fmt(team.stats.formation)} | ` +
+        `🍀 ${fmt(team.stats.luck)} | ` +
+        `🔊 ${fmt(team.stats.noise)} | ` +
+        `🧩 ${fmt(team.stats.clue)} | ` +
+        `😵 ${fmt(team.stats.fatigue)}` +
+        hpText
+    );
 }
 function buildLobbyText(event, shouldPingRole = false) {
     const teamsText =
@@ -3460,33 +3460,31 @@ async function handleStartEarly(interaction, event) {
 }
 
 async function handleInteraction(interaction) {
+    if (!interaction.guildId) {
+        return undefined;
+    }
+
+    if (!interaction.isButton() && !interaction.isStringSelectMenu()) {
+        return undefined;
+    }
+
+    const customId = String(interaction.customId || "");
+
+    // Không phải nút Cơ Duyên thì bỏ qua,
+    // để router chuyển sang module khác như raidserver.
+    if (!customId.startsWith("duyen_")) {
+        return undefined;
+    }
+
+    // Chỉ defer sau khi đã xác nhận đây là nút Cơ Duyên.
     if (
         interaction.isRepliable() &&
         !interaction.replied &&
         !interaction.deferred
     ) {
-        await interaction
-            .deferReply({
-                ephemeral: true,
-            })
-            .catch(() => {});
-    }
-
-    if (!interaction.guildId) {
-        return false;
-    }
-    if (!interaction.guildId) {
-        return false;
-    }
-
-    if (!interaction.isButton() && !interaction.isStringSelectMenu()) {
-        return false;
-    }
-
-    const customId = String(interaction.customId || "");
-
-    if (!customId.startsWith("duyen_")) {
-        return false;
+        await interaction.deferReply({
+            ephemeral: true,
+        });
     }
 
     const parts = customId.split("_");
