@@ -637,10 +637,11 @@ async function start(interaction) {
     if (!Number.isInteger(bet) || bet < config.minBet || bet > dynamicMaxBet) {
         return interaction.reply({
             content:
-                `❌ Tiền cược hợp lệ của bạn hiện là từ **${coin()} ${fmt(config.minBet)}** ` +
-                `đến **${coin()} ${fmt(dynamicMaxBet)}**.\n` +
-                `Giới hạn bằng ${Math.round(config.maxBalancePercent * 100)}% số dư ` +
-                `và tối đa ${coin()} ${fmt(config.maxBet)}.`,
+                `❌ Tiền cược hợp lệ của bạn hiện là từ ` +
+                `**${coin()} ${fmt(config.minBet)}** đến ` +
+                `**${coin()} ${fmt(dynamicMaxBet)}**.\n` +
+                `Mức cược tối đa của game là ` +
+                `**${coin()} ${fmt(config.maxBet)}**.`,
             ephemeral: true,
         });
     }
@@ -887,6 +888,13 @@ async function handleButton(interaction) {
                 components: [],
             });
         }
+
+        // Ghi nhận ô vừa đào là ô an toàn.
+        session.opened.push(selectedIndex);
+        session.opened.sort((a, b) => a - b);
+
+        // Gia hạn thời gian ván sau mỗi lần đào.
+        session.expiresAt = Date.now() + config.sessionTimeoutMs;
 
         const allSafeOpened = getRemainingSafeTiles(session) <= 0;
 
