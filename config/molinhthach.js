@@ -8,7 +8,7 @@ module.exports = {
     maxMines: 8,
     defaultMines: 5,
 
-    minBet: 10_000,
+    minBet: 1_000,
     maxBet: GAMBLE_MAX_BET,
     maxBalancePercent: 0.05,
 
@@ -16,7 +16,7 @@ module.exports = {
     rtp: 0.96,
 
     maxMultiplier: 50,
-    maxPayout: 10_000_000,
+    maxPayout: 50_000_000,
 
     sessionTimeoutMs: 90_000,
 

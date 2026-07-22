@@ -969,9 +969,9 @@ module.exports = [
             {
                 type: "integer",
                 name: "sotien",
-                description: "Tiền cược, tối đa 5% số dư và 500.000",
+                description: "Tiền cược 1000-5000000",
                 required: true,
-                minValue: 10000,
+                minValue: 1000,
                 maxValue: GAMBLE_MAX_BET,
             },
             {

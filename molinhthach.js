@@ -73,10 +73,9 @@ function getSessionIndex() {
 }
 
 function setSessionIndex(userIds) {
-    db.setSystemValue(
-        config.sessionIndexKey,
-        [...new Set((userIds || []).map(String).filter(Boolean))],
-    );
+    db.setSystemValue(config.sessionIndexKey, [
+        ...new Set((userIds || []).map(String).filter(Boolean)),
+    ]);
 }
 
 function addSessionToIndex(userId) {
@@ -200,13 +199,10 @@ function updateStats({ wagered = 0, payout = 0, result = null } = {}) {
 
 function getDynamicMaxBet(balance) {
     const safeBalance = Math.max(0, Math.floor(Number(balance || 0)));
-    const percentageCap = Math.floor(safeBalance * config.maxBalancePercent);
-    const balanceBasedCap = Math.max(config.minBet, percentageCap);
 
-    return Math.max(
-        0,
-        Math.min(config.maxBet, balanceBasedCap, safeBalance),
-    );
+    // Được cược tối đa 500.000,
+    // nhưng không thể cược nhiều hơn số tiền đang có.
+    return Math.max(0, Math.min(config.maxBet, safeBalance));
 }
 
 function generateMineIndexes(totalTiles, minesCount) {
@@ -407,9 +403,7 @@ function buildComponents(session, disabled = false) {
         rows.push(
             new ActionRowBuilder().addComponents(
                 new StringSelectMenuBuilder()
-                    .setCustomId(
-                        `mines_pick_${session.userId}_${session.id}`,
-                    )
+                    .setCustomId(`mines_pick_${session.userId}_${session.id}`)
                     .setPlaceholder("Chọn một ô để đào")
                     .setMinValues(1)
                     .setMaxValues(1)
@@ -422,18 +416,14 @@ function buildComponents(session, disabled = false) {
     rows.push(
         new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(
-                    `mines_cashout_${session.userId}_${session.id}`,
-                )
+                .setCustomId(`mines_cashout_${session.userId}_${session.id}`)
                 .setLabel("Thu hoạch")
                 .setEmoji("💰")
                 .setStyle(ButtonStyle.Success)
                 .setDisabled(disabled || session.opened.length <= 0),
 
             new ButtonBuilder()
-                .setCustomId(
-                    `mines_abandon_${session.userId}_${session.id}`,
-                )
+                .setCustomId(`mines_abandon_${session.userId}_${session.id}`)
                 .setLabel("Bỏ ván (mất cược)")
                 .setEmoji("🛑")
                 .setStyle(ButtonStyle.Danger)
@@ -526,7 +516,10 @@ function buildSettlementText(session, result, settlement, hitIndex = null) {
         );
     }
 
-    const autoText = result === "auto_cashout" ? "⏰ **Tự động thu hoạch.**" : "💰 **Thu hoạch thành công!**";
+    const autoText =
+        result === "auto_cashout"
+            ? "⏰ **Tự động thu hoạch.**"
+            : "💰 **Thu hoạch thành công!**";
 
     return (
         `${autoText}\n` +
@@ -636,17 +629,12 @@ async function start(interaction) {
 
     if (balance < config.minBet) {
         return interaction.reply({
-            content:
-                `❌ Bạn cần ít nhất **${coin()} ${fmt(config.minBet)}** để mở Mỏ Linh Thạch.`,
+            content: `❌ Bạn cần ít nhất **${coin()} ${fmt(config.minBet)}** để mở Mỏ Linh Thạch.`,
             ephemeral: true,
         });
     }
 
-    if (
-        !Number.isInteger(bet) ||
-        bet < config.minBet ||
-        bet > dynamicMaxBet
-    ) {
+    if (!Number.isInteger(bet) || bet < config.minBet || bet > dynamicMaxBet) {
         return interaction.reply({
             content:
                 `❌ Tiền cược hợp lệ của bạn hiện là từ **${coin()} ${fmt(config.minBet)}** ` +
@@ -663,8 +651,7 @@ async function start(interaction) {
         minesCount > config.maxMines
     ) {
         return interaction.reply({
-            content:
-                `❌ Số yêu thú phải từ **${config.minMines}** đến **${config.maxMines}**.`,
+            content: `❌ Số yêu thú phải từ **${config.minMines}** đến **${config.maxMines}**.`,
             ephemeral: true,
         });
     }
@@ -801,7 +788,8 @@ async function handleButton(interaction) {
 
     if (action === "cashout" && session.opened.length <= 0) {
         return interaction.reply({
-            content: "❌ Bạn phải đào an toàn ít nhất một ô mới được thu hoạch.",
+            content:
+                "❌ Bạn phải đào an toàn ít nhất một ô mới được thu hoạch.",
             ephemeral: true,
         });
     }
@@ -900,21 +888,12 @@ async function handleButton(interaction) {
             });
         }
 
-        session.opened.push(selectedIndex);
-        session.opened.sort((a, b) => a - b);
-        session.expiresAt = Date.now() + config.sessionTimeoutMs;
-
-        const payout = getPayoutDetails(session);
         const allSafeOpened = getRemainingSafeTiles(session) <= 0;
-        const reachedCap =
-            payout.multiplier >= config.maxMultiplier ||
-            payout.payout >= config.maxPayout;
 
-        if (allSafeOpened || reachedCap) {
+        // Chỉ tự thu hoạch khi người chơi đã mở hết
+        // toàn bộ ô an toàn trên bàn.
+        if (allSafeOpened) {
             const settlement = settleSession(session, "auto_cashout");
-            const reason = allSafeOpened
-                ? "🏆 **Bạn đã đào hết toàn bộ ô an toàn!**\n"
-                : "🏦 **Đã chạm giới hạn trả thưởng và tự động thu hoạch.**\n";
 
             return interaction.editReply({
                 embeds: [
@@ -922,7 +901,7 @@ async function handleButton(interaction) {
                         result: "auto_cashout",
                         revealAll: true,
                         resultText:
-                            reason +
+                            "🏆 **Bạn đã đào hết toàn bộ ô an toàn!**\n" +
                             buildSettlementText(
                                 session,
                                 "auto_cashout",
