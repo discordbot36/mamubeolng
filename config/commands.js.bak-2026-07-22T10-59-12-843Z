@@ -962,29 +962,6 @@ module.exports = [
         handler: "worldboss.chet",
     },
     {
-        name: "molinhthach",
-        description: "Đào ô an toàn, né yêu thú và thu hoạch tiền thưởng",
-        handler: "molinhthach.start",
-        options: [
-            {
-                type: "integer",
-                name: "sotien",
-                description: "Tiền cược, tối đa 5% số dư và 500.000",
-                required: true,
-                minValue: 10000,
-                maxValue: GAMBLE_MAX_BET,
-            },
-            {
-                type: "integer",
-                name: "yeuthu",
-                description: "Số yêu thú ẩn trong 25 ô, mặc định 5",
-                required: false,
-                minValue: 1,
-                maxValue: 8,
-            },
-        ],
-    },
-    {
         name: "blackjack",
         description: "Chơi Blackjack với Dealer",
         handler: "blackjack.start",

@@ -25,7 +25,6 @@ const dothachTournament = require("../dothachTournament");
 const phapbao = require("../phapbao");
 const raidserver = require("../raidserver");
 const duyen = require("../duyen");
-const molinhthach = require("../molinhthach");
 const modules = {
     economy,
     race,
@@ -38,7 +37,6 @@ const modules = {
     admin,
     tutien,
     duyen,
-    molinhthach,
     tower,
     kynang,
     leaderboard,
@@ -148,7 +146,6 @@ async function handleButton(interaction) {
         bicanh,
         phapbao,
         duyen,
-        molinhthach,
         sanyeuthu,
         flip,
         vecao,

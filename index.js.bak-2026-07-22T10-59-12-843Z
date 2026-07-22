@@ -10,7 +10,6 @@ const sanyeuthu = require("./sanyeuthu");
 const duyen = require("./duyen");
 const duyenConfig = require("./config/duyen");
 const raidserver = require("./raidserver");
-const molinhthach = require("./molinhthach");
 
 function requireEnv(name) {
     const value = process.env[name];
@@ -210,9 +209,6 @@ client.once("clientReady", () => {
     });
     raidserver.recover(client).catch((error) => {
         console.error("[RaidServer Recover]", error);
-    });
-    molinhthach.recover(client).catch((error) => {
-        console.error("[MoLinhThach Recover]", error);
     });
 
     raidserver.startAutoSchedule(client);
