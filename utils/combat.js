@@ -414,7 +414,7 @@ function calculateCombatStats(profile) {
 
     const combatPower = Math.floor(
         rawCombatPower *
-            (1 + activePowerBonus + weaponBonus.powerPercent * 0.18) +
+            (1 + activePowerBonus + weaponBonus.powerPercent * 0.32) +
             atk * critChance * critDamageMultiplier * 0.18 +
             hp * dodgeChance * 0.035 +
             hp * damageReduction * 0.045 +

@@ -619,10 +619,23 @@ function buildBaseStats(memberIds) {
          * giới cao tạo damage hàng triệu, nhưng
          * vẫn bảo đảm người mạnh hơn thấy rõ.
          */
-        combat +=
-            Math.sqrt(memberAtk) * 1.15 +
-            Math.sqrt(memberPower) * 0.18 +
+        const weaponBonus =
+            profile.equippedWeaponBonus &&
+            typeof profile.equippedWeaponBonus === "object"
+                ? profile.equippedWeaponBonus
+                : {};
+
+        const bossDamageBonus = Math.max(
+            0,
+            Math.min(1.5, Number(weaponBonus.bossDamage || 0)),
+        );
+
+        const memberCombat =
+            Math.pow(memberAtk, 0.62) * 0.72 +
+            Math.pow(memberPower, 0.55) * 0.24 +
             progressionLevel * 1.8;
+
+        combat += memberCombat * (1 + bossDamageBonus);
 
         /*
          * Trick không còn bị giảm khi lên cảnh giới.

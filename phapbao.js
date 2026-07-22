@@ -1244,8 +1244,12 @@ function getSealFactorForWeapon(user, weapon) {
         };
     }
 
+    const realmGap = Math.max(1, requiredRealmIndex - currentRealmIndex);
+
+    const sealFactor = Math.max(0.45, 1 - realmGap * 0.12);
+
     return {
-        factor: 0.3,
+        factor: sealFactor,
         isSealed: true,
         currentRealmIndex,
         requiredRealmIndex,
@@ -1305,7 +1309,8 @@ function calculateWeaponBonusForUser(user, weapon) {
     }
 
     if (rarity.rank >= 9) {
-        bonus.bossDamage += 0.05 * finalMultiplier;
+        // SSS trở lên có vai trò rõ ràng khi đánh boss.
+        bonus.bossDamage += 0.15 * finalMultiplier;
     }
 
     bonus.powerPercent = baseBonus;
