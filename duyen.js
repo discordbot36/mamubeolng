@@ -711,6 +711,11 @@ function formatTeamStats(team, hpText = "") {
         hpText
     );
 }
+function statsLine(team) {
+    const hpText = team.maxHp ? ` | ❤️ ${fmt(team.hp)}/${fmt(team.maxHp)}` : "";
+
+    return formatTeamStats(team, hpText);
+}
 function buildLobbyText(event, shouldPingRole = false) {
     const teamsText =
         event.teams.length > 0
@@ -1220,101 +1225,175 @@ async function autoStart(client) {
 
     return true;
 }
-
 async function createTeam(interaction, event, solo = false) {
     const userId = String(interaction.user.id);
+
+    // Có một đội khác đang được tạo.
     if (event.teamCreating) {
-        return interaction.editReply({
-            content: "⏳ Đang tạo đội khác, vui lòng thử lại.",
+        return interaction.reply({
+            content: "⏳ Đang tạo đội khác, vui lòng thử lại sau vài giây.",
+            ephemeral: true,
         });
     }
 
+    // Khóa ngay để tránh hai người tạo trùng số đội.
     event.teamCreating = true;
 
-    if (isBlockedByAfkBan(event, userId)) {
-        return interaction.reply({
-            content:
-                "⛔ Bạn đã AFK ở lượt trước nên bị cấm tham gia Cơ Duyên lần này.",
-            ephemeral: true,
-        });
-    }
+    let team = null;
 
-    if (event.status !== "lobby") {
-        return interaction.reply({
-            content: "❌ Bí cảnh đã bắt đầu.",
-            ephemeral: true,
-        });
-    }
+    try {
+        // Tạo channel có thể mất hơn 3 giây nên cần defer riêng tại đây.
+        if (!interaction.replied && !interaction.deferred) {
+            await interaction.deferReply({
+                ephemeral: true,
+            });
+        }
 
-    if (getUserTeam(event, userId)) {
-        return interaction.reply({
-            content: "❌ Bạn đã có đội.",
-            ephemeral: true,
-        });
-    }
+        if (isBlockedByAfkBan(event, userId)) {
+            return interaction.editReply({
+                content:
+                    "⛔ Bạn đã AFK ở lượt trước nên bị cấm tham gia Cơ Duyên lần này.",
+            });
+        }
 
-    if (event.teams.length >= MAX_TEAMS) {
-        return interaction.reply({
-            content: "❌ Đã đủ số đội.",
-            ephemeral: true,
-        });
-    }
+        if (event.status !== "lobby") {
+            return interaction.editReply({
+                content: "❌ Bí Cảnh đã bắt đầu, không thể tạo thêm đội.",
+            });
+        }
 
-    const team = {
-        id: `team_${Date.now()}_` + `${Math.random().toString(36).slice(2, 7)}`,
+        if (getUserTeam(event, userId)) {
+            return interaction.editReply({
+                content: "❌ Bạn đã có đội.",
+            });
+        }
 
-        no:
+        if (event.teams.length >= MAX_TEAMS) {
+            return interaction.editReply({
+                content: "❌ Đã đủ số đội.",
+            });
+        }
+
+        const nextTeamNo =
             event.teams.length > 0
-                ? Math.max(...event.teams.map((t) => t.no)) + 1
-                : 1,
+                ? Math.max(...event.teams.map((item) => item.no)) + 1
+                : 1;
 
-        leaderId: userId,
-        members: [userId],
-        locked: solo,
+        team = {
+            id:
+                `team_${Date.now()}_` +
+                `${Math.random().toString(36).slice(2, 7)}`,
 
-        stats: buildBaseStats([userId]),
+            no: nextTeamNo,
 
-        votes: {},
-        choices: {},
-        pathOptions: [],
+            leaderId: userId,
+            members: [userId],
+            locked: solo,
 
-        finalChoice: null,
-        finalScore: 0,
+            stats: buildBaseStats([userId]),
 
-        hp: 0,
-        maxHp: 0,
+            votes: {},
+            choices: {},
+            pathOptions: [],
 
-        channelId: null,
-        pathHistory: [],
-        pathMessageId: null,
+            finalChoice: null,
+            finalScore: 0,
 
-        choiceDetails: {},
-        finalVoteDetails: null,
+            hp: 0,
+            maxHp: 0,
 
-        activeMembers: new Set(),
-    };
+            channelId: null,
+            pathHistory: [],
+            pathMessageId: null,
 
-    setupTeamHp(team, true);
+            choiceDetails: {},
+            finalVoteDetails: null,
 
-    event.teams.push(team);
+            activeMembers: new Set(),
+        };
 
-    await refreshLobby(event);
+        setupTeamHp(team, true);
 
-    await createTeamChannel(event, team);
+        /*
+         * Tạo kênh trước.
+         * Chỉ thêm đội vào danh sách khi kênh đã tạo thành công.
+         */
+        await createTeamChannel(event, team);
 
-    await refreshLobby(event);
+        event.teams.push(team);
 
-    event.teamCreating = false;
+        await refreshLobby(event);
 
-    return interaction
-        .editReply({
+        return interaction.editReply({
             content: solo
-                ? `🚪 Bạn đi solo ở **Đội ${team.no}**.`
-                : `🧍 Bạn đã tạo **Đội ${team.no}**.`,
-        })
-        .catch(() => undefined);
-}
+                ? `🚪 Bạn đi solo ở **Đội ${team.no}**.\n` +
+                  `Kênh đội: <#${team.channelId}>`
+                : `🧍 Bạn đã tạo **Đội ${team.no}**.\n` +
+                  `Kênh đội: <#${team.channelId}>`,
+        });
+    } catch (error) {
+        console.error("[DUYEN CREATE TEAM]", error);
 
+        /*
+         * Nếu đội đã bị thêm nhưng quá trình sau đó lỗi,
+         * loại đội khỏi danh sách để không tạo đội ma.
+         */
+        if (team) {
+            event.teams = event.teams.filter((item) => {
+                return item.id !== team.id;
+            });
+
+            /*
+             * Nếu channel đã được tạo một phần thì xóa channel lỗi.
+             */
+            if (team.channelId) {
+                const failedChannel = await event.guild.channels
+                    .fetch(team.channelId)
+                    .catch(() => null);
+
+                await failedChannel
+                    ?.delete("Hoàn tác vì tạo đội Cơ Duyên thất bại")
+                    .catch(() => undefined);
+            }
+
+            await refreshLobby(event).catch(() => undefined);
+        }
+
+        const errorCode = Number(error?.code || 0);
+
+        const message =
+            errorCode === 50013
+                ? "❌ Bot không có quyền tạo kênh đội.\n" +
+                  "Hãy cấp quyền **Manage Channels** cho role của bot."
+                : "❌ Không thể tạo tổ đội Cơ Duyên.\n" +
+                  "Hãy xem console tại dòng `[DUYEN CREATE TEAM]`.";
+
+        if (interaction.deferred || interaction.replied) {
+            return interaction
+                .editReply({
+                    content: message,
+                })
+                .catch(() => undefined);
+        }
+
+        return interaction
+            .reply({
+                content: message,
+                ephemeral: true,
+            })
+            .catch(() => undefined);
+    } finally {
+        /*
+         * Luôn mở khóa, kể cả khi:
+         * - người chơi bị cấm AFK;
+         * - đã có đội;
+         * - đủ số đội;
+         * - bot không tạo được channel;
+         * - Discord trả lỗi.
+         */
+        event.teamCreating = false;
+    }
+}
 async function showJoinMenu(interaction, event) {
     const userId = String(interaction.user.id);
 
@@ -3470,21 +3549,9 @@ async function handleInteraction(interaction) {
 
     const customId = String(interaction.customId || "");
 
-    // Không phải nút Cơ Duyên thì bỏ qua,
-    // để router chuyển sang module khác như raidserver.
+    // Không phải nút Cơ Duyên thì chuyển cho module khác xử lý.
     if (!customId.startsWith("duyen_")) {
         return undefined;
-    }
-
-    // Chỉ defer sau khi đã xác nhận đây là nút Cơ Duyên.
-    if (
-        interaction.isRepliable() &&
-        !interaction.replied &&
-        !interaction.deferred
-    ) {
-        await interaction.deferReply({
-            ephemeral: true,
-        });
     }
 
     const parts = customId.split("_");

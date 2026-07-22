@@ -250,13 +250,17 @@ function calculateActiveSkillPowerBonus(profile) {
 }
 
 const POWER_PER_FLOOR = 1.055;
+const POWER_SCALE_PER_REALM = 0.15;
 const MAX_EXP_POWER_RATE = 0.04;
 
 function calculateRealmPower(realmIndex) {
-    const safeRealmIndex = Math.max(0, Number(realmIndex || 0));
-    const absoluteFloor = safeRealmIndex * MAX_REALM_FLOOR;
+    const safeRealmIndex = Math.max(0, Math.floor(Number(realmIndex || 0)));
 
-    return Math.floor(1000 * Math.pow(POWER_PER_FLOOR, absoluteFloor));
+    const absoluteFloor = safeRealmIndex * MAX_REALM_FLOOR;
+    const progressionPower = 1000 * Math.pow(POWER_PER_FLOOR, absoluteFloor);
+    const realmScale = 1 + safeRealmIndex * POWER_SCALE_PER_REALM;
+
+    return Math.floor(progressionPower * realmScale);
 }
 
 function calculateFloorPower(realmPower, floor) {
