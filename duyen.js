@@ -2980,11 +2980,9 @@ async function cleanup(event, delay) {
     return undefined;
 }
 async function handlePathVote(interaction, event, parts) {
-    const teamId = parts[3];
-
-    const round = Number(parts[4]);
-
-    const pathId = parts[5];
+    const pathId = parts[parts.length - 1];
+    const round = Number(parts[parts.length - 2]);
+    const teamId = parts.slice(3, -2).join("_");
 
     const userId = String(interaction.user.id);
 
@@ -3110,11 +3108,9 @@ async function handlePathVote(interaction, event, parts) {
 }
 
 async function handlePuzzleVote(interaction, event, parts) {
-    const teamId = parts[3];
-
-    const puzzleKey = parts[4];
-
-    const choiceIndex = Number(parts[5]);
+    const choiceIndex = Number(parts[parts.length - 1]);
+    const puzzleKey = parts[parts.length - 2];
+    const teamId = parts.slice(3, -2).join("_");
 
     const userId = String(interaction.user.id);
 
@@ -3191,9 +3187,8 @@ async function handlePuzzleVote(interaction, event, parts) {
 }
 
 async function handleFinalVote(interaction, event, parts, isFinderVote) {
-    const teamId = parts[3];
-
-    const choiceId = parts[4];
+    const choiceId = parts[parts.length - 1];
+    const teamId = parts.slice(3, -1).join("_");
 
     const userId = String(interaction.user.id);
 
@@ -3290,11 +3285,9 @@ async function handleFinalVote(interaction, event, parts, isFinderVote) {
     });
 }
 async function handleBossAction(interaction, event, parts) {
-    const teamId = parts[3];
-
-    const bossKey = parts[4];
-
-    const action = parts[5];
+    const action = parts[parts.length - 1];
+    const bossKey = parts[parts.length - 2];
+    const teamId = parts.slice(3, -2).join("_");
 
     const userId = String(interaction.user.id);
 
@@ -3441,9 +3434,8 @@ async function handleBossAction(interaction, event, parts) {
 }
 
 async function handleBossSupport(interaction, event, parts) {
-    const teamId = parts[3];
-
-    const bossKey = parts[4];
+    const bossKey = parts[parts.length - 1];
+    const teamId = parts.slice(3, -1).join("_");
 
     const userId = String(interaction.user.id);
 
