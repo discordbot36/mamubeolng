@@ -250,8 +250,8 @@ function calculateActiveSkillPowerBonus(profile) {
 }
 
 const POWER_PER_FLOOR = 1.055;
-const POWER_SCALE_PER_REALM = 0.15;
-const MAX_EXP_POWER_RATE = 0.04;
+const POWER_SCALE_PER_REALM = 0.2;
+const MAX_EXP_POWER_RATE = 0.1;
 
 function calculateRealmPower(realmIndex) {
     const safeRealmIndex = Math.max(0, Math.floor(Number(realmIndex || 0)));
@@ -352,13 +352,13 @@ function calculateCombatStats(profile) {
 
     const rootDefBonus = root ? Number(root.breakthroughBonus || 0) : 0;
 
-    const baseAtk = Math.floor(baseCombatPower * (0.45 + rootAtkBonus * 0.18));
+    const baseAtk = Math.floor(baseCombatPower * (0.58 + rootAtkBonus * 0.18));
 
     const baseDefense = Math.floor(
-        baseCombatPower * (0.25 + rootDefBonus * 0.22),
+        baseCombatPower * (0.33 + rootDefBonus * 0.22),
     );
 
-    const baseHp = Math.floor(baseCombatPower * (5 + rootRank * 0.02));
+    const baseHp = Math.floor(baseCombatPower * (6.3 + rootRank * 0.02));
 
     const baseSpeed = Math.floor(
         50 + realmIndex * 20 + floor * 5 + rootRank * 1.5,

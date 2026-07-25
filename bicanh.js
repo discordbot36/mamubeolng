@@ -1479,7 +1479,7 @@ function createBattleState(realm) {
         Math.floor(
             totalEffectivePower *
                 difficultyMultiplier *
-                0.072 *
+                0.055 *
                 Number(difficulty.requiredProgressMultiplier || 1) *
                 missingDifficultyMultiplier *
                 Number(battleModEffects.requiredProgressMultiplier || 1),
@@ -1626,7 +1626,7 @@ function calculateActionResult(realm, userId, action) {
 
     const isRequiredAction = requiredRoles.includes(action);
 
-    const baseValue = Math.max(1, memberPower * 0.012);
+    const baseValue = Math.max(1, memberPower * 0.015);
 
     const randomMultiplier = combat.randomBetween(0.94, 1.06);
 
@@ -1717,13 +1717,13 @@ function calculateRealmDamage(
     );
 
     const baseDamageRate = cleanSolved
-        ? combat.randomBetween(0.012, 0.026)
-        : combat.randomBetween(0.085, 0.145);
+        ? combat.randomBetween(0.008, 0.018)
+        : combat.randomBetween(0.060, 0.105);
 
     const baseDamage = battle.maxTeamHp * baseDamageRate * damageMultiplier;
 
     const missingRolePenalty =
-        battle.maxTeamHp * 0.075 * missingRoles * damageMultiplier;
+        battle.maxTeamHp * 0.050 * missingRoles * damageMultiplier;
 
     const wrongActionDamageMultiplier = Math.max(
         1,
@@ -1732,7 +1732,7 @@ function calculateRealmDamage(
 
     const wrongActionPenalty =
         battle.maxTeamHp *
-        0.045 *
+        0.030 *
         Number(wrongActionCount || 0) *
         damageMultiplier *
         wrongActionDamageMultiplier;

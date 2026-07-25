@@ -1094,7 +1094,7 @@ module.exports = [
     },
     {
         name: "quest",
-        description: "Xem nhiệm vụ ngày / tuần",
+        description: "Xem nhiệm vụ ngày / tuần / thử thách",
         handler: "quest.show",
         options: [
             {
@@ -1110,6 +1110,10 @@ module.exports = [
                     {
                         name: "Weekly",
                         value: "weekly",
+                    },
+                    {
+                        name: "Challenge",
+                        value: "challenge",
                     },
                 ],
             },

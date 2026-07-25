@@ -17,6 +17,7 @@ const {
 } = require("./database");
 
 const taixiuConfig = require("./config/taixiu");
+const quest = require("./quest");
 
 const games = new Map();
 const gamesById = new Map();
@@ -497,8 +498,14 @@ class TaiXiuManager {
                 addLoss(bet.userId);
             }
 
+            quest.trackGambleResult(bet.userId, "taixiu", {
+                bet: bet.amount,
+                payout: receive,
+                won: win,
+            });
+
             resultLines.push(
-                `<@${bet.userId}> ${getBetLabel(bet.betKey)} ` +
+                F`<@${bet.userId}> ${getBetLabel(bet.betKey)} ` +
                     `${win ? `ăn ${formatMoney(net)}` : `bay ${formatMoney(bet.amount)}`}`,
             );
         }

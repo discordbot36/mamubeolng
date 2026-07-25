@@ -631,8 +631,8 @@ function buildBaseStats(memberIds) {
         );
 
         const memberCombat =
-            Math.pow(memberAtk, 0.62) * 0.72 +
-            Math.pow(memberPower, 0.55) * 0.24 +
+            Math.pow(memberAtk, 0.62) * 0.9 +
+            Math.pow(memberPower, 0.55) * 0.34 +
             progressionLevel * 1.8;
 
         combat += memberCombat * (1 + bossDamageBonus);
@@ -689,12 +689,11 @@ function calculateTeamMaxHp(team) {
         Math.round(
             180 +
                 team.members.length * 90 +
-                Number(team.stats.combat || 0) * 0.55 +
-                Number(team.stats.formation || 0) * 1.15,
+                Number(team.stats.combat || 0) * 0.7 +
+                Number(team.stats.formation || 0) * 1.3,
         ),
     );
 }
-
 function setupTeamHp(team, reset = false) {
     const oldMaxHp = Number(team.maxHp || 0);
 
@@ -2055,7 +2054,7 @@ async function runBossEncounter(event, team, type = "mini") {
         hp: Math.round(
             bossConfig.hp +
                 Math.pow(Number(team.stats.combat || 1), 0.82) *
-                    (type === "major" ? 4.2 : 2.6) +
+                    (type === "major" ? 3.6 : 2.2) +
                 team.members.length * (type === "major" ? 45 : 22),
         ),
 
@@ -2182,7 +2181,7 @@ async function runBossEncounter(event, team, type = "mini") {
         const damage = Math.max(
             8,
             Math.round(
-                (Number(team.stats.combat || 1) * 0.72 +
+                (Number(team.stats.combat || 1) * 0.9 +
                     Number(team.stats.trick || 1) * 0.14 +
                     rnd(12, 32)) *
                     (0.3 + attackCount * 0.5) *

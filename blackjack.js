@@ -15,6 +15,7 @@ const {
 } = require("./database");
 
 const { GAMBLE_MAX_BET } = require("./config/gamble");
+const quest = require("./quest");
 const GAME_EXPIRE_MS = 10 * 60 * 1000;
 const games = new Map();
 const MIN_BET = 100;
@@ -227,6 +228,23 @@ function finishGame(game, outcome) {
             `🎉 **Dealer quắc!**\n` +
             `Bạn thắng và nhận **${coin} ${formatMoney(payout)}**.`;
     }
+
+    const won = ["player_blackjack", "player_win", "dealer_bust"].includes(
+        outcome,
+    );
+
+    quest.trackGambleResult(game.userId, "blackjack", {
+        bet: game.bet,
+        payout,
+        won,
+
+        extraProgress:
+            outcome === "player_blackjack"
+                ? {
+                      blackjack_natural: 1,
+                  }
+                : undefined,
+    });
 
     games.delete(game.userId);
 

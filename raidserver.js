@@ -445,8 +445,7 @@ function getPlayerPower(userId) {
 
 function createRaidPlayer(userId) {
     const power = getPlayerPower(userId);
-    const maxHp = Math.max(6000, Math.floor(7000 + Math.sqrt(power) * 38));
-
+    const maxHp = Math.max(6000, Math.floor(7000 + Math.sqrt(power) * 50));
     return {
         userId,
         registeredAt: now(),
@@ -840,7 +839,7 @@ function applyPlayerActionDamage(raid, logs) {
         }
 
         const base = Math.floor(
-            45000 + Math.sqrt(Math.max(1, player.power || 1)) * 150,
+            45000 + Math.sqrt(Math.max(1, player.power || 1)) * 210,
         );
 
         let dealt = 0;

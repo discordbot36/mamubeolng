@@ -133,73 +133,255 @@ function getWeeklyQuestKey() {
     return date.toISOString().slice(0, 10);
 }
 
-function getQuestPeriodKey(type) {
-    return type === "weekly" ? getWeeklyQuestKey() : getDailyQuestKey();
+function normalizeQuestType(type) {
+    return ["daily", "weekly", "challenge"].includes(type) ? type : "daily";
 }
 
-function ensureQuestBucket(user, type) {
+function getQuestGroup(type) {
+    const normalizedType = normalizeQuestType(type);
+
+    return questConfig[normalizedType] || questConfig.daily;
+}
+
+function getQuestPeriodKey(type) {
+    const group = getQuestGroup(type);
+
+    return group.reset === "weekly" ? getWeeklyQuestKey() : getDailyQuestKey();
+}
+
+function createSeededRandom(seedText) {
+    let seed = 2166136261;
+
+    for (const char of String(seedText)) {
+        seed ^= char.charCodeAt(0);
+        seed = Math.imul(seed, 16777619);
+    }
+
+    return function nextRandom() {
+        seed += 0x6d2b79f5;
+
+        let value = seed;
+
+        value = Math.imul(value ^ (value >>> 15), value | 1);
+        value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+
+        return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    };
+}
+
+function selectQuestIds(userId, type, periodKey) {
+    const group = getQuestGroup(type);
+    const quests = Array.isArray(group.quests) ? group.quests : [];
+
+    const questIds = quests.map((quest) => quest.id).filter(Boolean);
+
+    const selectCount = Math.min(
+        questIds.length,
+        Math.max(1, Number(group.selectCount || questIds.length)),
+    );
+
+    const random = createSeededRandom(`${userId}:${type}:${periodKey}`);
+
+    const shuffled = [...quests];
+
+    for (let index = shuffled.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(random() * (index + 1));
+
+        const temp = shuffled[index];
+
+        shuffled[index] = shuffled[swapIndex];
+        shuffled[swapIndex] = temp;
+    }
+
+    const selected = [];
+    const usedTaskIds = new Set();
+
+    /*
+     * Ưu tiên chọn nhiệm vụ có taskId khác nhau.
+     * Tránh một ngày xuất hiện cả:
+     * - Tu luyện 2 lần
+     * - Tu luyện 5 lần
+     */
+    for (const quest of shuffled) {
+        if (!quest?.id || usedTaskIds.has(quest.taskId)) {
+            continue;
+        }
+
+        selected.push(quest.id);
+        usedTaskIds.add(quest.taskId);
+
+        if (selected.length >= selectCount) {
+            return selected;
+        }
+    }
+
+    /*
+     * Nếu số taskId khác nhau không đủ,
+     * lấy thêm nhiệm vụ còn lại.
+     */
+    for (const quest of shuffled) {
+        if (!quest?.id || selected.includes(quest.id)) {
+            continue;
+        }
+
+        selected.push(quest.id);
+
+        if (selected.length >= selectCount) {
+            break;
+        }
+    }
+
+    return selected;
+}
+
+function ensureQuestBucket(user, userId, type) {
     if (!user.quests) {
         user.quests = {};
     }
 
-    const periodKey = getQuestPeriodKey(type);
+    const normalizedType = normalizeQuestType(type);
+    const periodKey = getQuestPeriodKey(normalizedType);
+    const group = getQuestGroup(normalizedType);
 
-    if (!user.quests[type] || user.quests[type].periodKey !== periodKey) {
-        user.quests[type] = {
+    const validQuestIds = new Set(
+        (Array.isArray(group.quests) ? group.quests : [])
+            .map((quest) => quest.id)
+            .filter(Boolean),
+    );
+
+    const expectedCount = Math.min(
+        validQuestIds.size,
+        Math.max(1, Number(group.selectCount || validQuestIds.size)),
+    );
+
+    if (
+        !user.quests[normalizedType] ||
+        user.quests[normalizedType].periodKey !== periodKey
+    ) {
+        user.quests[normalizedType] = {
             periodKey,
             progress: {},
             claimed: {},
+            selectedQuestIds: selectQuestIds(userId, normalizedType, periodKey),
         };
     }
 
-    if (!user.quests[type].progress) {
-        user.quests[type].progress = {};
+    const bucket = user.quests[normalizedType];
+
+    if (!bucket.progress) {
+        bucket.progress = {};
     }
 
-    if (!user.quests[type].claimed) {
-        user.quests[type].claimed = {};
+    if (!bucket.claimed) {
+        bucket.claimed = {};
     }
 
-    return user.quests[type];
+    const selectedQuestIds = Array.isArray(bucket.selectedQuestIds)
+        ? bucket.selectedQuestIds.filter((questId) =>
+              validQuestIds.has(questId),
+          )
+        : [];
+
+    if (selectedQuestIds.length !== expectedCount) {
+        bucket.selectedQuestIds = selectQuestIds(
+            userId,
+            normalizedType,
+            periodKey,
+        );
+    } else {
+        bucket.selectedQuestIds = selectedQuestIds;
+    }
+
+    return bucket;
 }
 
 function getQuestState(userId, type = "daily") {
     return withData((data) => {
         const user = ensureUser(data, userId);
-        return ensureQuestBucket(user, type);
+
+        return ensureQuestBucket(user, userId, type);
     });
 }
 
-function trackQuestProgress(userId, taskId, amount = 1) {
+function getActiveQuests(userId, type = "daily") {
+    return withData((data) => {
+        const normalizedType = normalizeQuestType(type);
+
+        const user = ensureUser(data, userId);
+
+        const bucket = ensureQuestBucket(user, userId, normalizedType);
+
+        const group = getQuestGroup(normalizedType);
+
+        const questMap = new Map(
+            (Array.isArray(group.quests) ? group.quests : []).map((quest) => [
+                quest.id,
+                quest,
+            ]),
+        );
+
+        return bucket.selectedQuestIds
+            .map((questId) => questMap.get(questId))
+            .filter(Boolean);
+    });
+}
+
+function trackQuestProgressBatch(userId, progressEntries = {}) {
     return withData((data) => {
         const user = ensureUser(data, userId);
-        const safeAmount = Math.max(1, Number(amount || 1));
 
-        for (const type of ["daily", "weekly"]) {
-            const bucket = ensureQuestBucket(user, type);
-            bucket.progress[taskId] =
-                Number(bucket.progress[taskId] || 0) + safeAmount;
+        const normalizedEntries = Object.entries(progressEntries)
+            .map(([taskId, amount]) => [
+                String(taskId || "").trim(),
+                Math.max(0, Math.floor(Number(amount || 0))),
+            ])
+            .filter(([taskId, amount]) => taskId && amount > 0);
+
+        if (normalizedEntries.length <= 0) {
+            return user.quests || {};
+        }
+
+        for (const type of ["daily", "weekly", "challenge"]) {
+            const bucket = ensureQuestBucket(user, userId, type);
+
+            for (const [taskId, amount] of normalizedEntries) {
+                bucket.progress[taskId] =
+                    Number(bucket.progress[taskId] || 0) + amount;
+            }
         }
 
         return user.quests;
     });
 }
 
+function trackQuestProgress(userId, taskId, amount = 1) {
+    return trackQuestProgressBatch(userId, {
+        [taskId]: amount,
+    });
+}
+
 function findQuestConfig(type, questId) {
-    const group = type === "weekly" ? questConfig.weekly : questConfig.daily;
-    return group.quests.find((quest) => quest.id === questId);
+    const group = getQuestGroup(type);
+
+    return (Array.isArray(group.quests) ? group.quests : []).find(
+        (quest) => quest.id === questId,
+    );
 }
 
 function claimQuestReward(userId, type = "daily", questId) {
     return withData((data) => {
-        const user = ensureUser(data, userId);
-        const bucket = ensureQuestBucket(user, type);
-        const quest = findQuestConfig(type, questId);
+        const normalizedType = normalizeQuestType(type);
 
-        if (!quest) {
+        const user = ensureUser(data, userId);
+
+        const bucket = ensureQuestBucket(user, userId, normalizedType);
+
+        const quest = findQuestConfig(normalizedType, questId);
+
+        if (!quest || !bucket.selectedQuestIds.includes(quest.id)) {
             return {
                 success: false,
-                message: "Không tìm thấy nhiệm vụ.",
+                message: "Không tìm thấy nhiệm vụ trong kỳ hiện tại.",
             };
         }
 
@@ -211,6 +393,7 @@ function claimQuestReward(userId, type = "daily", questId) {
         }
 
         const current = Number(bucket.progress[quest.taskId] || 0);
+
         const target = Number(quest.target || 1);
 
         if (current < target) {
@@ -244,6 +427,7 @@ function claimQuestReward(userId, type = "daily", questId) {
 
             for (const itemReward of reward.items) {
                 const itemId = itemReward.itemId;
+
                 const amount = Math.max(1, Number(itemReward.amount || 1));
 
                 if (!itemId) {
@@ -1634,7 +1818,9 @@ module.exports = {
     getDungeonProfile,
     updateDungeonProfile,
     getQuestState,
+    getActiveQuests,
     trackQuestProgress,
+    trackQuestProgressBatch,
     claimQuestReward,
     getSecretRealmState,
     updateSecretRealmState,

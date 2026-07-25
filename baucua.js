@@ -17,7 +17,7 @@ const {
 } = require("./database");
 
 const baucuaConfig = require("./config/baucua");
-
+const quest = require("./quest");
 const games = new Map();
 
 function sleep(ms) {
@@ -467,12 +467,24 @@ class BauCuaManager {
                 addMoney(bet.userId, receive);
                 addWin(bet.userId);
 
+                quest.trackGambleResult(bet.userId, "baucua", {
+                    bet: bet.amount,
+                    payout: receive,
+                    won: true,
+                });
+
                 resultLines.push(
                     `<@${bet.userId}> ${getBetLabel(bet.itemId)} ` +
                         `trúng ${matchCount} | nhận ${formatMoney(receive)}`,
                 );
             } else {
                 addLoss(bet.userId);
+
+                quest.trackGambleResult(bet.userId, "baucua", {
+                    bet: bet.amount,
+                    payout: 0,
+                    won: false,
+                });
 
                 resultLines.push(
                     `<@${bet.userId}> ${getBetLabel(bet.itemId)} ` +
