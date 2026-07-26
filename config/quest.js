@@ -1,4 +1,10 @@
-module.exports = {
+const REWARD_BUFF = Object.freeze({
+    money: 3, // Hệ số tiền
+    tuVi: 3, // Hệ số tu vi
+    items: 2, // Hệ số số lượng vật phẩm/rương
+});
+
+const questConfig = {
     timezoneOffsetHours: 7,
 
     daily: {
@@ -367,3 +373,60 @@ module.exports = {
         ],
     },
 };
+function applyRewardBuff(config) {
+    for (const type of [
+        "daily",
+        "weekly",
+        "challenge",
+    ]) {
+        const quests = config[type]?.quests;
+
+        if (!Array.isArray(quests)) {
+            continue;
+        }
+
+        for (const quest of quests) {
+            const reward = quest.reward;
+
+            if (!reward) {
+                continue;
+            }
+
+            // Buff tiền
+            if (Number(reward.money) > 0) {
+                reward.money = Math.floor(
+                    Number(reward.money) *
+                        REWARD_BUFF.money,
+                );
+            }
+
+            // Buff tu vi
+            if (Number(reward.tuVi) > 0) {
+                reward.tuVi = Math.floor(
+                    Number(reward.tuVi) *
+                        REWARD_BUFF.tuVi,
+                );
+            }
+
+            // Buff số lượng vật phẩm/rương
+            if (Array.isArray(reward.items)) {
+                for (const item of reward.items) {
+                    item.amount = Math.max(
+                        1,
+                        Math.floor(
+                            Number(
+                                item.amount || 1,
+                            ) *
+                                REWARD_BUFF.items,
+                        ),
+                    );
+                }
+            }
+        }
+    }
+
+    return config;
+}
+
+module.exports =
+    applyRewardBuff(questConfig);

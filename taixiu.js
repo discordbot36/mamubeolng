@@ -19,6 +19,25 @@ const {
 const taixiuConfig = require("./config/taixiu");
 const quest = require("./quest");
 
+function safeTrackTaiXiuQuest(userId, result) {
+    try {
+        if (!quest || typeof quest.trackGambleResult !== "function") {
+            console.warn(
+                "[TaiXiu] quest.trackGambleResult chưa tồn tại hoặc chưa được export.",
+            );
+
+            return;
+        }
+
+        quest.trackGambleResult(userId, "taixiu", result);
+    } catch (error) {
+        /*
+         * Quest có lỗi cũng tuyệt đối không được
+         * làm treo quá trình trả thưởng Tài Xỉu.
+         */
+        console.error("[TaiXiu trackGambleResult]", error);
+    }
+}
 const games = new Map();
 const gamesById = new Map();
 const tableEditTimers = new Map();
@@ -484,40 +503,75 @@ class TaiXiuManager {
         const taiXiuResult = getTaiXiu(total);
         const chanLeResult = getChanLe(total);
         const resultLines = [];
+        const questResults = [];
 
         for (const bet of game.bets) {
             const win = isWinningBet(bet.betKey, total);
+
             const payout = getPayout(bet.betKey);
+
             const receive = win ? Math.floor(bet.amount * payout) : 0;
+
             const net = receive - bet.amount;
 
             if (win) {
                 addMoney(bet.userId, receive);
+
                 addWin(bet.userId);
             } else {
                 addLoss(bet.userId);
             }
 
-            quest.trackGambleResult(bet.userId, "taixiu", {
+            resultLines.push(
+                `<@${bet.userId}> ${getBetLabel(bet.betKey)} ` +
+                    `${
+                        win
+                            ? `ăn ${formatMoney(net)}`
+                            : `bay ${formatMoney(bet.amount)}`
+                    }`,
+            );
+
+            /*
+             * Chỉ lưu lại kết quả.
+             * Chưa cập nhật Quest tại đây để tránh
+             * Quest lỗi làm kẹt màn mở bát.
+             */
+            questResults.push({
+                userId: bet.userId,
                 bet: bet.amount,
                 payout: receive,
                 won: win,
             });
-
-            resultLines.push(
-                F`<@${bet.userId}> ${getBetLabel(bet.betKey)} ` +
-                    `${win ? `ăn ${formatMoney(net)}` : `bay ${formatMoney(bet.amount)}`}`,
-            );
         }
 
-        return gameMessage.edit({
+        /*
+         * Phải hiện kết quả và trả thưởng trước.
+         */
+        const finalMessage = await gameMessage.edit({
             content:
                 `🎲 Kết quả: ${formatDice(results)}\n` +
-                `📊 Tổng: **${total}** | **${taixiuConfig.choices[taiXiuResult].name} - ${taixiuConfig.choices[chanLeResult].name}**\n\n` +
+                `📊 Tổng: **${total}** | ` +
+                `**${taixiuConfig.choices[taiXiuResult].name} - ${
+                    taixiuConfig.choices[chanLeResult].name
+                }**\n\n` +
                 `${resultLines.join("\n")}\n\n` +
                 `🏁 Xong kèo, đời là thế thôi`,
             components: createButtons(game, true),
         });
+
+        /*
+         * Sau khi ván đã kết thúc mới cập nhật Quest.
+         * Quest lỗi cũng không ảnh hưởng Tài Xỉu.
+         */
+        for (const result of questResults) {
+            safeTrackTaiXiuQuest(result.userId, {
+                bet: result.bet,
+                payout: result.payout,
+                won: result.won,
+            });
+        }
+
+        return finalMessage;
     }
 }
 
