@@ -9,7 +9,7 @@ const {
 
 const workConfig = require("./config/work");
 const quest = require("./quest");
-const { runLuckyWheel } = require("./utils/luckyWheel");
+const { runLuckyWheel } = require("./utils/luckywheel");
 function roll(chance) {
     return Math.random() < chance;
 }
