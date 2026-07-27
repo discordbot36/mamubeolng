@@ -9,7 +9,7 @@ const {
 
 const workConfig = require("./config/work");
 const quest = require("./quest");
-
+const { runLuckyWheel } = require("./utils/luckyWheel");
 function roll(chance) {
     return Math.random() < chance;
 }
@@ -85,7 +85,14 @@ function createShipperButtons(userId, disabled = false) {
             .setDisabled(disabled),
     );
 }
-
+function finishWork(interaction, basePayload, responseType = "reply") {
+    return runLuckyWheel(interaction, {
+        userId: interaction.user.id,
+        source: "work",
+        responseType,
+        basePayload,
+    });
+}
 class WorkManager {
     autocomplete(interaction) {
         const focusedValue = interaction.options.getFocused().toLowerCase();
@@ -150,7 +157,7 @@ class WorkManager {
         addMoney(interaction.user.id, job.reward);
         quest.trackQuestProgress(interaction.user.id, "work", 1);
 
-        return interaction.reply({
+        return finishWork(interaction, {
             content:
                 `${interaction.user} đi làm ${job.name}
 
@@ -174,7 +181,7 @@ class WorkManager {
                 value: job.stolenItem.price,
             });
             quest.trackQuestProgress(interaction.user.id, "work", 1);
-            return interaction.reply({
+            return finishWork(interaction, {
                 content:
                     `${interaction.user} đi làm ${job.name}\n\n` +
                     `📱 Móc được **${job.stolenItem.name}**!\n` +
@@ -186,7 +193,7 @@ class WorkManager {
         addMoney(interaction.user.id, job.reward);
         quest.trackQuestProgress(interaction.user.id, "work", 1);
 
-        return interaction.reply({
+        return finishWork(interaction, {
             content:
                 `${interaction.user} đi làm ${job.name}\n\n` +
                 `💰 Nhận: ${formatMoney(job.reward)}`,
@@ -198,11 +205,10 @@ class WorkManager {
             addMoney(interaction.user.id, job.reward);
             quest.trackQuestProgress(interaction.user.id, "work", 1);
 
-            return interaction.reply({
+            return finishWork(interaction, {
                 content:
-                    `${interaction.user} đi làm ${job.name}
-
-` + `💰 Nhận: ${formatMoney(job.reward)}`,
+                    `${interaction.user} đi làm ${job.name}\n\n` +
+                    `💰 Nhận: ${formatMoney(job.reward)}`,
             });
         }
 
@@ -244,18 +250,12 @@ class WorkManager {
 
         quest.trackQuestProgress(interaction.user.id, "work", 1);
 
-        return interaction.reply({
+        return finishWork(interaction, {
             content:
-                `${interaction.user} đi ${job.name}
-
-` +
-                `${dog.name}
-` +
-                `⚖️ ${weightKg}kg
-` +
-                `💰 Giá trị: ${formatMoney(value)}
-
-` +
+                `${interaction.user} đi ${job.name}\n\n` +
+                `${dog.name}\n` +
+                `⚖️ ${weightKg}kg\n` +
+                `💰 Giá trị: ${formatMoney(value)}\n\n` +
                 `Đã bỏ vào kho đồ`,
         });
     }
@@ -286,13 +286,17 @@ class WorkManager {
             addMoney(userId, honestReward);
             quest.trackQuestProgress(userId, "work", 1);
 
-            return interaction.update({
-                content:
-                    `${interaction.user} chọn Lương thiện\n\n` +
-                    `🙏 Giao hàng tử tế, được khổ chủ bo thêm **${formatMoney(job.honestBonus || 0)}**\n` +
-                    `💰 Tổng nhận: ${formatMoney(honestReward)}`,
-                components: [disabledRow],
-            });
+            return finishWork(
+                interaction,
+                {
+                    content:
+                        `${interaction.user} chọn Lương thiện\n\n` +
+                        `🙏 Giao hàng tử tế, được khổ chủ bo thêm **${formatMoney(job.honestBonus || 0)}**\n` +
+                        `💰 Tổng nhận: ${formatMoney(honestReward)}`,
+                    components: [disabledRow],
+                },
+                "update",
+            );
         }
 
         if (action === "steal") {
@@ -311,14 +315,18 @@ class WorkManager {
             });
             quest.trackQuestProgress(userId, "work", 1);
 
-            return interaction.update({
-                content:
-                    `${interaction.user} chọn Bú\n\n` +
-                    `📱 Trộm thành công **${job.stolenItem.name}**\n` +
-                    `💰 Giá trị: ${formatMoney(job.stolenItem.price)}\n\n` +
-                    `Đã bỏ vào kho đồ`,
-                components: [disabledRow],
-            });
+            return finishWork(
+                interaction,
+                {
+                    content:
+                        `${interaction.user} chọn Bú\n\n` +
+                        `📱 Trộm thành công **${job.stolenItem.name}**\n` +
+                        `💰 Giá trị: ${formatMoney(job.stolenItem.price)}\n\n` +
+                        `Đã bỏ vào kho đồ`,
+                    components: [disabledRow],
+                },
+                "update",
+            );
         }
 
         return interaction.reply({
