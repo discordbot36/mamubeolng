@@ -155,8 +155,9 @@ module.exports = {
         minDifficultyLevel: 5,
         minModCount: 2,
 
-        exChestChance: 0.035,
-        mamuChestChance: 0.12,
+        // Thiên Phạt + ít nhất 2 dị biến
+        exChestChance: 0.06,
+        mamuChestChance: 0.22,
     },
     powerLimits: {
         minGuestRatio: 0.12,
@@ -229,109 +230,367 @@ module.exports = {
 
     rewards: {
         economy: {
-            hostMin: 7000,
-            hostMax: 18000,
+            hostMin: 10000,
+            hostMax: 26000,
 
-            guestMin: 5000,
-            guestMax: 12000,
+            guestMin: 7000,
+            guestMax: 18000,
         },
 
         tuVi: {
-            hostMin: 220,
-            hostMax: 420,
+            hostMin: 300,
+            hostMax: 650,
 
-            guestMin: 150,
-            guestMax: 300,
+            guestMin: 220,
+            guestMax: 480,
         },
+
         guaranteedFeed: {
             itemId: "cam_lon_nam_dinh",
 
-            hostMin: 3,
-            hostMax: 5,
+            hostMin: 4,
+            hostMax: 7,
 
-            guestMin: 2,
-            guestMax: 3,
+            guestMin: 3,
+            guestMax: 5,
         },
 
-        hostRolls: 5,
-        guestRolls: 3,
+        hostRolls: 6,
+        guestRolls: 4,
+
+        /*
+         * bonusRolls:
+         * Lượt quay pool thường cộng thêm.
+         *
+         * premiumRolls:
+         * Lượt chắc chắn quay trong pool vật phẩm giá trị.
+         *
+         * amountMultiplier:
+         * Nhân số lượng nguyên liệu thường theo độ khó.
+         */
+        difficultyBonus: {
+            1: {
+                bonusRolls: 0,
+                premiumRolls: 0,
+                amountMultiplier: 1,
+            },
+
+            2: {
+                bonusRolls: 1,
+                premiumRolls: 0,
+                amountMultiplier: 1.1,
+            },
+
+            3: {
+                bonusRolls: 2,
+                premiumRolls: 1,
+                amountMultiplier: 1.25,
+            },
+
+            4: {
+                bonusRolls: 3,
+                premiumRolls: 2,
+                amountMultiplier: 1.5,
+            },
+
+            5: {
+                bonusRolls: 5,
+                premiumRolls: 3,
+                amountMultiplier: 1.8,
+            },
+        },
 
         rewardPool: [
+            // =====================================
+            // ĐỒ CƠ BẢN - MỌI ĐỘ KHÓ
+            // =====================================
+
             {
                 itemId: "cam_lon_nam_dinh",
-                weight: 34,
-                minAmount: 1,
-                maxAmount: 4,
+                weight: 25,
+                minAmount: 2,
+                maxAmount: 5,
             },
             {
                 itemId: "cam_lon_tang_trong",
-                weight: 21,
+                weight: 18,
                 minAmount: 1,
                 maxAmount: 3,
             },
             {
                 itemId: "cam_lon_xin_vl",
-                weight: 11,
+                weight: 8,
                 minAmount: 1,
-                maxAmount: 1,
+                maxAmount: 2,
             },
 
             {
                 itemId: "da_lo",
-                weight: 15,
+                weight: 13,
+                minAmount: 2,
+                maxAmount: 6,
+            },
+            {
+                itemId: "da_cho_Tau",
+                weight: 10,
                 minAmount: 1,
                 maxAmount: 4,
             },
             {
-                itemId: "da_cho_Tau",
-                weight: 9,
-                minAmount: 1,
-                maxAmount: 2,
-            },
-            {
                 itemId: "da_thach_anh",
-                weight: 6,
+                weight: 7,
                 minAmount: 1,
-                maxAmount: 1,
+                maxAmount: 3,
             },
 
             {
                 itemId: "bi_tich_rach_chu_dong",
-                weight: 3.3,
+                weight: 3.2,
                 minAmount: 1,
                 maxAmount: 1,
+                scaleAmountWithDifficulty: false,
             },
             {
                 itemId: "bi_tich_rach_bi_dong",
-                weight: 3.3,
+                weight: 3.2,
                 minAmount: 1,
                 maxAmount: 1,
+                scaleAmountWithDifficulty: false,
             },
-
             {
                 itemId: "bi_tich_thuong_chu_dong",
-                weight: 1.35,
+                weight: 1.8,
                 minAmount: 1,
                 maxAmount: 1,
+                scaleAmountWithDifficulty: false,
             },
             {
                 itemId: "bi_tich_thuong_bi_dong",
-                weight: 1.35,
+                weight: 1.6,
                 minAmount: 1,
                 maxAmount: 1,
+                scaleAmountWithDifficulty: false,
             },
 
+            // =====================================
+            // NHIỄU ĐỘNG TRỞ LÊN
+            // =====================================
+
             {
-                itemId: "bi_tich_cao_cap_chu_dong",
-                weight: 0.35,
+                itemId: "da_ma_nao",
+                weight: 5.5,
+                minAmount: 1,
+                maxAmount: 2,
+
+                minDifficultyLevel: 2,
+                maxDifficultyLevel: 3,
+
+                premium: true,
+            },
+            {
+                itemId: "ruong_phap_bao_rach",
+                weight: 2.4,
                 minAmount: 1,
                 maxAmount: 1,
+
+                minDifficultyLevel: 2,
+                scaleAmountWithDifficulty: false,
+            },
+
+            // =====================================
+            // HUNG HIỂM TRỞ LÊN
+            // =====================================
+
+            {
+                itemId: "cam_on_em_vi_tat_ca",
+                weight: 4,
+                minAmount: 1,
+                maxAmount: 2,
+
+                minDifficultyLevel: 3,
+                maxDifficultyLevel: 4,
+
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+            {
+                itemId: "da_ngoc_bich",
+                weight: 5,
+                minAmount: 1,
+                maxAmount: 2,
+
+                minDifficultyLevel: 3,
+                maxDifficultyLevel: 4,
+
+                premium: true,
+            },
+            {
+                itemId: "bi_tich_ngau_nhien_chu_dong",
+                weight: 3.4,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 3,
+                maxDifficultyLevel: 4,
+
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+            {
+                itemId: "bi_tich_ngau_nhien_bi_dong",
+                weight: 3,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 3,
+                maxDifficultyLevel: 4,
+
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+            {
+                itemId: "ruong_phap_bao_thuong",
+                weight: 2.6,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 3,
+                maxDifficultyLevel: 4,
+
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+
+            // =====================================
+            // ÁC MỘNG TRỞ LÊN
+            // =====================================
+
+            {
+                itemId: "da_phi_thuy",
+                weight: 3.8,
+                minAmount: 1,
+                maxAmount: 2,
+
+                minDifficultyLevel: 4,
+                premium: true,
+            },
+            {
+                itemId: "bi_tich_cao_cap_chu_dong",
+                weight: 2.4,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 4,
+                premium: true,
+                scaleAmountWithDifficulty: false,
             },
             {
                 itemId: "bi_tich_cao_cap_bi_dong",
-                weight: 0.35,
+                weight: 2,
                 minAmount: 1,
                 maxAmount: 1,
+
+                minDifficultyLevel: 4,
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+            {
+                itemId: "ruong_phap_bao_tinh_anh",
+                weight: 1.4,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 4,
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+
+            // =====================================
+            // THIÊN PHẠT
+            // =====================================
+
+            {
+                itemId: "da_hoa_dien",
+                weight: 2.4,
+                minAmount: 1,
+                maxAmount: 2,
+
+                minDifficultyLevel: 5,
+                premium: true,
+            },
+            {
+                itemId: "da_mamu",
+                weight: 0.7,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 5,
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+
+            {
+                itemId: "bi_tich_thien_giai_chu_dong",
+                weight: 1.1,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 5,
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+            {
+                itemId: "bi_tich_thien_giai_bi_dong",
+                weight: 0.9,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 5,
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+
+            {
+                itemId: "ruong_phap_bao_mamu",
+                weight: 0.55,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 5,
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+
+            {
+                itemId: "bi_tich_mamu_cam_thuat_chu_dong",
+                weight: 0.16,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 5,
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+            {
+                itemId: "bi_tich_mamu_cam_thuat_bi_dong",
+                weight: 0.12,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 5,
+                premium: true,
+                scaleAmountWithDifficulty: false,
+            },
+
+            {
+                itemId: "ruong_tan_tich_ex",
+                weight: 0.04,
+                minAmount: 1,
+                maxAmount: 1,
+
+                minDifficultyLevel: 5,
+                premium: true,
+                scaleAmountWithDifficulty: false,
             },
         ],
     },

@@ -338,7 +338,11 @@ function actionCount(raid, action) {
 }
 
 function requiredByAlive(raid, ratio, min = 1) {
-    return Math.max(min, Math.ceil(getAlivePlayers(raid).length * ratio));
+    const bonus = Number(raidConfig.difficulty?.requiredRatioBonus ?? 0);
+
+    const finalRatio = clamp(Number(ratio || 0) + bonus, 0, 1);
+
+    return Math.max(min, Math.ceil(getAlivePlayers(raid).length * finalRatio));
 }
 
 function addBossDamage(raid, amount, reason = "damage") {
@@ -831,6 +835,12 @@ function createBoss(activeCount) {
 function applyPlayerActionDamage(raid, logs) {
     let damage = 0;
 
+    const damageMultiplier = clamp(
+        Number(raidConfig.difficulty?.playerDamageMultiplier ?? 1),
+        0.1,
+        2,
+    );
+
     for (const player of getAlivePlayers(raid)) {
         const action = raid.phase.actions[player.userId];
 
@@ -844,12 +854,23 @@ function applyPlayerActionDamage(raid, logs) {
 
         let dealt = 0;
 
-        if (action === "attack") dealt = base;
-        if (action === "break") dealt = Math.floor(base * 0.55);
-        if (action === "focus") dealt = Math.floor(base * 0.25);
+        if (action === "attack") {
+            dealt = base;
+        }
+
+        if (action === "break") {
+            dealt = Math.floor(base * 0.55);
+        }
+
+        if (action === "focus") {
+            dealt = Math.floor(base * 0.25);
+        }
+
         if (["guard", "cleanse", "dodge"].includes(action)) {
             dealt = Math.floor(base * 0.12);
         }
+
+        dealt = Math.max(0, Math.floor(dealt * damageMultiplier));
 
         damage += dealt;
         player.damage = Number(player.damage || 0) + dealt;
@@ -857,6 +878,7 @@ function applyPlayerActionDamage(raid, logs) {
 
     if (damage > 0) {
         addBossDamage(raid, damage, "damage");
+
         logs.push(
             `⚔️ Sát thương người chơi gây ra: **${formatNumber(damage)}**.`,
         );
@@ -2101,17 +2123,48 @@ class RaidServerManager {
         applyPlayerActionDamage(raid, logs);
         resolveMechanic(raid, logs);
 
+        // Boss tự tăng nộ theo từng phase.
+        // Boss càng ít máu thì tốc độ tăng nộ càng nhanh.
+        const stage = getBossStage(raid);
+
+        const passiveRage =
+            Number(raidConfig.difficulty?.passiveRagePerPhase ?? 0) +
+            (stage >= 2
+                ? Number(raidConfig.difficulty?.stage2ExtraRage ?? 0)
+                : 0) +
+            (stage >= 3
+                ? Number(raidConfig.difficulty?.stage3ExtraRage ?? 0)
+                : 0);
+
+        if (passiveRage > 0) {
+            addRage(raid, passiveRage);
+        }
+
         if (
             Number(raid.boss.rage || 0) >=
             Number(raidConfig.boss.maxRage || 100)
         ) {
             raid.stats.rageBursts += 1;
-            raid.boss.rage = 35;
+
+            raid.boss.rage = clamp(
+                Number(raidConfig.difficulty?.rageAfterBurst ?? 45),
+                0,
+                Number(raidConfig.boss.maxRage || 100),
+            );
+
+            const burstMultiplier = Number(
+                raidConfig.difficulty?.rageBurstDamageMultiplier ?? 2.1,
+            );
 
             logs.push("💀 Boss tung Cấm Kỵ Diệt Server Kiếm vì Nộ đạt 100!");
 
-            for (const p of getAlivePlayers(raid)) {
-                damagePlayer(raid, p, raid.boss.atk * 1.6, "Boss bùng Nộ");
+            for (const player of getAlivePlayers(raid)) {
+                damagePlayer(
+                    raid,
+                    player,
+                    raid.boss.atk * burstMultiplier,
+                    "Boss bùng Nộ",
+                );
             }
         }
 

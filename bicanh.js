@@ -332,10 +332,49 @@ function randomInt(min, max) {
 
     return Math.floor(Math.random() * (safeMax - safeMin + 1)) + safeMin;
 }
-function rollSecretRealmReward() {
-    const pool = Array.isArray(config.rewards?.rewardPool)
-        ? config.rewards.rewardPool
-        : [];
+function getDifficultyRewardConfig(difficultyLevel) {
+    const level = Math.max(1, Number(difficultyLevel || 1));
+
+    const table = config.rewards?.difficultyBonus || {};
+
+    return (
+        table[level] ||
+        table[String(level)] || {
+            bonusRolls: 0,
+            premiumRolls: 0,
+            amountMultiplier: 1,
+        }
+    );
+}
+
+function rollSecretRealmReward(
+    difficultyLevel = 1,
+    { premiumOnly = false, amountMultiplier = 1 } = {},
+) {
+    const level = Math.max(1, Number(difficultyLevel || 1));
+
+    const pool = (
+        Array.isArray(config.rewards?.rewardPool)
+            ? config.rewards.rewardPool
+            : []
+    ).filter((entry) => {
+        const minLevel = Math.max(1, Number(entry.minDifficultyLevel || 1));
+
+        const maxLevel = Math.max(
+            minLevel,
+            Number(entry.maxDifficultyLevel || 999),
+        );
+
+        if (level < minLevel || level > maxLevel) {
+            return false;
+        }
+
+        if (premiumOnly && entry.premium !== true) {
+            return false;
+        }
+
+        return true;
+    });
 
     if (pool.length <= 0) {
         return null;
@@ -362,10 +401,22 @@ function rollSecretRealmReward() {
                 Number(entry.maxAmount || minAmount),
             );
 
+            const rolledAmount = randomInt(minAmount, maxAmount);
+
+            const finalAmount =
+                entry.scaleAmountWithDifficulty === false
+                    ? rolledAmount
+                    : Math.max(
+                          1,
+                          Math.ceil(
+                              rolledAmount *
+                                  Math.max(1, Number(amountMultiplier || 1)),
+                          ),
+                      );
+
             return {
                 itemId: entry.itemId,
-
-                amount: randomInt(minAmount, maxAmount),
+                amount: finalAmount,
             };
         }
     }
@@ -1718,12 +1769,12 @@ function calculateRealmDamage(
 
     const baseDamageRate = cleanSolved
         ? combat.randomBetween(0.008, 0.018)
-        : combat.randomBetween(0.060, 0.105);
+        : combat.randomBetween(0.06, 0.105);
 
     const baseDamage = battle.maxTeamHp * baseDamageRate * damageMultiplier;
 
     const missingRolePenalty =
-        battle.maxTeamHp * 0.050 * missingRoles * damageMultiplier;
+        battle.maxTeamHp * 0.05 * missingRoles * damageMultiplier;
 
     const wrongActionDamageMultiplier = Math.max(
         1,
@@ -1732,7 +1783,7 @@ function calculateRealmDamage(
 
     const wrongActionPenalty =
         battle.maxTeamHp *
-        0.030 *
+        0.03 *
         Number(wrongActionCount || 0) *
         damageMultiplier *
         wrongActionDamageMultiplier;
@@ -1851,13 +1902,44 @@ function giveSecretRealmReward(realm, userId) {
         }
     }
 
-    const rewardRolls = Math.max(
+    const difficultyLevel = Math.max(
         1,
-        Math.ceil((isHost ? 3 : 2) * finalMultiplier),
+        Number(realm.battle?.difficulty?.level || 1),
     );
 
+    const difficultyBonus = getDifficultyRewardConfig(difficultyLevel);
+
+    /*
+     * Lượt quay thường cộng thêm theo độ khó.
+     * Vẫn bị giảm bởi mức tham gia và fatigue.
+     */
+    const bonusRolls = Math.max(
+        0,
+        Math.round(
+            Number(difficultyBonus.bonusRolls || 0) *
+                participationMultiplier *
+                fatigueMultiplier,
+        ),
+    );
+
+    const rewardRolls = Math.max(
+        1,
+        Math.ceil((isHost ? 3 : 2) * finalMultiplier) + bonusRolls,
+    );
+
+    const itemAmountMultiplier = Math.max(
+        1,
+        Number(difficultyBonus.amountMultiplier || 1),
+    );
+
+    /*
+     * Quay pool thường.
+     * Pool tự mở thêm đồ theo độ khó.
+     */
     for (let index = 0; index < rewardRolls; index += 1) {
-        const rewardItem = rollSecretRealmReward();
+        const rewardItem = rollSecretRealmReward(difficultyLevel, {
+            amountMultiplier: itemAmountMultiplier,
+        });
 
         if (!rewardItem) {
             continue;
@@ -1866,8 +1948,45 @@ function giveSecretRealmReward(realm, userId) {
         const amount = Math.max(1, Math.floor(rewardItem.amount));
 
         addShopItem(userId, rewardItem.itemId, amount);
+
         mergeRewardItem(items, rewardItem.itemId, amount);
     }
+
+    /*
+     * Quay pool premium bảo hiểm.
+     *
+     * Hung Hiểm: 1 lượt
+     * Ác Mộng: 2 lượt
+     * Thiên Phạt: 3 lượt
+     *
+     * AFK hoặc fatigue cao sẽ bị giảm.
+     */
+    const premiumRolls = Math.max(
+        0,
+        Math.round(
+            Number(difficultyBonus.premiumRolls || 0) *
+                participationMultiplier *
+                fatigueMultiplier,
+        ),
+    );
+
+    for (let index = 0; index < premiumRolls; index += 1) {
+        const premiumItem = rollSecretRealmReward(difficultyLevel, {
+            premiumOnly: true,
+            amountMultiplier: 1,
+        });
+
+        if (!premiumItem) {
+            continue;
+        }
+
+        const amount = Math.max(1, Math.floor(premiumItem.amount));
+
+        addShopItem(userId, premiumItem.itemId, amount);
+
+        mergeRewardItem(items, premiumItem.itemId, amount);
+    }
+
     tryGiveSuperHighReward(realm, userId, items);
     /*
      * Buff nhẹ economy.

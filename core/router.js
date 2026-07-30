@@ -17,6 +17,7 @@ const dungeon = require("../dungeon");
 const blackjack = require("../blackjack");
 const pigRoad = require("../pigRoad");
 const flip = require("../flip");
+const keno = require("../keno");
 const vecao = require("../vecao");
 const quest = require("../quest");
 const bicanh = require("../bicanh");
@@ -45,6 +46,7 @@ const modules = {
     worldboss,
     blackjack,
     dungeon,
+    keno,
     pigRoad,
     flip,
     vecao,

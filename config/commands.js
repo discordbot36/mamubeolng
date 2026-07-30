@@ -1039,6 +1039,91 @@ module.exports = [
         ],
     },
     {
+    name: "keno",
+    description:
+        "Chọn 1-10 số từ 1-40 và chơi Keno một người",
+    handler: "keno.play",
+
+    options: [
+        {
+            type: "integer",
+            name: "cuoc",
+            description:
+                "Số tiền muốn cược",
+            required: true,
+
+            minValue: 1000,
+            maxValue: GAMBLE_MAX_BET,
+        },
+
+        {
+            type: "string",
+            name: "chedo",
+            description:
+                "Mức rủi ro và bảng thưởng",
+            required: true,
+
+            choices: [
+                {
+                    name:
+                        "Thấp - dễ nhận tiền hơn",
+                    value: "low",
+                },
+
+                {
+                    name:
+                        "Trung bình - cân bằng",
+                    value: "medium",
+                },
+
+                {
+                    name:
+                        "Cao - ít trúng, hệ số lớn",
+                    value: "high",
+                },
+            ],
+        },
+
+        {
+            type: "string",
+            name: "so",
+            description:
+                "Các số cách nhau bằng dấu phẩy, ví dụ 3,7,12,25",
+            required: false,
+        },
+
+        {
+            type: "integer",
+            name: "soluong",
+            description:
+                "Nếu không nhập số, bot tự chọn bao nhiêu số; mặc định 5",
+            required: false,
+
+            minValue: 1,
+            maxValue: 10,
+        },
+    ],
+},
+{
+    name: "kenonote",
+    description:
+        "Xem luật, ghi chú và bảng thưởng Keno",
+    handler: "keno.note",
+
+    options: [
+        {
+            type: "integer",
+            name: "soluong",
+            description:
+                "Xem bảng thưởng khi chọn bao nhiêu số; mặc định 5",
+            required: false,
+
+            minValue: 1,
+            maxValue: 10,
+        },
+    ],
+},
+    {
         name: "flip",
         description: "50-50 cược tiền, thắng gấp đôi",
         handler: "flip.play",
