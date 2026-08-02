@@ -1657,7 +1657,116 @@ function addBeastMaterials(userId, materials = {}) {
         return beastMaterials;
     });
 }
+function getAlchemyDateKey() {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Ho_Chi_Minh",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(new Date());
+}
 
+function ensureAlchemyProfile(user) {
+    if (!user.alchemyProfile) {
+        user.alchemyProfile = {
+            level: 1,
+            exp: 0,
+
+            furnaceLevel: 1,
+            furnaceDurability: 100,
+
+            pills: {},
+            medicineResidue: 0,
+
+            totalCrafted: 0,
+            totalSucceeded: 0,
+            totalFailed: 0,
+            totalExploded: 0,
+            highestQuality: 0,
+
+            pendingHuntLure: null,
+
+            daily: {
+                date: getAlchemyDateKey(),
+                cultivationPillsUsed: 0,
+                huntRunPillsUsed: 0,
+            },
+        };
+    }
+
+    const profile = user.alchemyProfile;
+
+    if (!profile.pills) {
+        profile.pills = {};
+    }
+
+    if (!profile.daily) {
+        profile.daily = {
+            date: getAlchemyDateKey(),
+            cultivationPillsUsed: 0,
+            huntRunPillsUsed: 0,
+        };
+    }
+
+    const today = getAlchemyDateKey();
+
+    if (profile.daily.date !== today) {
+        profile.daily.date = today;
+        profile.daily.cultivationPillsUsed = 0;
+        profile.daily.huntRunPillsUsed = 0;
+    }
+
+    profile.level = Math.max(1, Number(profile.level || 1));
+    profile.exp = Math.max(0, Number(profile.exp || 0));
+
+    profile.furnaceLevel = Math.max(
+        1,
+        Number(profile.furnaceLevel || 1),
+    );
+
+    profile.furnaceDurability = Math.max(
+        0,
+        Number(profile.furnaceDurability ?? 100),
+    );
+
+    profile.medicineResidue = Math.max(
+        0,
+        Number(profile.medicineResidue || 0),
+    );
+
+    return profile;
+}
+
+function getAlchemyProfile(userId) {
+    return withData((data) => {
+        const user = ensureUser(data, userId);
+        return ensureAlchemyProfile(user);
+    });
+}
+
+/*
+ * Updater nhận đồng thời:
+ * - profile nghề luyện đan
+ * - user để sửa tiền, tu vi và inventory
+ * - beastMaterials để trừ nguyên liệu
+ *
+ * Tất cả được ghi trong cùng một lần withData.
+ */
+function updateAlchemyProfile(userId, updater) {
+    return withData((data) => {
+        const user = ensureUser(data, userId);
+        const profile = ensureAlchemyProfile(user);
+        const beastMaterials = ensureBeastMaterials(user);
+
+        const result = updater(
+            profile,
+            user,
+            beastMaterials,
+        );
+
+        return result === undefined ? profile : result;
+    });
+}
 function ensureBeastHuntState(data) {
     if (!data.system) {
         data.system = {};
@@ -1828,6 +1937,10 @@ module.exports = {
     updateSecretRealmFatigue,
     getBeastMaterials,
     addBeastMaterials,
+
+    getAlchemyProfile,
+    updateAlchemyProfile,
+
     getBeastHuntState,
     updateBeastHuntState,
 };

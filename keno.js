@@ -20,12 +20,6 @@ const MIN_BET = 1000;
 const MAX_BET = GAMBLE_MAX_BET;
 
 /*
- * Tránh một lần jackpot làm vỡ kinh tế bot.
- * Có thể nâng lên nếu kinh tế server của bạn lớn.
- */
-const MAX_PAYOUT = 10000000;
-
-/*
  * Bản bot lấy cấu trúc Keno của Stake,
  * nhưng dùng RTP 97% để hợp kinh tế server.
  */
@@ -38,8 +32,7 @@ const RISK_MODES = {
         emoji: "🟢",
         color: 0x2ecc71,
 
-        note:
-            "Dễ nhận tiền hoàn lại hơn, nhưng các mốc trúng lớn có hệ số thấp hơn.",
+        note: "Dễ nhận tiền hoàn lại hơn, nhưng các mốc trúng lớn có hệ số thấp hơn.",
 
         /*
          * Hệ số tăng giữa các mốc trúng.
@@ -55,19 +48,7 @@ const RISK_MODES = {
          * Số hit tối thiểu để bắt đầu nhận thưởng.
          * Index là số lượng số người chơi chọn.
          */
-        minHitsByPicks: [
-            0,
-            1,
-            1,
-            1,
-            1,
-            2,
-            2,
-            2,
-            2,
-            2,
-            2,
-        ],
+        minHitsByPicks: [0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2],
     },
 
     medium: {
@@ -76,25 +57,12 @@ const RISK_MODES = {
         emoji: "🟡",
         color: 0xf1c40f,
 
-        note:
-            "Cân bằng giữa tần suất trúng và hệ số, phù hợp để chơi thông thường.",
+        note: "Cân bằng giữa tần suất trúng và hệ số, phù hợp để chơi thông thường.",
 
         growth: 4,
         maxMultiplier: 750,
 
-        minHitsByPicks: [
-            0,
-            1,
-            1,
-            2,
-            2,
-            2,
-            3,
-            3,
-            3,
-            3,
-            3,
-        ],
+        minHitsByPicks: [0, 1, 1, 2, 2, 2, 3, 3, 3, 3, 3],
     },
 
     high: {
@@ -103,25 +71,12 @@ const RISK_MODES = {
         emoji: "🔴",
         color: 0xe74c3c,
 
-        note:
-            "Phần lớn ván không trả thưởng, đổi lại các mốc cao có thể lên tới x1000.",
+        note: "Phần lớn ván không trả thưởng, đổi lại các mốc cao có thể lên tới x1000.",
 
         growth: 7,
         maxMultiplier: 1000,
 
-        minHitsByPicks: [
-            0,
-            1,
-            2,
-            3,
-            3,
-            3,
-            4,
-            4,
-            4,
-            4,
-            4,
-        ],
+        minHitsByPicks: [0, 1, 2, 3, 3, 3, 4, 4, 4, 4, 4],
     },
 };
 
@@ -140,15 +95,8 @@ function combination(n, k) {
 
     let result = 1;
 
-    for (
-        let index = 1;
-        index <= safeK;
-        index += 1
-    ) {
-        result =
-            (result *
-                (n - safeK + index)) /
-            index;
+    for (let index = 1; index <= safeK; index += 1) {
+        result = (result * (n - safeK + index)) / index;
     }
 
     return result;
@@ -160,33 +108,20 @@ function combination(n, k) {
  * Người chơi chọn pickCount số trong 40 số.
  * Bot rút 10 số không lặp.
  */
-function getHitProbability(
-    pickCount,
-    hitCount,
-) {
+function getHitProbability(pickCount, hitCount) {
     if (
         hitCount < 0 ||
         hitCount > pickCount ||
         DRAW_COUNT - hitCount < 0 ||
-        DRAW_COUNT - hitCount >
-            BOARD_SIZE - pickCount
+        DRAW_COUNT - hitCount > BOARD_SIZE - pickCount
     ) {
         return 0;
     }
 
     return (
-        combination(
-            pickCount,
-            hitCount,
-        ) *
-        combination(
-            BOARD_SIZE - pickCount,
-            DRAW_COUNT - hitCount,
-        ) /
-        combination(
-            BOARD_SIZE,
-            DRAW_COUNT,
-        )
+        (combination(pickCount, hitCount) *
+            combination(BOARD_SIZE - pickCount, DRAW_COUNT - hitCount)) /
+        combination(BOARD_SIZE, DRAW_COUNT)
     );
 }
 
@@ -201,44 +136,27 @@ function getHitProbability(
  * Bảng này cố định về mặt toán học,
  * không thay đổi tùy từng người chơi.
  */
-function buildPayoutTable(
-    riskId,
-    pickCount,
-) {
+function buildPayoutTable(riskId, pickCount) {
     const mode = RISK_MODES[riskId];
 
     if (!mode) {
         return null;
     }
 
-    const cacheKey =
-        `${riskId}:${pickCount}`;
+    const cacheKey = `${riskId}:${pickCount}`;
 
-    const cached =
-        payoutTableCache.get(
-            cacheKey,
-        );
+    const cached = payoutTableCache.get(cacheKey);
 
     if (cached) {
         return cached;
     }
 
-    const minHits =
-        mode.minHitsByPicks[
-            pickCount
-        ];
+    const minHits = mode.minHitsByPicks[pickCount];
 
     const weights = {};
 
-    for (
-        let hits = minHits;
-        hits <= pickCount;
-        hits += 1
-    ) {
-        weights[hits] = Math.pow(
-            mode.growth,
-            hits - minHits,
-        );
+    for (let hits = minHits; hits <= pickCount; hits += 1) {
+        weights[hits] = Math.pow(mode.growth, hits - minHits);
     }
 
     /*
@@ -247,95 +165,55 @@ function buildPayoutTable(
     let lowScale = 0;
     let highScale = 1000000000000;
 
-    for (
-        let index = 0;
-        index < 160;
-        index += 1
-    ) {
-        const scale =
-            (lowScale + highScale) /
-            2;
+    for (let index = 0; index < 160; index += 1) {
+        const scale = (lowScale + highScale) / 2;
 
         let expectedReturn = 0;
 
-        for (
-            let hits = minHits;
-            hits <= pickCount;
-            hits += 1
-        ) {
-            const multiplier =
-                Math.min(
-                    mode.maxMultiplier,
-                    scale *
-                        weights[hits],
-                );
+        for (let hits = minHits; hits <= pickCount; hits += 1) {
+            const multiplier = Math.min(
+                mode.maxMultiplier,
+                scale * weights[hits],
+            );
 
-            expectedReturn +=
-                getHitProbability(
-                    pickCount,
-                    hits,
-                ) *
-                multiplier;
+            expectedReturn += getHitProbability(pickCount, hits) * multiplier;
         }
 
-        if (
-            expectedReturn <
-            TARGET_RTP
-        ) {
+        if (expectedReturn < TARGET_RTP) {
             lowScale = scale;
         } else {
             highScale = scale;
         }
     }
 
-    const finalScale =
-        (lowScale + highScale) /
-        2;
+    const finalScale = (lowScale + highScale) / 2;
 
     const table = {};
 
-    for (
-        let hits = 0;
-        hits <= pickCount;
-        hits += 1
-    ) {
+    for (let hits = 0; hits <= pickCount; hits += 1) {
         if (hits < minHits) {
             table[hits] = 0;
             continue;
         }
 
         table[hits] = Number(
-            Math.min(
-                mode.maxMultiplier,
-                finalScale *
-                    weights[hits],
-            ).toFixed(2),
+            Math.min(mode.maxMultiplier, finalScale * weights[hits]).toFixed(2),
         );
     }
 
-    payoutTableCache.set(
-        cacheKey,
-        table,
-    );
+    payoutTableCache.set(cacheKey, table);
 
     return table;
 }
 
-function formatMultiplier(
-    multiplier,
-) {
-    const value = Number(
-        multiplier || 0,
-    );
+function formatMultiplier(multiplier) {
+    const value = Number(multiplier || 0);
 
     if (Number.isInteger(value)) {
         return `x${value}`;
     }
 
-    return `x${value
-        .toFixed(2)
-        .replace(/0+$/, "")
-        .replace(/\.$/, "")}`;
+    return `x${value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}`;
 }
 
 /*
@@ -345,13 +223,8 @@ function formatMultiplier(
  * 3 7 12 18 25
  * 3;7;12;18;25
  */
-function parseSelectedNumbers(
-    rawValue,
-) {
-    if (
-        !rawValue ||
-        !String(rawValue).trim()
-    ) {
+function parseSelectedNumbers(rawValue) {
+    if (!rawValue || !String(rawValue).trim()) {
         return null;
     }
 
@@ -364,53 +237,29 @@ function parseSelectedNumbers(
     if (
         numbers.some(
             (number) =>
-                !Number.isInteger(
-                    number,
-                ) ||
-                number < 1 ||
-                number > BOARD_SIZE,
+                !Number.isInteger(number) || number < 1 || number > BOARD_SIZE,
         )
     ) {
-        throw new Error(
-            `Mỗi số phải là số nguyên từ 1 đến ${BOARD_SIZE}.`,
-        );
+        throw new Error(`Mỗi số phải là số nguyên từ 1 đến ${BOARD_SIZE}.`);
     }
 
-    const uniqueNumbers = [
-        ...new Set(numbers),
-    ];
+    const uniqueNumbers = [...new Set(numbers)];
 
-    if (
-        uniqueNumbers.length !==
-        numbers.length
-    ) {
-        throw new Error(
-            "Dãy số không được chứa số trùng nhau.",
-        );
+    if (uniqueNumbers.length !== numbers.length) {
+        throw new Error("Dãy số không được chứa số trùng nhau.");
     }
 
-    if (
-        uniqueNumbers.length <
-            MIN_PICKS ||
-        uniqueNumbers.length >
-            MAX_PICKS
-    ) {
-        throw new Error(
-            `Bạn phải chọn từ ${MIN_PICKS} đến ${MAX_PICKS} số.`,
-        );
+    if (uniqueNumbers.length < MIN_PICKS || uniqueNumbers.length > MAX_PICKS) {
+        throw new Error(`Bạn phải chọn từ ${MIN_PICKS} đến ${MAX_PICKS} số.`);
     }
 
-    return uniqueNumbers.sort(
-        (a, b) => a - b,
-    );
+    return uniqueNumbers.sort((a, b) => a - b);
 }
 
 /*
  * Tạo một dãy số không trùng nhau.
  */
-function randomUniqueNumbers(
-    count,
-) {
+function randomUniqueNumbers(count) {
     const numbers = Array.from(
         {
             length: BOARD_SIZE,
@@ -418,87 +267,47 @@ function randomUniqueNumbers(
         (_, index) => index + 1,
     );
 
-    for (
-        let index =
-            numbers.length - 1;
-        index > 0;
-        index -= 1
-    ) {
-        const swapIndex =
-            Math.floor(
-                Math.random() *
-                    (index + 1),
-            );
+    for (let index = numbers.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(Math.random() * (index + 1));
 
-        [
-            numbers[index],
-            numbers[swapIndex],
-        ] = [
+        [numbers[index], numbers[swapIndex]] = [
             numbers[swapIndex],
             numbers[index],
         ];
     }
 
-    return numbers
-        .slice(0, count)
-        .sort((a, b) => a - b);
+    return numbers.slice(0, count).sort((a, b) => a - b);
 }
 
 function formatNumber(number) {
-    return String(number).padStart(
-        2,
-        "0",
-    );
+    return String(number).padStart(2, "0");
 }
 
-function formatSelectedNumbers(
-    numbers,
-    hitSet,
-) {
+function formatSelectedNumbers(numbers, hitSet) {
     return numbers
         .map((number) => {
-            const label =
-                formatNumber(number);
+            const label = formatNumber(number);
 
-            return hitSet.has(number)
-                ? `**🟢 ${label}**`
-                : `⚪ ${label}`;
+            return hitSet.has(number) ? `**🟢 ${label}**` : `⚪ ${label}`;
         })
         .join("  ");
 }
 
-function formatDrawnNumbers(
-    numbers,
-    hitSet,
-) {
+function formatDrawnNumbers(numbers, hitSet) {
     return numbers
         .map((number) => {
-            const label =
-                formatNumber(number);
+            const label = formatNumber(number);
 
-            return hitSet.has(number)
-                ? `**🎯 ${label}**`
-                : `🔵 ${label}`;
+            return hitSet.has(number) ? `**🎯 ${label}**` : `🔵 ${label}`;
         })
         .join("  ");
 }
 
-function formatPayoutTable(
-    table,
-    pickCount,
-) {
+function formatPayoutTable(table, pickCount) {
     const parts = [];
 
-    for (
-        let hits = 0;
-        hits <= pickCount;
-        hits += 1
-    ) {
-        parts.push(
-            `**${hits}/${pickCount}** ${formatMultiplier(
-                table[hits],
-            )}`,
-        );
+    for (let hits = 0; hits <= pickCount; hits += 1) {
+        parts.push(`**${hits}/${pickCount}** ${formatMultiplier(table[hits])}`);
     }
 
     return parts.join("  •  ");
@@ -507,53 +316,29 @@ function formatPayoutTable(
 /*
  * Embed hướng dẫn và note.
  */
-function buildGuideEmbed(
-    pickCount = 5,
-) {
-    const safePickCount =
-        Math.min(
-            MAX_PICKS,
-            Math.max(
-                MIN_PICKS,
-                Number(
-                    pickCount || 5,
-                ),
-            ),
+function buildGuideEmbed(pickCount = 5) {
+    const safePickCount = Math.min(
+        MAX_PICKS,
+        Math.max(MIN_PICKS, Number(pickCount || 5)),
+    );
+
+    const embed = new EmbedBuilder()
+        .setColor(0x5865f2)
+        .setTitle("📋 NOTE KENO")
+        .setDescription(
+            `• Chọn **1–10 số** trong khoảng **1–40**.\n` +
+                `• Bot rút ngẫu nhiên **10 số**.\n` +
+                `• Trùng càng nhiều số thì hệ số càng cao.\n`,
         );
 
-    const embed =
-        new EmbedBuilder()
-            .setColor(0x5865f2)
-            .setTitle(
-                "📋 NOTE KENO",
-            )
-            .setDescription(
-                `• Chọn **1–10 số** trong khoảng **1–40**.\n` +
-                    `• Bot rút ngẫu nhiên **10 số**.\n` +
-                    `• Trùng càng nhiều số thì hệ số càng cao.\n` +
-                    `• Tiền nhận = tiền cược × hệ số, đã gồm cả vốn.\n` +
-                    `• Trần trả thưởng: **${getCurrencyEmoji()} ${formatMoney(
-                        MAX_PAYOUT,
-                    )}/ván**.\n\n` +
-                    `**Bảng dưới áp dụng khi chọn ${safePickCount} số:**`,
-            );
-
-    for (
-        const mode of Object.values(
-            RISK_MODES,
-        )
-    ) {
+    for (const mode of Object.values(RISK_MODES)) {
         embed.addFields({
-            name:
-                `${mode.emoji} ${mode.name}`,
+            name: `${mode.emoji} ${mode.name}`,
 
             value:
                 `${mode.note}\n` +
                 formatPayoutTable(
-                    buildPayoutTable(
-                        mode.id,
-                        safePickCount,
-                    ),
+                    buildPayoutTable(mode.id, safePickCount),
                     safePickCount,
                 ),
         });
@@ -561,25 +346,19 @@ function buildGuideEmbed(
 
     return embed
         .setFooter({
-            text:
-                "Thấp trả đều hơn • Trung bình cân bằng • Cao ít trúng nhưng hệ số lớn",
+            text: "Thấp trả đều hơn • Trung bình cân bằng • Cao ít trúng nhưng hệ số lớn",
         })
         .setTimestamp();
 }
 
-function getResultStyle(
-    multiplier,
-    profit,
-) {
+function getResultStyle(multiplier, profit) {
     if (multiplier <= 0) {
         return {
-            title:
-                "💀 KENO — TRẮNG TAY",
+            title: "💀 KENO — TRẮNG TAY",
 
             color: 0x992d22,
 
-            text:
-                "Không đủ số trùng để nhận thưởng.",
+            text: "Không đủ số trùng để nhận thưởng.",
         };
     }
 
@@ -589,36 +368,30 @@ function getResultStyle(
      */
     if (profit < 0) {
         return {
-            title:
-                "🟠 KENO — HOÀN MỘT PHẦN",
+            title: "🟠 KENO — HOÀN MỘT PHẦN",
 
             color: 0xe67e22,
 
-            text:
-                "Có trúng số nhưng tiền nhận vẫn thấp hơn tiền cược.",
+            text: "Có trúng số nhưng tiền nhận vẫn thấp hơn tiền cược.",
         };
     }
 
     if (profit === 0) {
         return {
-            title:
-                "⚪ KENO — HÒA VỐN",
+            title: "⚪ KENO — HÒA VỐN",
 
             color: 0x95a5a6,
 
-            text:
-                "Bạn nhận lại đúng tiền cược.",
+            text: "Bạn nhận lại đúng tiền cược.",
         };
     }
 
     return {
-        title:
-            "🎉 KENO — THẮNG",
+        title: "🎉 KENO — THẮNG",
 
         color: 0x2ecc71,
 
-        text:
-            "Bạn đã có lợi nhuận từ lượt Keno này!",
+        text: "Bạn đã có lợi nhuận từ lượt Keno này!",
     };
 }
 
@@ -636,178 +409,98 @@ function buildResultEmbed({
     rawPayout,
     payout,
 }) {
-    const coin =
-        getCurrencyEmoji();
+    const coin = getCurrencyEmoji();
 
-    const hitSet =
-        new Set(hitNumbers);
+    const hitSet = new Set(hitNumbers);
 
-    const profit =
-        payout - bet;
+    const profit = payout - bet;
 
-    const style =
-        getResultStyle(
-            multiplier,
-            profit,
-        );
+    const style = getResultStyle(multiplier, profit);
 
-    const payoutTable =
-        buildPayoutTable(
-            mode.id,
-            selectedNumbers.length,
-        );
+    const payoutTable = buildPayoutTable(mode.id, selectedNumbers.length);
 
     return new EmbedBuilder()
         .setColor(style.color)
         .setTitle(style.title)
         .setDescription(
             `${interaction.user} chơi chế độ ${mode.emoji} **${mode.name}**.\n\n` +
-
                 `🎟️ **Số đã chọn**\n` +
-                `${formatSelectedNumbers(
-                    selectedNumbers,
-                    hitSet,
-                )}\n\n` +
-
+                `${formatSelectedNumbers(selectedNumbers, hitSet)}\n\n` +
                 `🎱 **10 số được rút**\n` +
-                `${formatDrawnNumbers(
-                    drawnNumbers,
-                    hitSet,
-                )}`,
+                `${formatDrawnNumbers(drawnNumbers, hitSet)}`,
         )
         .addFields(
             {
-                name:
-                    "📊 Kết quả",
+                name: "📊 Kết quả",
 
                 value:
                     `Trúng: **${hitNumbers.length}/${selectedNumbers.length} số**\n` +
-                    `Hệ số: **${formatMultiplier(
-                        multiplier,
-                    )}**\n` +
+                    `Hệ số: **${formatMultiplier(multiplier)}**\n` +
                     style.text,
 
                 inline: true,
             },
 
             {
-                name:
-                    "💰 Thanh toán",
+                name: "💰 Thanh toán",
 
                 value:
-                    `Cược: **${coin} ${formatMoney(
-                        bet,
-                    )}**\n` +
-
-                    `Nhận: **${coin} ${formatMoney(
-                        payout,
-                    )}**\n` +
-
+                    `Cược: **${coin} ${formatMoney(bet)}**\n` +
+                    `Nhận: **${coin} ${formatMoney(payout)}**\n` +
                     `Lãi/lỗ: **${profit >= 0 ? "+" : "-"}${coin} ${formatMoney(
-                        Math.abs(
-                            profit,
-                        ),
-                    )}**` +
-
-                    (
-                        rawPayout >
-                        payout
-                            ? `\n⚠️ Đã chạm trần trả thưởng.`
-                            : ""
-                    ),
+                        Math.abs(profit),
+                    )}**`,
 
                 inline: true,
             },
 
             {
-                name:
-                    `📈 Bảng thưởng ${mode.name} — chọn ${selectedNumbers.length} số`,
+                name: `📈 Bảng thưởng ${mode.name} — chọn ${selectedNumbers.length} số`,
 
-                value:
-                    formatPayoutTable(
-                        payoutTable,
-                        selectedNumbers.length,
-                    ),
+                value: formatPayoutTable(payoutTable, selectedNumbers.length),
             },
 
             {
-                name:
-                    "📝 Note chế độ",
+                name: "📝 Note chế độ",
 
-                value:
-                    mode.note,
+                value: mode.note,
             },
         )
         .setFooter({
-            text:
-                "Bảng thưởng đã gồm tiền vốn • Dùng /kenonote để xem đủ 3 chế độ",
+            text: "Bảng thưởng đã gồm tiền vốn • Dùng /kenonote để xem đủ 3 chế độ",
         })
         .setTimestamp();
 }
 
 class KenoManager {
     async play(interaction) {
-        const userId = String(
-            interaction.user.id,
-        );
+        const userId = String(interaction.user.id);
 
-        if (
-            processingUsers.has(
-                userId,
-            )
-        ) {
+        if (processingUsers.has(userId)) {
             return interaction.reply({
-                content:
-                    "⏳ Một lượt Keno của bạn đang được xử lý.",
+                content: "⏳ Một lượt Keno của bạn đang được xử lý.",
 
                 ephemeral: true,
             });
         }
 
-        const bet =
-            interaction.options
-                .getInteger(
-                    "cuoc",
-                );
+        const bet = interaction.options.getInteger("cuoc");
 
-        const riskId =
-            interaction.options
-                .getString(
-                    "chedo",
-                ) || "medium";
+        const riskId = interaction.options.getString("chedo") || "medium";
 
-        const rawNumbers =
-            interaction.options
-                .getString(
-                    "so",
-                );
+        const rawNumbers = interaction.options.getString("so");
 
-        const autoPickCount =
-            interaction.options
-                .getInteger(
-                    "soluong",
-                ) || 5;
+        const autoPickCount = interaction.options.getInteger("soluong") || 5;
 
-        const coin =
-            getCurrencyEmoji();
+        const coin = getCurrencyEmoji();
 
-        const mode =
-            RISK_MODES[riskId];
+        const mode = RISK_MODES[riskId];
 
-        if (
-            !Number.isInteger(
-                bet,
-            ) ||
-            bet < MIN_BET ||
-            bet > MAX_BET
-        ) {
+        if (!Number.isInteger(bet) || bet < MIN_BET || bet > MAX_BET) {
             return interaction.reply({
-                content:
-                    `❌ Cược phải từ **${coin} ${formatMoney(
-                        MIN_BET,
-                    )}** đến **${coin} ${formatMoney(
-                        MAX_BET,
-                    )}**.`,
+                content: `❌ Cược phải từ **${coin} ${formatMoney(
+                    MIN_BET,
+                )}** đến **${coin} ${formatMoney(MAX_BET)}**.`,
 
                 ephemeral: true,
             });
@@ -815,8 +508,7 @@ class KenoManager {
 
         if (!mode) {
             return interaction.reply({
-                content:
-                    "❌ Chế độ Keno không hợp lệ.",
+                content: "❌ Chế độ Keno không hợp lệ.",
 
                 ephemeral: true,
             });
@@ -832,52 +524,36 @@ class KenoManager {
              * để chọn ngẫu nhiên.
              */
             selectedNumbers =
-                parseSelectedNumbers(
-                    rawNumbers,
-                ) ||
-                randomUniqueNumbers(
-                    autoPickCount,
-                );
+                parseSelectedNumbers(rawNumbers) ||
+                randomUniqueNumbers(autoPickCount);
         } catch (error) {
             return interaction.reply({
-                content:
-                    `❌ ${error.message}`,
+                content: `❌ ${error.message}`,
 
                 ephemeral: true,
             });
         }
 
-        const balance =
-            getBalance(userId);
+        const balance = getBalance(userId);
 
         if (balance < bet) {
             return interaction.reply({
-                content:
-                    `❌ Không đủ tiền. Số dư: **${coin} ${formatMoney(
-                        balance,
-                    )}**.`,
+                content: `❌ Không đủ tiền. Số dư: **${coin} ${formatMoney(
+                    balance,
+                )}**.`,
 
                 ephemeral: true,
             });
         }
 
-        processingUsers.add(
-            userId,
-        );
+        processingUsers.add(userId);
 
         try {
-            const removeResult =
-                removeMoney(
-                    userId,
-                    bet,
-                );
+            const removeResult = removeMoney(userId, bet);
 
-            if (
-                !removeResult.success
-            ) {
+            if (!removeResult.success) {
                 return interaction.reply({
-                    content:
-                        `❌ ${removeResult.message}`,
+                    content: `❌ ${removeResult.message}`,
 
                     ephemeral: true,
                 });
@@ -886,70 +562,36 @@ class KenoManager {
             /*
              * Rút đúng 10 số khác nhau.
              */
-            const drawnNumbers =
-                randomUniqueNumbers(
-                    DRAW_COUNT,
-                );
+            const drawnNumbers = randomUniqueNumbers(DRAW_COUNT);
 
-            const drawnSet =
-                new Set(
-                    drawnNumbers,
-                );
+            const drawnSet = new Set(drawnNumbers);
 
-            const hitNumbers =
-                selectedNumbers.filter(
-                    (number) =>
-                        drawnSet.has(
-                            number,
-                        ),
-                );
+            const hitNumbers = selectedNumbers.filter((number) =>
+                drawnSet.has(number),
+            );
 
-            const payoutTable =
-                buildPayoutTable(
-                    riskId,
-                    selectedNumbers.length,
-                );
+            const payoutTable = buildPayoutTable(
+                riskId,
+                selectedNumbers.length,
+            );
 
-            const multiplier =
-                Number(
-                    payoutTable[
-                        hitNumbers.length
-                    ] || 0,
-                );
+            const multiplier = Number(payoutTable[hitNumbers.length] || 0);
 
             /*
              * Tiền thưởng đã gồm cả vốn.
              */
-            const rawPayout =
-                Math.max(
-                    0,
-                    Math.floor(
-                        bet *
-                            multiplier,
-                    ),
-                );
+            const rawPayout = Math.max(0, Math.floor(bet * multiplier));
 
-            const payout =
-                Math.min(
-                    MAX_PAYOUT,
-                    rawPayout,
-                );
-
+            const payout = rawPayout;
             if (payout > 0) {
-                addMoney(
-                    userId,
-                    payout,
-                );
+                addMoney(userId, payout);
             }
 
-            const profit =
-                payout - bet;
+            const profit = payout - bet;
 
             if (profit > 0) {
                 addWin(userId);
-            } else if (
-                profit < 0
-            ) {
+            } else if (profit < 0) {
                 addLoss(userId);
             }
 
@@ -973,40 +615,25 @@ class KenoManager {
                 ],
             });
         } catch (error) {
-            console.error(
-                "[Keno] Lỗi:",
-                error,
-            );
+            console.error("[Keno] Lỗi:", error);
 
             return interaction.reply({
-                content:
-                    "❌ Có lỗi khi xử lý Keno.",
+                content: "❌ Có lỗi khi xử lý Keno.",
 
                 ephemeral: true,
             });
         } finally {
-            processingUsers.delete(
-                userId,
-            );
+            processingUsers.delete(userId);
         }
     }
 
     async note(interaction) {
-        const pickCount =
-            interaction.options
-                .getInteger(
-                    "soluong",
-                ) || 5;
+        const pickCount = interaction.options.getInteger("soluong") || 5;
 
         return interaction.reply({
-            embeds: [
-                buildGuideEmbed(
-                    pickCount,
-                ),
-            ],
+            embeds: [buildGuideEmbed(pickCount)],
         });
     }
 }
 
-module.exports =
-    new KenoManager();
+module.exports = new KenoManager();

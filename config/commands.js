@@ -957,6 +957,149 @@ module.exports = [
         ],
     },
     {
+    name: "luyendan",
+    description: "Luyện đan, dùng đan và phát triển nghề Luyện Đan Sư",
+    handler: "luyendan.execute",
+    options: [
+        {
+            type: "string",
+            name: "hanhdong",
+            description: "Chọn việc muốn thực hiện",
+            required: true,
+            choices: [
+                {
+                    name: "Xem hồ sơ Luyện Đan Sư",
+                    value: "hoso",
+                },
+                {
+                    name: "Xem đan phương",
+                    value: "congthuc",
+                },
+                {
+                    name: "Khai lò luyện đan",
+                    value: "luyen",
+                },
+                {
+                    name: "Dùng đan dược",
+                    value: "dung",
+                },
+                {
+                    name: "Bán cho Đan Các",
+                    value: "ban",
+                },
+                {
+                    name: "Nâng cấp đan lô",
+                    value: "nanglo",
+                },
+                {
+                    name: "Sửa chữa đan lô",
+                    value: "sualo",
+                },
+            ],
+        },
+        {
+            type: "string",
+            name: "dan",
+            description: "Chọn đan phương hoặc loại đan",
+            required: false,
+            choices: [
+                {
+                    name: "Tụ Khí Đan",
+                    value: "tu_khi_dan",
+                },
+                {
+                    name: "Ngưng Nguyên Đan",
+                    value: "ngung_nguyen_dan",
+                },
+                {
+                    name: "Hóa Linh Đan",
+                    value: "hoa_linh_dan",
+                },
+                {
+                    name: "Hồi Liệp Đan",
+                    value: "hoi_liep_dan",
+                },
+                {
+                    name: "Tầm Yêu Đan",
+                    value: "tam_yeu_dan",
+                },
+                {
+                    name: "Thượng Cổ Dẫn Yêu Đan",
+                    value: "thuong_co_dan_yeu_dan",
+                },
+                {
+                    name: "Linh Trư Trúc Cơ Đan",
+                    value: "linh_tru_truc_co_dan",
+                },
+                {
+                    name: "Kim Nha Ngưng Đan",
+                    value: "kim_nha_ngung_dan",
+                },
+                {
+                    name: "Trư Anh Hóa Sinh Đan",
+                    value: "tru_anh_hoa_sinh_dan",
+                },
+                {
+                    name: "Thiên Bồng Hóa Thần Đan",
+                    value: "thien_bong_hoa_than_dan",
+                },
+                {
+                    name: "Thôn Thiên Phá Hư Đan",
+                    value: "thon_thien_pha_hu_dan",
+                },
+                {
+                    name: "Vạn Trư Hợp Đạo Đan",
+                    value: "van_tru_hop_dao_dan",
+                },
+                {
+                    name: "Trư Hoàng Thừa Thiên Đan",
+                    value: "tru_hoang_thua_thien_dan",
+                },
+                {
+                    name: "Cửu Lôi Dẫn Kiếp Đan",
+                    value: "cuu_loi_dan_kiep_dan",
+                },
+                {
+                    name: "Thiên Bồng Phi Tiên Đan",
+                    value: "thien_bong_phi_tien_dan",
+                },
+            ],
+        },
+        {
+            type: "integer",
+            name: "soluong",
+            description: "Số lượng muốn luyện, dùng hoặc bán",
+            required: false,
+            minValue: 1,
+            maxValue: 50,
+        },
+        {
+            type: "integer",
+            name: "pham",
+            description: "Phẩm chất đan muốn dùng hoặc bán",
+            required: false,
+            choices: [
+                {
+                    name: "Hạ phẩm",
+                    value: 1,
+                },
+                {
+                    name: "Trung phẩm",
+                    value: 2,
+                },
+                {
+                    name: "Thượng phẩm",
+                    value: 3,
+                },
+                {
+                    name: "Cực phẩm",
+                    value: 4,
+                },
+            ],
+        },
+    ],
+},
+    {
         name: "chet",
         description: "Ép Boss Thế Giới chết và chia thưởng",
         handler: "worldboss.chet",

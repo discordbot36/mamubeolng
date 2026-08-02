@@ -22,6 +22,7 @@ const vecao = require("../vecao");
 const quest = require("../quest");
 const bicanh = require("../bicanh");
 const sanyeuthu = require("../sanyeuthu");
+const luyendan = require("../luyendan");
 const dothachTournament = require("../dothachTournament");
 const phapbao = require("../phapbao");
 const raidserver = require("../raidserver");
@@ -52,6 +53,7 @@ const modules = {
     vecao,
     bicanh,
     sanyeuthu,
+    luyendan,
     phapbao,
     quest,
     raidserver,
