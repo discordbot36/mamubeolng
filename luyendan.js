@@ -13,20 +13,11 @@ function formatNumber(value) {
 }
 
 function clampInteger(value, min, max) {
-    return Math.max(
-        min,
-        Math.min(
-            max,
-            Math.floor(Number(value || min)),
-        ),
-    );
+    return Math.max(min, Math.min(max, Math.floor(Number(value || min))));
 }
 
 function roll(chance) {
-    return Math.random() < Math.max(
-        0,
-        Math.min(1, Number(chance || 0)),
-    );
+    return Math.random() < Math.max(0, Math.min(1, Number(chance || 0)));
 }
 
 function getRecipe(recipeId) {
@@ -36,31 +27,22 @@ function getRecipe(recipeId) {
 function getFurnace(level) {
     return (
         alchemyConfig.furnaces[
-            clampInteger(
-                level,
-                1,
-                alchemyConfig.maxFurnaceLevel,
-            )
+            clampInteger(level, 1, alchemyConfig.maxFurnaceLevel)
         ] || alchemyConfig.furnaces[1]
     );
 }
 
 function getQuality(qualityLevel) {
     return (
-        alchemyConfig.qualities[
-            clampInteger(qualityLevel, 1, 4)
-        ] || alchemyConfig.qualities[1]
+        alchemyConfig.qualities[clampInteger(qualityLevel, 1, 4)] ||
+        alchemyConfig.qualities[1]
     );
 }
 
 function getAlchemyTitle(level) {
     return (
         alchemyConfig.titles[
-            clampInteger(
-                level,
-                1,
-                alchemyConfig.maxAlchemyLevel,
-            )
+            clampInteger(level, 1, alchemyConfig.maxAlchemyLevel)
         ] || "Học Đồ Luyện Đan"
     );
 }
@@ -68,11 +50,7 @@ function getAlchemyTitle(level) {
 function getRequiredExpForLevel(level) {
     return Number(
         alchemyConfig.levelExp[
-            clampInteger(
-                level,
-                1,
-                alchemyConfig.maxAlchemyLevel,
-            )
+            clampInteger(level, 1, alchemyConfig.maxAlchemyLevel)
         ] || 0,
     );
 }
@@ -80,11 +58,7 @@ function getRequiredExpForLevel(level) {
 function refreshAlchemyLevel(profile) {
     let newLevel = 1;
 
-    for (
-        let level = 1;
-        level <= alchemyConfig.maxAlchemyLevel;
-        level += 1
-    ) {
+    for (let level = 1; level <= alchemyConfig.maxAlchemyLevel; level += 1) {
         const requiredExp = getRequiredExpForLevel(level);
 
         if (Number(profile.exp || 0) >= requiredExp) {
@@ -108,25 +82,17 @@ function getMaterialName(materialId) {
 }
 
 function formatMaterials(materials = {}, multiplier = 1) {
-    const lines = Object.entries(materials).map(
-        ([materialId, amount]) => {
-            return (
-                `${getMaterialName(materialId)} ×` +
-                `${formatNumber(Number(amount || 0) * multiplier)}`
-            );
-        },
-    );
+    const lines = Object.entries(materials).map(([materialId, amount]) => {
+        return (
+            `${getMaterialName(materialId)} ×` +
+            `${formatNumber(Number(amount || 0) * multiplier)}`
+        );
+    });
 
-    return lines.length > 0
-        ? lines.join("\n")
-        : "Không cần nguyên liệu";
+    return lines.length > 0 ? lines.join("\n") : "Không cần nguyên liệu";
 }
 
-function getOwnedPillAmount(
-    profile,
-    recipeId,
-    qualityLevel = 1,
-) {
+function getOwnedPillAmount(profile, recipeId, qualityLevel = 1) {
     const recipe = getRecipe(recipeId);
 
     if (!recipe) {
@@ -141,19 +107,10 @@ function getOwnedPillAmount(
         return 0;
     }
 
-    return Number(
-        profile.pills?.[recipeId]?.[
-            String(qualityLevel)
-        ] || 0,
-    );
+    return Number(profile.pills?.[recipeId]?.[String(qualityLevel)] || 0);
 }
 
-function addCustomPill(
-    profile,
-    recipeId,
-    qualityLevel,
-    amount = 1,
-) {
+function addCustomPill(profile, recipeId, qualityLevel, amount = 1) {
     if (!profile.pills[recipeId]) {
         profile.pills[recipeId] = {};
     }
@@ -161,40 +118,24 @@ function addCustomPill(
     const qualityKey = String(qualityLevel);
 
     profile.pills[recipeId][qualityKey] =
-        Number(
-            profile.pills[recipeId][qualityKey] || 0,
-        ) + Number(amount || 0);
+        Number(profile.pills[recipeId][qualityKey] || 0) + Number(amount || 0);
 }
 
-function removeCustomPill(
-    profile,
-    recipeId,
-    qualityLevel,
-    amount = 1,
-) {
+function removeCustomPill(profile, recipeId, qualityLevel, amount = 1) {
     const qualityKey = String(qualityLevel);
-    const current = Number(
-        profile.pills?.[recipeId]?.[qualityKey] || 0,
-    );
+    const current = Number(profile.pills?.[recipeId]?.[qualityKey] || 0);
 
     if (current < amount) {
         return false;
     }
 
-    profile.pills[recipeId][qualityKey] =
-        current - amount;
+    profile.pills[recipeId][qualityKey] = current - amount;
 
-    if (
-        profile.pills[recipeId][qualityKey] <= 0
-    ) {
+    if (profile.pills[recipeId][qualityKey] <= 0) {
         delete profile.pills[recipeId][qualityKey];
     }
 
-    if (
-        Object.keys(
-            profile.pills[recipeId] || {},
-        ).length <= 0
-    ) {
+    if (Object.keys(profile.pills[recipeId] || {}).length <= 0) {
         delete profile.pills[recipeId];
     }
 
@@ -203,32 +144,19 @@ function removeCustomPill(
 
 function rollQuality(furnaceLevel) {
     const furnace = getFurnace(furnaceLevel);
-    const maxQuality = clampInteger(
-        furnace.maxQuality,
-        1,
-        4,
-    );
+    const maxQuality = clampInteger(furnace.maxQuality, 1, 4);
 
     const candidates = [];
 
-    for (
-        let qualityLevel = 1;
-        qualityLevel <= maxQuality;
-        qualityLevel += 1
-    ) {
+    for (let qualityLevel = 1; qualityLevel <= maxQuality; qualityLevel += 1) {
         candidates.push({
             level: qualityLevel,
-            weight: Number(
-                alchemyConfig.qualityRates[
-                    qualityLevel
-                ] || 0,
-            ),
+            weight: Number(alchemyConfig.qualityRates[qualityLevel] || 0),
         });
     }
 
     const totalWeight = candidates.reduce(
-        (total, entry) =>
-            total + entry.weight,
+        (total, entry) => total + entry.weight,
         0,
     );
 
@@ -252,13 +180,7 @@ function getCurrentRealmMaxExp(profile) {
         tuTienConfig.realms.length - 1,
     );
 
-    return Math.max(
-        1,
-        Number(
-            tuTienConfig.realms[realmIndex]?.maxExp ||
-                1,
-        ),
-    );
+    return Math.max(1, Number(tuTienConfig.realms[realmIndex]?.maxExp || 1));
 }
 
 function autoAdvanceCultivationFloors(profile) {
@@ -268,96 +190,58 @@ function autoAdvanceCultivationFloors(profile) {
         tuTienConfig.realms.length - 1,
     );
 
-    profile.floor = clampInteger(
-        profile.floor || 1,
-        1,
-        10,
-    );
+    profile.floor = clampInteger(profile.floor || 1, 1, 10);
 
-    profile.exp = Math.max(
-        0,
-        Number(profile.exp || 0),
-    );
+    profile.exp = Math.max(0, Number(profile.exp || 0));
 
-    let maxExp =
-        getCurrentRealmMaxExp(profile);
+    let maxExp = getCurrentRealmMaxExp(profile);
 
-    while (
-        profile.floor < 10 &&
-        profile.exp >= maxExp
-    ) {
+    while (profile.floor < 10 && profile.exp >= maxExp) {
         profile.exp -= maxExp;
         profile.floor += 1;
-        maxExp =
-            getCurrentRealmMaxExp(profile);
+        maxExp = getCurrentRealmMaxExp(profile);
     }
 
     /*
      * Đã tầng 10 thì chỉ giữ tối đa lượng tu vi
      * cần để đột phá, không cho tích vượt vô hạn.
      */
-    if (
-        profile.floor >= 10 &&
-        profile.exp > maxExp
-    ) {
+    if (profile.floor >= 10 && profile.exp > maxExp) {
         profile.exp = maxExp;
     }
 }
 
 function buildProfileEmbed(userId) {
-    const profile =
-        database.getAlchemyProfile(userId);
+    const profile = database.getAlchemyProfile(userId);
 
     refreshAlchemyLevel(profile);
 
-    const furnace =
-        getFurnace(profile.furnaceLevel);
+    const furnace = getFurnace(profile.furnaceLevel);
 
-    const currentLevel =
-        Number(profile.level || 1);
+    const currentLevel = Number(profile.level || 1);
 
-    const nextLevel =
-        Math.min(
-            alchemyConfig.maxAlchemyLevel,
-            currentLevel + 1,
-        );
+    const nextLevel = Math.min(alchemyConfig.maxAlchemyLevel, currentLevel + 1);
 
     const nextExp =
-        currentLevel >=
-        alchemyConfig.maxAlchemyLevel
+        currentLevel >= alchemyConfig.maxAlchemyLevel
             ? "MAX"
-            : formatNumber(
-                  getRequiredExpForLevel(
-                      nextLevel,
-                  ),
-              );
+            : formatNumber(getRequiredExpForLevel(nextLevel));
 
     const pillLines = [];
 
-    for (
-        const [recipeId, qualities]
-        of Object.entries(
-            profile.pills || {},
-        )
-    ) {
+    for (const [recipeId, qualities] of Object.entries(profile.pills || {})) {
         const recipe = getRecipe(recipeId);
 
         if (!recipe) {
             continue;
         }
 
-        for (
-            const [qualityLevel, amount]
-            of Object.entries(
-                qualities || {},
-            )
-        ) {
+        for (const [qualityLevel, amount] of Object.entries(qualities || {})) {
             if (Number(amount || 0) <= 0) {
                 continue;
             }
 
-            const quality =
-                getQuality(qualityLevel);
+            const quality = getQuality(qualityLevel);
 
             pillLines.push(
                 `${recipe.emoji} ${quality.emoji} ` +
@@ -409,31 +293,19 @@ function buildProfileEmbed(userId) {
 }
 
 function buildRecipesEmbed(userId) {
-    const profile =
-        database.getAlchemyProfile(userId);
+    const profile = database.getAlchemyProfile(userId);
 
     refreshAlchemyLevel(profile);
 
     const unlocked = [];
     const locked = [];
 
-    for (
-        const recipe
-        of Object.values(
-            alchemyConfig.recipes,
-        )
-    ) {
+    for (const recipe of Object.values(alchemyConfig.recipes)) {
         const available =
             Number(profile.level || 1) >=
-                Number(
-                    recipe.requiredAlchemyLevel ||
-                        1,
-                ) &&
+                Number(recipe.requiredAlchemyLevel || 1) &&
             Number(profile.furnaceLevel || 1) >=
-                Number(
-                    recipe.requiredFurnaceLevel ||
-                        1,
-                );
+                Number(recipe.requiredFurnaceLevel || 1);
 
         const text =
             `${recipe.emoji} **${recipe.name}** ` +
@@ -464,16 +336,13 @@ function buildRecipesEmbed(userId) {
             value:
                 locked.length > 0
                     ? locked
-                          .map((entry) =>
-                              entry.split("\n")[0],
-                          )
+                          .map((entry) => entry.split("\n")[0])
                           .join("\n")
                           .slice(0, 1000)
                     : "Đã mở toàn bộ công thức.",
         })
         .setFooter({
-            text:
-                "Dùng /luyendan hanhdong:luyen dan:<id> để khai lò",
+            text: "Dùng /luyendan hanhdong:luyen dan:<id> để khai lò",
         })
         .setTimestamp();
 }
@@ -484,32 +353,20 @@ function craftPills(userId, recipeId, quantity) {
     if (!recipe) {
         return {
             success: false,
-            message:
-                "Không tìm thấy đan phương này.",
+            message: "Không tìm thấy đan phương này.",
         };
     }
 
-    const safeQuantity =
-        clampInteger(quantity, 1, 10);
+    const safeQuantity = clampInteger(quantity, 1, 10);
 
     return database.updateAlchemyProfile(
         userId,
-        (
-            profile,
-            user,
-            beastMaterials,
-        ) => {
+        (profile, user, beastMaterials) => {
             refreshAlchemyLevel(profile);
 
-            const furnace =
-                getFurnace(
-                    profile.furnaceLevel,
-                );
+            const furnace = getFurnace(profile.furnaceLevel);
 
-            if (
-                profile.level <
-                recipe.requiredAlchemyLevel
-            ) {
+            if (profile.level < recipe.requiredAlchemyLevel) {
                 return {
                     success: false,
                     message:
@@ -518,30 +375,18 @@ function craftPills(userId, recipeId, quantity) {
                 };
             }
 
-            if (
-                profile.furnaceLevel <
-                recipe.requiredFurnaceLevel
-            ) {
+            if (profile.furnaceLevel < recipe.requiredFurnaceLevel) {
                 return {
                     success: false,
                     message:
-                        `Cần đan lô cấp ` +
-                        `${recipe.requiredFurnaceLevel}.`,
+                        `Cần đan lô cấp ` + `${recipe.requiredFurnaceLevel}.`,
                 };
             }
 
             const durabilityCost =
-                Number(
-                    recipe.furnaceDurabilityCost ||
-                        1,
-                ) * safeQuantity;
+                Number(recipe.furnaceDurabilityCost || 1) * safeQuantity;
 
-            if (
-                Number(
-                    profile.furnaceDurability ||
-                        0,
-                ) < durabilityCost
-            ) {
+            if (Number(profile.furnaceDurability || 0) < durabilityCost) {
                 return {
                     success: false,
                     message:
@@ -551,15 +396,9 @@ function craftPills(userId, recipeId, quantity) {
                 };
             }
 
-            const totalMoney =
-                Number(
-                    recipe.craftMoney || 0,
-                ) * safeQuantity;
+            const totalMoney = Number(recipe.craftMoney || 0) * safeQuantity;
 
-            if (
-                Number(user.money || 0) <
-                totalMoney
-            ) {
+            if (Number(user.money || 0) < totalMoney) {
                 return {
                     success: false,
                     message:
@@ -568,23 +407,12 @@ function craftPills(userId, recipeId, quantity) {
                 };
             }
 
-            for (
-                const [materialId, amount]
-                of Object.entries(
-                    recipe.materials || {},
-                )
-            ) {
-                const required =
-                    Number(amount || 0) *
-                    safeQuantity;
+            for (const [materialId, amount] of Object.entries(
+                recipe.materials || {},
+            )) {
+                const required = Number(amount || 0) * safeQuantity;
 
-                if (
-                    Number(
-                        beastMaterials[
-                            materialId
-                        ] || 0,
-                    ) < required
-                ) {
+                if (Number(beastMaterials[materialId] || 0) < required) {
                     return {
                         success: false,
                         message:
@@ -599,54 +427,28 @@ function craftPills(userId, recipeId, quantity) {
              * Chỉ bắt đầu trừ sau khi đã kiểm tra đủ
              * toàn bộ tiền, nguyên liệu và độ bền.
              */
-            user.money =
-                Number(user.money || 0) -
-                totalMoney;
+            user.money = Number(user.money || 0) - totalMoney;
 
             profile.furnaceDurability =
-                Number(
-                    profile.furnaceDurability ||
-                        0,
-                ) - durabilityCost;
+                Number(profile.furnaceDurability || 0) - durabilityCost;
 
-            for (
-                const [materialId, amount]
-                of Object.entries(
-                    recipe.materials || {},
-                )
-            ) {
+            for (const [materialId, amount] of Object.entries(
+                recipe.materials || {},
+            )) {
                 beastMaterials[materialId] =
-                    Number(
-                        beastMaterials[
-                            materialId
-                        ] || 0,
-                    ) -
-                    Number(amount || 0) *
-                        safeQuantity;
+                    Number(beastMaterials[materialId] || 0) -
+                    Number(amount || 0) * safeQuantity;
 
-                if (
-                    beastMaterials[
-                        materialId
-                    ] <= 0
-                ) {
-                    delete beastMaterials[
-                        materialId
-                    ];
+                if (beastMaterials[materialId] <= 0) {
+                    delete beastMaterials[materialId];
                 }
             }
 
-            const successRate =
-                Math.min(
-                    0.95,
-                    Number(
-                        recipe.baseSuccessRate ||
-                            0,
-                    ) +
-                        Number(
-                            furnace.successBonus ||
-                                0,
-                        ),
-                );
+            const successRate = Math.min(
+                0.95,
+                Number(recipe.baseSuccessRate || 0) +
+                    Number(furnace.successBonus || 0),
+            );
 
             const qualityResults = {};
             let succeeded = 0;
@@ -654,143 +456,76 @@ function craftPills(userId, recipeId, quantity) {
             let exploded = 0;
             let gainedExp = 0;
 
-            for (
-                let attempt = 0;
-                attempt < safeQuantity;
-                attempt += 1
-            ) {
-                profile.totalCrafted =
-                    Number(
-                        profile.totalCrafted ||
-                            0,
-                    ) + 1;
+            for (let attempt = 0; attempt < safeQuantity; attempt += 1) {
+                profile.totalCrafted = Number(profile.totalCrafted || 0) + 1;
 
                 if (roll(successRate)) {
                     succeeded += 1;
 
                     profile.totalSucceeded =
-                        Number(
-                            profile.totalSucceeded ||
-                                0,
-                        ) + 1;
+                        Number(profile.totalSucceeded || 0) + 1;
 
-                    gainedExp += Number(
-                        recipe.alchemyExp || 0,
-                    );
+                    gainedExp += Number(recipe.alchemyExp || 0);
 
-                    if (
-                        recipe.type ===
-                        "shop_item"
-                    ) {
+                    if (recipe.type === "shop_item") {
                         if (!user.inventory) {
                             user.inventory = {};
                         }
 
-                        user.inventory[
-                            recipe.shopItemId
-                        ] =
-                            Number(
-                                user.inventory[
-                                    recipe.shopItemId
-                                ] || 0,
-                            ) + 1;
+                        user.inventory[recipe.shopItemId] =
+                            Number(user.inventory[recipe.shopItemId] || 0) + 1;
 
                         continue;
                     }
 
-                    const qualityLevel =
-                        rollQuality(
-                            profile.furnaceLevel,
-                        );
+                    const qualityLevel = rollQuality(profile.furnaceLevel);
 
-                    addCustomPill(
-                        profile,
-                        recipe.id,
+                    addCustomPill(profile, recipe.id, qualityLevel, 1);
+
+                    qualityResults[qualityLevel] =
+                        Number(qualityResults[qualityLevel] || 0) + 1;
+
+                    profile.highestQuality = Math.max(
+                        Number(profile.highestQuality || 0),
                         qualityLevel,
-                        1,
                     );
-
-                    qualityResults[
-                        qualityLevel
-                    ] =
-                        Number(
-                            qualityResults[
-                                qualityLevel
-                            ] || 0,
-                        ) + 1;
-
-                    profile.highestQuality =
-                        Math.max(
-                            Number(
-                                profile.highestQuality ||
-                                    0,
-                            ),
-                            qualityLevel,
-                        );
 
                     continue;
                 }
 
                 failed += 1;
 
-                profile.totalFailed =
-                    Number(
-                        profile.totalFailed || 0,
-                    ) + 1;
+                profile.totalFailed = Number(profile.totalFailed || 0) + 1;
 
                 gainedExp += Math.max(
                     1,
                     Math.floor(
-                        Number(
-                            recipe.alchemyExp ||
-                                0,
-                        ) *
-                            Number(
-                                alchemyConfig.failureExpRate ||
-                                    0.25,
-                            ),
+                        Number(recipe.alchemyExp || 0) *
+                            Number(alchemyConfig.failureExpRate || 0.25),
                     ),
                 );
 
-                if (
-                    roll(
-                        alchemyConfig.explosionChance,
-                    )
-                ) {
+                if (roll(alchemyConfig.explosionChance)) {
                     exploded += 1;
 
                     profile.totalExploded =
-                        Number(
-                            profile.totalExploded ||
-                                0,
-                        ) + 1;
+                        Number(profile.totalExploded || 0) + 1;
 
-                    profile.furnaceDurability =
-                        Math.max(
-                            0,
-                            Number(
-                                profile.furnaceDurability ||
-                                    0,
-                            ) - 5,
-                        );
+                    profile.furnaceDurability = Math.max(
+                        0,
+                        Number(profile.furnaceDurability || 0) - 5,
+                    );
                 } else {
                     profile.medicineResidue =
-                        Number(
-                            profile.medicineResidue ||
-                                0,
-                        ) + 1;
+                        Number(profile.medicineResidue || 0) + 1;
                 }
             }
 
-            const oldLevel =
-                Number(profile.level || 1);
+            const oldLevel = Number(profile.level || 1);
 
-            profile.exp =
-                Number(profile.exp || 0) +
-                gainedExp;
+            profile.exp = Number(profile.exp || 0) + gainedExp;
 
-            const newLevel =
-                refreshAlchemyLevel(profile);
+            const newLevel = refreshAlchemyLevel(profile);
 
             return {
                 success: true,
@@ -804,8 +539,7 @@ function craftPills(userId, recipeId, quantity) {
                 gainedExp,
                 oldLevel,
                 newLevel,
-                remainingDurability:
-                    profile.furnaceDurability,
+                remainingDurability: profile.furnaceDurability,
             };
         },
     );
@@ -815,35 +549,22 @@ function buildCraftResultEmbed(result) {
     const recipe = result.recipe;
     const resultLines = [];
 
-    if (
-        recipe.type === "shop_item" &&
-        result.succeeded > 0
-    ) {
+    if (recipe.type === "shop_item" && result.succeeded > 0) {
         resultLines.push(
             `${recipe.emoji} **${recipe.name}** ×${result.succeeded}`,
         );
     } else {
-        for (
-            const [qualityLevel, amount]
-            of Object.entries(
-                result.qualityResults || {},
-            )
-        ) {
-            const quality =
-                getQuality(qualityLevel);
+        for (const [qualityLevel, amount] of Object.entries(
+            result.qualityResults || {},
+        )) {
+            const quality = getQuality(qualityLevel);
 
-            resultLines.push(
-                `${quality.emoji} **${quality.name}** ×${amount}`,
-            );
+            resultLines.push(`${quality.emoji} **${quality.name}** ×${amount}`);
         }
     }
 
     return new EmbedBuilder()
-        .setColor(
-            result.succeeded > 0
-                ? 0x2ecc71
-                : 0xe74c3c,
-        )
+        .setColor(result.succeeded > 0 ? 0x2ecc71 : 0xe74c3c)
         .setTitle(
             result.succeeded > 0
                 ? "🔥 LUYỆN ĐAN HOÀN TẤT"
@@ -876,30 +597,21 @@ function buildCraftResultEmbed(result) {
                 value:
                     `EXP nghề: **+${formatNumber(result.gainedExp)}**\n` +
                     `Độ bền lò còn: **${formatNumber(result.remainingDurability)}**` +
-                    (
-                        result.newLevel >
-                        result.oldLevel
-                            ? `\n🎉 Thăng cấp: **Lv.${result.oldLevel} → Lv.${result.newLevel}**`
-                            : ""
-                    ),
+                    (result.newLevel > result.oldLevel
+                        ? `\n🎉 Thăng cấp: **Lv.${result.oldLevel} → Lv.${result.newLevel}**`
+                        : ""),
             },
         )
         .setTimestamp();
 }
 
-function usePill(
-    userId,
-    recipeId,
-    qualityLevel,
-    quantity,
-) {
+function usePill(userId, recipeId, qualityLevel, quantity) {
     const recipe = getRecipe(recipeId);
 
     if (!recipe) {
         return {
             success: false,
-            message:
-                "Không tìm thấy loại đan này.",
+            message: "Không tìm thấy loại đan này.",
         };
     }
 
@@ -911,11 +623,9 @@ function usePill(
         };
     }
 
-    const safeQuality =
-        clampInteger(qualityLevel, 1, 4);
+    const safeQuality = clampInteger(qualityLevel, 1, 4);
 
-    const safeQuantity =
-        clampInteger(quantity, 1, 10);
+    const safeQuantity = clampInteger(quantity, 1, 10);
 
     /*
      * Đảm bảo profile tu tiên đã tồn tại trước
@@ -923,493 +633,303 @@ function usePill(
      */
     database.ensureTuTienProfile(userId);
 
-    return database.updateAlchemyProfile(
-        userId,
-        (
-            profile,
-            user,
-        ) => {
-            const owned =
-                getOwnedPillAmount(
-                    profile,
-                    recipe.id,
-                    safeQuality,
-                );
+    return database.updateAlchemyProfile(userId, (profile, user) => {
+        const owned = getOwnedPillAmount(profile, recipe.id, safeQuality);
 
-            if (owned < safeQuantity) {
-                return {
-                    success: false,
-                    message:
-                        `Bạn chỉ có ${owned} viên ` +
-                        `${getQuality(safeQuality).name}.`,
-                };
-            }
-
-            if (
-                recipe.type ===
-                "cultivation"
-            ) {
-                const usedToday =
-                    Number(
-                        profile.daily
-                            .cultivationPillsUsed ||
-                            0,
-                    );
-
-                if (
-                    usedToday +
-                        safeQuantity >
-                    alchemyConfig
-                        .dailyCultivationPillLimit
-                ) {
-                    return {
-                        success: false,
-                        message:
-                            `Mỗi ngày chỉ hấp thụ tối đa ` +
-                            `${alchemyConfig.dailyCultivationPillLimit} viên đan tu vi.`,
-                    };
-                }
-
-                const cultivation =
-                    user.tuTienProfile;
-
-                const maxExp =
-                    getCurrentRealmMaxExp(
-                        cultivation,
-                    );
-
-                if (
-                    Number(
-                        cultivation.floor || 1,
-                    ) >= 10 &&
-                    Number(
-                        cultivation.exp || 0,
-                    ) >= maxExp
-                ) {
-                    return {
-                        success: false,
-                        message:
-                            "Bạn đã đạt Tầng 10 viên mãn, hãy đột phá trước.",
-                    };
-                }
-
-                const quality =
-                    getQuality(safeQuality);
-
-                const gainedExp =
-                    Math.floor(
-                        Number(
-                            recipe.baseValue || 0,
-                        ) *
-                            Number(
-                                quality.valueMultiplier ||
-                                    1,
-                            ) *
-                            safeQuantity,
-                    );
-
-                if (
-                    !removeCustomPill(
-                        profile,
-                        recipe.id,
-                        safeQuality,
-                        safeQuantity,
-                    )
-                ) {
-                    return {
-                        success: false,
-                        message:
-                            "Không đủ đan dược.",
-                    };
-                }
-
-                cultivation.exp =
-                    Number(
-                        cultivation.exp || 0,
-                    ) + gainedExp;
-
-                autoAdvanceCultivationFloors(
-                    cultivation,
-                );
-
-                profile.daily
-                    .cultivationPillsUsed =
-                    usedToday +
-                    safeQuantity;
-
-                return {
-                    success: true,
-                    type: recipe.type,
-                    recipe,
-                    quality,
-                    quantity: safeQuantity,
-                    gainedExp,
-                    floor:
-                        cultivation.floor,
-                    exp: cultivation.exp,
-                    maxExp:
-                        getCurrentRealmMaxExp(
-                            cultivation,
-                        ),
-                };
-            }
-
-            if (
-                recipe.type ===
-                "hunt_run"
-            ) {
-                const usedToday =
-                    Number(
-                        profile.daily
-                            .huntRunPillsUsed ||
-                            0,
-                    );
-
-                if (
-                    usedToday +
-                        safeQuantity >
-                    alchemyConfig
-                        .dailyHuntRunPillLimit
-                ) {
-                    return {
-                        success: false,
-                        message:
-                            `Mỗi ngày chỉ dùng tối đa ` +
-                            `${alchemyConfig.dailyHuntRunPillLimit} Hồi Liệp Đan.`,
-                    };
-                }
-
-                if (!user.beastHuntStats) {
-                    return {
-                        success: false,
-                        message:
-                            "Bạn chưa sử dụng lượt săn nào hôm nay.",
-                    };
-                }
-
-                const currentRuns =
-                    Number(
-                        user.beastHuntStats
-                            .dailyRuns || 0,
-                    );
-
-                if (currentRuns <= 0) {
-                    return {
-                        success: false,
-                        message:
-                            "Bạn vẫn còn đủ lượt săn, chưa cần dùng Hồi Liệp Đan.",
-                    };
-                }
-
-                /*
-                 * Không cho uống nhiều hơn số lượt
-                 * đã sử dụng thực tế.
-                 */
-                const restoredRuns =
-                    Math.min(
-                        safeQuantity,
-                        currentRuns,
-                    );
-
-                if (
-                    !removeCustomPill(
-                        profile,
-                        recipe.id,
-                        safeQuality,
-                        restoredRuns,
-                    )
-                ) {
-                    return {
-                        success: false,
-                        message:
-                            "Không đủ Hồi Liệp Đan.",
-                    };
-                }
-
-                user.beastHuntStats.dailyRuns =
-                    currentRuns -
-                    restoredRuns;
-
-                profile.daily
-                    .huntRunPillsUsed =
-                    usedToday +
-                    restoredRuns;
-
-                return {
-                    success: true,
-                    type: recipe.type,
-                    recipe,
-                    quality:
-                        getQuality(
-                            safeQuality,
-                        ),
-                    quantity:
-                        restoredRuns,
-                    remainingUsedRuns:
-                        user.beastHuntStats
-                            .dailyRuns,
-                };
-            }
-
-            if (
-                recipe.type ===
-                "hunt_lure"
-            ) {
-                if (
-                    profile.pendingHuntLure
-                ) {
-                    return {
-                        success: false,
-                        message:
-                            "Bạn đang có một Dẫn Yêu Đan chờ sử dụng ở lượt săn kế tiếp.",
-                    };
-                }
-
-                const minimumLevel =
-                    Number(
-                        recipe
-                            .minBeastLevelByQuality?.[
-                            safeQuality
-                        ] || 1,
-                    );
-
-                if (
-                    !removeCustomPill(
-                        profile,
-                        recipe.id,
-                        safeQuality,
-                        1,
-                    )
-                ) {
-                    return {
-                        success: false,
-                        message:
-                            "Không đủ Dẫn Yêu Đan.",
-                    };
-                }
-
-                profile.pendingHuntLure = {
-                    recipeId:
-                        recipe.id,
-                    recipeName:
-                        recipe.name,
-                    qualityLevel:
-                        safeQuality,
-                    minBeastLevel:
-                        minimumLevel,
-                    activatedAt:
-                        Date.now(),
-                };
-
-                return {
-                    success: true,
-                    type: recipe.type,
-                    recipe,
-                    quality:
-                        getQuality(
-                            safeQuality,
-                        ),
-                    quantity: 1,
-                    minBeastLevel:
-                        minimumLevel,
-                };
-            }
-
+        if (owned < safeQuantity) {
             return {
                 success: false,
                 message:
-                    "Loại đan này chưa hỗ trợ sử dụng.",
+                    `Bạn chỉ có ${owned} viên ` +
+                    `${getQuality(safeQuality).name}.`,
             };
-        },
-    );
+        }
+
+        if (recipe.type === "cultivation") {
+            const usedToday = Number(profile.daily.cultivationPillsUsed || 0);
+
+            if (
+                usedToday + safeQuantity >
+                alchemyConfig.dailyCultivationPillLimit
+            ) {
+                return {
+                    success: false,
+                    message:
+                        `Mỗi ngày chỉ hấp thụ tối đa ` +
+                        `${alchemyConfig.dailyCultivationPillLimit} viên đan tu vi.`,
+                };
+            }
+
+            const cultivation = user.tuTienProfile;
+
+            const maxExp = getCurrentRealmMaxExp(cultivation);
+
+            if (
+                Number(cultivation.floor || 1) >= 10 &&
+                Number(cultivation.exp || 0) >= maxExp
+            ) {
+                return {
+                    success: false,
+                    message: "Bạn đã đạt Tầng 10 viên mãn, hãy đột phá trước.",
+                };
+            }
+
+            const quality = getQuality(safeQuality);
+
+            const gainedExp = Math.floor(
+                Number(recipe.baseValue || 0) *
+                    Number(quality.valueMultiplier || 1) *
+                    safeQuantity,
+            );
+
+            if (
+                !removeCustomPill(profile, recipe.id, safeQuality, safeQuantity)
+            ) {
+                return {
+                    success: false,
+                    message: "Không đủ đan dược.",
+                };
+            }
+
+            cultivation.exp = Number(cultivation.exp || 0) + gainedExp;
+
+            autoAdvanceCultivationFloors(cultivation);
+
+            profile.daily.cultivationPillsUsed = usedToday + safeQuantity;
+
+            return {
+                success: true,
+                type: recipe.type,
+                recipe,
+                quality,
+                quantity: safeQuantity,
+                gainedExp,
+                floor: cultivation.floor,
+                exp: cultivation.exp,
+                maxExp: getCurrentRealmMaxExp(cultivation),
+            };
+        }
+
+        if (recipe.type === "hunt_run") {
+            const usedToday = Number(profile.daily.huntRunPillsUsed || 0);
+
+            if (
+                usedToday + safeQuantity >
+                alchemyConfig.dailyHuntRunPillLimit
+            ) {
+                return {
+                    success: false,
+                    message:
+                        `Mỗi ngày chỉ dùng tối đa ` +
+                        `${alchemyConfig.dailyHuntRunPillLimit} Hồi Liệp Đan.`,
+                };
+            }
+
+            if (!user.beastHuntStats) {
+                return {
+                    success: false,
+                    message: "Bạn chưa sử dụng lượt săn nào hôm nay.",
+                };
+            }
+
+            const todayKey = new Intl.DateTimeFormat("en-CA", {
+                timeZone: "Asia/Ho_Chi_Minh",
+                year: "numeric",
+                month: "2-digit",
+                day: "2-digit",
+            }).format(new Date());
+
+            if (user.beastHuntStats.resetDate !== todayKey) {
+                user.beastHuntStats.resetDate = todayKey;
+
+                user.beastHuntStats.dailyRuns = 0;
+                user.beastHuntStats.soloRuns = 0;
+                user.beastHuntStats.partyRuns = 0;
+                user.beastHuntStats.lastSoloAt = 0;
+                user.beastHuntStats.lastPartyAt = 0;
+            }
+
+            const currentRuns = Number(user.beastHuntStats.dailyRuns || 0);
+
+            if (currentRuns <= 0) {
+                return {
+                    success: false,
+                    message:
+                        "Bạn vẫn còn đủ lượt săn, chưa cần dùng Hồi Liệp Đan.",
+                };
+            }
+
+            /*
+             * Không cho uống nhiều hơn số lượt
+             * đã sử dụng thực tế.
+             */
+            const restoredRuns = Math.min(safeQuantity, currentRuns);
+
+            if (
+                !removeCustomPill(profile, recipe.id, safeQuality, restoredRuns)
+            ) {
+                return {
+                    success: false,
+                    message: "Không đủ Hồi Liệp Đan.",
+                };
+            }
+
+            user.beastHuntStats.dailyRuns = currentRuns - restoredRuns;
+
+            profile.daily.huntRunPillsUsed = usedToday + restoredRuns;
+
+            return {
+                success: true,
+                type: recipe.type,
+                recipe,
+                quality: getQuality(safeQuality),
+                quantity: restoredRuns,
+                remainingUsedRuns: user.beastHuntStats.dailyRuns,
+            };
+        }
+
+        if (recipe.type === "hunt_lure") {
+            if (profile.pendingHuntLure) {
+                return {
+                    success: false,
+                    message:
+                        "Bạn đang có một Dẫn Yêu Đan chờ sử dụng ở lượt săn kế tiếp.",
+                };
+            }
+
+            const minimumLevel = Number(
+                recipe.minBeastLevelByQuality?.[safeQuality] || 1,
+            );
+
+            if (!removeCustomPill(profile, recipe.id, safeQuality, 1)) {
+                return {
+                    success: false,
+                    message: "Không đủ Dẫn Yêu Đan.",
+                };
+            }
+
+            profile.pendingHuntLure = {
+                recipeId: recipe.id,
+                recipeName: recipe.name,
+                qualityLevel: safeQuality,
+                minBeastLevel: minimumLevel,
+                activatedAt: Date.now(),
+            };
+
+            return {
+                success: true,
+                type: recipe.type,
+                recipe,
+                quality: getQuality(safeQuality),
+                quantity: 1,
+                minBeastLevel: minimumLevel,
+            };
+        }
+
+        return {
+            success: false,
+            message: "Loại đan này chưa hỗ trợ sử dụng.",
+        };
+    });
 }
 
-function sellPill(
-    userId,
-    recipeId,
-    qualityLevel,
-    quantity,
-) {
+function sellPill(userId, recipeId, qualityLevel, quantity) {
     const recipe = getRecipe(recipeId);
 
     if (!recipe) {
         return {
             success: false,
-            message:
-                "Không tìm thấy loại đan này.",
+            message: "Không tìm thấy loại đan này.",
         };
     }
 
-    const safeQuantity =
-        clampInteger(quantity, 1, 50);
+    const safeQuantity = clampInteger(quantity, 1, 50);
 
-    const safeQuality =
-        clampInteger(qualityLevel, 1, 4);
+    const safeQuality = clampInteger(qualityLevel, 1, 4);
 
-    return database.updateAlchemyProfile(
-        userId,
-        (
-            profile,
-            user,
-        ) => {
-            let sellPricePerItem = Number(
-                recipe.buybackPrice || 0,
-            );
+    return database.updateAlchemyProfile(userId, (profile, user) => {
+        let sellPricePerItem = Number(recipe.buybackPrice || 0);
 
-            if (
-                recipe.type ===
-                "shop_item"
-            ) {
-                const itemId =
-                    recipe.shopItemId;
+        if (recipe.type === "shop_item") {
+            const itemId = recipe.shopItemId;
 
-                const owned =
-                    Number(
-                        user.inventory?.[
-                            itemId
-                        ] || 0,
-                    );
+            const owned = Number(user.inventory?.[itemId] || 0);
 
-                if (owned < safeQuantity) {
-                    return {
-                        success: false,
-                        message:
-                            `Bạn chỉ có ${owned} viên ${recipe.name}.`,
-                    };
-                }
-
-                user.inventory[itemId] =
-                    owned - safeQuantity;
-
-                if (
-                    user.inventory[itemId] <=
-                    0
-                ) {
-                    delete user.inventory[
-                        itemId
-                    ];
-                }
-            } else {
-                const owned =
-                    getOwnedPillAmount(
-                        profile,
-                        recipe.id,
-                        safeQuality,
-                    );
-
-                if (owned < safeQuantity) {
-                    return {
-                        success: false,
-                        message:
-                            `Bạn chỉ có ${owned} viên ${getQuality(safeQuality).name}.`,
-                    };
-                }
-
-                const quality =
-                    getQuality(
-                        safeQuality,
-                    );
-
-                sellPricePerItem =
-                    Math.floor(
-                        sellPricePerItem *
-                            Number(
-                                quality.sellMultiplier ||
-                                    1,
-                            ),
-                    );
-
-                removeCustomPill(
-                    profile,
-                    recipe.id,
-                    safeQuality,
-                    safeQuantity,
-                );
+            if (owned < safeQuantity) {
+                return {
+                    success: false,
+                    message: `Bạn chỉ có ${owned} viên ${recipe.name}.`,
+                };
             }
 
-            const totalPrice =
-                sellPricePerItem *
-                safeQuantity;
+            user.inventory[itemId] = owned - safeQuantity;
 
-            user.money =
-                Number(user.money || 0) +
-                totalPrice;
+            if (user.inventory[itemId] <= 0) {
+                delete user.inventory[itemId];
+            }
+        } else {
+            const owned = getOwnedPillAmount(profile, recipe.id, safeQuality);
 
-            return {
-                success: true,
-                recipe,
-                quantity: safeQuantity,
-                quality:
-                    recipe.type ===
-                    "shop_item"
-                        ? null
-                        : getQuality(
-                              safeQuality,
-                          ),
-                sellPricePerItem,
-                totalPrice,
-            };
-        },
-    );
+            if (owned < safeQuantity) {
+                return {
+                    success: false,
+                    message: `Bạn chỉ có ${owned} viên ${getQuality(safeQuality).name}.`,
+                };
+            }
+
+            const quality = getQuality(safeQuality);
+
+            sellPricePerItem = Math.floor(
+                sellPricePerItem * Number(quality.sellMultiplier || 1),
+            );
+
+            removeCustomPill(profile, recipe.id, safeQuality, safeQuantity);
+        }
+
+        const totalPrice = sellPricePerItem * safeQuantity;
+
+        user.money = Number(user.money || 0) + totalPrice;
+
+        return {
+            success: true,
+            recipe,
+            quantity: safeQuantity,
+            quality:
+                recipe.type === "shop_item" ? null : getQuality(safeQuality),
+            sellPricePerItem,
+            totalPrice,
+        };
+    });
 }
 
 function upgradeFurnace(userId) {
     return database.updateAlchemyProfile(
         userId,
-        (
-            profile,
-            user,
-            beastMaterials,
-        ) => {
-            const currentLevel =
-                Number(
-                    profile.furnaceLevel ||
-                        1,
-                );
+        (profile, user, beastMaterials) => {
+            const currentLevel = Number(profile.furnaceLevel || 1);
 
-            if (
-                currentLevel >=
-                alchemyConfig.maxFurnaceLevel
-            ) {
+            if (currentLevel >= alchemyConfig.maxFurnaceLevel) {
                 return {
                     success: false,
-                    message:
-                        "Đan lô đã đạt cấp tối đa.",
+                    message: "Đan lô đã đạt cấp tối đa.",
                 };
             }
 
-            const nextFurnace =
-                getFurnace(
-                    currentLevel + 1,
-                );
+            const nextFurnace = getFurnace(currentLevel + 1);
 
-            const cost =
-                nextFurnace.upgradeCost;
+            const cost = nextFurnace.upgradeCost;
 
-            if (
-                Number(user.money || 0) <
-                Number(cost.money || 0)
-            ) {
+            if (Number(user.money || 0) < Number(cost.money || 0)) {
                 return {
                     success: false,
-                    message:
-                        `Cần ${formatNumber(cost.money)} tiền để nâng lò.`,
+                    message: `Cần ${formatNumber(cost.money)} tiền để nâng lò.`,
                 };
             }
 
-            for (
-                const [materialId, amount]
-                of Object.entries(
-                    cost.materials || {},
-                )
-            ) {
-                if (
-                    Number(
-                        beastMaterials[
-                            materialId
-                        ] || 0,
-                    ) < amount
-                ) {
+            for (const [materialId, amount] of Object.entries(
+                cost.materials || {},
+            )) {
+                if (Number(beastMaterials[materialId] || 0) < amount) {
                     return {
                         success: false,
                         message:
@@ -1419,35 +939,21 @@ function upgradeFurnace(userId) {
                 }
             }
 
-            user.money -= Number(
-                cost.money || 0,
-            );
+            user.money -= Number(cost.money || 0);
 
-            for (
-                const [materialId, amount]
-                of Object.entries(
-                    cost.materials || {},
-                )
-            ) {
-                beastMaterials[materialId] -=
-                    amount;
+            for (const [materialId, amount] of Object.entries(
+                cost.materials || {},
+            )) {
+                beastMaterials[materialId] -= amount;
 
-                if (
-                    beastMaterials[
-                        materialId
-                    ] <= 0
-                ) {
-                    delete beastMaterials[
-                        materialId
-                    ];
+                if (beastMaterials[materialId] <= 0) {
+                    delete beastMaterials[materialId];
                 }
             }
 
-            profile.furnaceLevel =
-                nextFurnace.level;
+            profile.furnaceLevel = nextFurnace.level;
 
-            profile.furnaceDurability =
-                nextFurnace.maxDurability;
+            profile.furnaceDurability = nextFurnace.maxDurability;
 
             return {
                 success: true,
@@ -1461,82 +967,48 @@ function upgradeFurnace(userId) {
 function repairFurnace(userId) {
     return database.updateAlchemyProfile(
         userId,
-        (
-            profile,
-            user,
-            beastMaterials,
-        ) => {
-            const furnace =
-                getFurnace(
-                    profile.furnaceLevel,
-                );
+        (profile, user, beastMaterials) => {
+            const furnace = getFurnace(profile.furnaceLevel);
 
-            const missing =
-                Math.max(
-                    0,
-                    furnace.maxDurability -
-                        Number(
-                            profile.furnaceDurability ||
-                                0,
-                        ),
-                );
+            const missing = Math.max(
+                0,
+                furnace.maxDurability - Number(profile.furnaceDurability || 0),
+            );
 
             if (missing <= 0) {
                 return {
                     success: false,
-                    message:
-                        "Đan lô chưa bị mất độ bền.",
+                    message: "Đan lô chưa bị mất độ bền.",
                 };
             }
 
-            const moneyCost =
-                missing * 500;
+            const moneyCost = missing * 500;
 
-            const boneCost =
-                Math.max(
-                    1,
-                    Math.ceil(missing / 10),
-                );
+            const boneCost = Math.max(1, Math.ceil(missing / 10));
 
-            if (
-                Number(user.money || 0) <
-                moneyCost
-            ) {
+            if (Number(user.money || 0) < moneyCost) {
                 return {
                     success: false,
-                    message:
-                        `Cần ${formatNumber(moneyCost)} tiền để sửa lò.`,
+                    message: `Cần ${formatNumber(moneyCost)} tiền để sửa lò.`,
                 };
             }
 
-            if (
-                Number(
-                    beastMaterials
-                        .xuong_yeu_thu || 0,
-                ) < boneCost
-            ) {
+            if (Number(beastMaterials.xuong_yeu_thu || 0) < boneCost) {
                 return {
                     success: false,
-                    message:
-                        `Cần ${boneCost} Xương Yêu Thú để sửa lò.`,
+                    message: `Cần ${boneCost} Xương Yêu Thú để sửa lò.`,
                 };
             }
 
             user.money -= moneyCost;
 
-            beastMaterials.xuong_yeu_thu -=
-                boneCost;
+            beastMaterials.xuong_yeu_thu -= boneCost;
 
-            if (
-                beastMaterials.xuong_yeu_thu <=
-                0
-            ) {
-                delete beastMaterials
-                    .xuong_yeu_thu;
+            if (beastMaterials.xuong_yeu_thu <= 0) {
+                delete beastMaterials.xuong_yeu_thu;
             }
 
-            profile.furnaceDurability =
-                furnace.maxDurability;
+            profile.furnaceDurability = furnace.maxDurability;
 
             return {
                 success: true,
@@ -1550,46 +1022,25 @@ function repairFurnace(userId) {
 
 async function show(interaction) {
     return interaction.reply({
-        embeds: [
-            buildProfileEmbed(
-                interaction.user.id,
-            ),
-        ],
+        embeds: [buildProfileEmbed(interaction.user.id)],
         ephemeral: true,
     });
 }
 
 async function execute(interaction) {
-    const userId = String(
-        interaction.user.id,
-    );
+    const userId = String(interaction.user.id);
 
-    const action =
-        interaction.options.getString(
-            "hanhdong",
-        ) || "hoso";
+    const action = interaction.options.getString("hanhdong") || "hoso";
 
-    const recipeId =
-        interaction.options.getString(
-            "dan",
-        );
+    const recipeId = interaction.options.getString("dan");
 
-    const quantity =
-        interaction.options.getInteger(
-            "soluong",
-        ) || 1;
+    const quantity = interaction.options.getInteger("soluong") || 1;
 
-    const qualityLevel =
-        interaction.options.getInteger(
-            "pham",
-        ) || 1;
+    const qualityLevel = interaction.options.getInteger("pham") || 1;
 
-    if (
-        processingUsers.has(userId)
-    ) {
+    if (processingUsers.has(userId)) {
         return interaction.reply({
-            content:
-                "⏳ Lò luyện đan của bạn đang được xử lý.",
+            content: "⏳ Lò luyện đan của bạn đang được xử lý.",
             ephemeral: true,
         });
     }
@@ -1600,9 +1051,7 @@ async function execute(interaction) {
 
     if (action === "congthuc") {
         return interaction.reply({
-            embeds: [
-                buildRecipesEmbed(userId),
-            ],
+            embeds: [buildRecipesEmbed(userId)],
             ephemeral: true,
         });
     }
@@ -1611,50 +1060,32 @@ async function execute(interaction) {
 
     try {
         if (action === "luyen") {
-            const result = craftPills(
-                userId,
-                recipeId,
-                quantity,
-            );
+            const result = craftPills(userId, recipeId, quantity);
 
             if (!result.success) {
                 return interaction.reply({
-                    content:
-                        `❌ ${result.message}`,
+                    content: `❌ ${result.message}`,
                     ephemeral: true,
                 });
             }
 
             return interaction.reply({
-                embeds: [
-                    buildCraftResultEmbed(
-                        result,
-                    ),
-                ],
+                embeds: [buildCraftResultEmbed(result)],
                 ephemeral: true,
             });
         }
 
         if (action === "dung") {
-            const result = usePill(
-                userId,
-                recipeId,
-                qualityLevel,
-                quantity,
-            );
+            const result = usePill(userId, recipeId, qualityLevel, quantity);
 
             if (!result.success) {
                 return interaction.reply({
-                    content:
-                        `❌ ${result.message}`,
+                    content: `❌ ${result.message}`,
                     ephemeral: true,
                 });
             }
 
-            if (
-                result.type ===
-                "cultivation"
-            ) {
+            if (result.type === "cultivation") {
                 return interaction.reply({
                     content:
                         `🧪 Đã dùng **${result.recipe.name} — ${result.quality.name}** ×${result.quantity}\n\n` +
@@ -1665,10 +1096,7 @@ async function execute(interaction) {
                 });
             }
 
-            if (
-                result.type ===
-                "hunt_run"
-            ) {
+            if (result.type === "hunt_run") {
                 return interaction.reply({
                     content:
                         `🎟️ Đã dùng **${result.recipe.name}** ×${result.quantity}\n\n` +
@@ -1679,10 +1107,7 @@ async function execute(interaction) {
                 });
             }
 
-            if (
-                result.type ===
-                "hunt_lure"
-            ) {
+            if (result.type === "hunt_lure") {
                 return interaction.reply({
                     content:
                         `🧭 Đã kích hoạt **${result.recipe.name} — ${result.quality.name}**.\n\n` +
@@ -1698,17 +1123,11 @@ async function execute(interaction) {
         }
 
         if (action === "ban") {
-            const result = sellPill(
-                userId,
-                recipeId,
-                qualityLevel,
-                quantity,
-            );
+            const result = sellPill(userId, recipeId, qualityLevel, quantity);
 
             if (!result.success) {
                 return interaction.reply({
-                    content:
-                        `❌ ${result.message}`,
+                    content: `❌ ${result.message}`,
                     ephemeral: true,
                 });
             }
@@ -1724,13 +1143,11 @@ async function execute(interaction) {
         }
 
         if (action === "nanglo") {
-            const result =
-                upgradeFurnace(userId);
+            const result = upgradeFurnace(userId);
 
             if (!result.success) {
                 return interaction.reply({
-                    content:
-                        `❌ ${result.message}`,
+                    content: `❌ ${result.message}`,
                     ephemeral: true,
                 });
             }
@@ -1747,13 +1164,11 @@ async function execute(interaction) {
         }
 
         if (action === "sualo") {
-            const result =
-                repairFurnace(userId);
+            const result = repairFurnace(userId);
 
             if (!result.success) {
                 return interaction.reply({
-                    content:
-                        `❌ ${result.message}`,
+                    content: `❌ ${result.message}`,
                     ephemeral: true,
                 });
             }
@@ -1768,30 +1183,21 @@ async function execute(interaction) {
         }
 
         return interaction.reply({
-            content:
-                "❌ Hành động luyện đan không hợp lệ.",
+            content: "❌ Hành động luyện đan không hợp lệ.",
             ephemeral: true,
         });
     } catch (error) {
-        console.error(
-            "[LuyenDan] Loi:",
-            error,
-        );
+        console.error("[LuyenDan] Loi:", error);
 
-        if (
-            interaction.replied ||
-            interaction.deferred
-        ) {
+        if (interaction.replied || interaction.deferred) {
             return interaction.followUp({
-                content:
-                    "❌ Có lỗi khi xử lý Luyện Đan.",
+                content: "❌ Có lỗi khi xử lý Luyện Đan.",
                 ephemeral: true,
             });
         }
 
         return interaction.reply({
-            content:
-                "❌ Có lỗi khi xử lý Luyện Đan.",
+            content: "❌ Có lỗi khi xử lý Luyện Đan.",
             ephemeral: true,
         });
     } finally {

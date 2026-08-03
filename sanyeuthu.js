@@ -16,6 +16,10 @@ const {
     getCurrencyEmoji,
     getBeastMaterials,
     addBeastMaterials,
+
+    getAlchemyProfile,
+    updateAlchemyProfile,
+
     getBeastHuntState,
     updateBeastHuntState,
 } = require("./database");
@@ -414,11 +418,121 @@ function removeMaterial(materials, materialId, amount = 1) {
     return removed;
 }
 
-function pickBeast(mode) {
+function pickBeast(mode, minimumLevel = 1) {
+    const safeMinimumLevel = Math.max(1, Math.floor(Number(minimumLevel || 1)));
+
     const weightKey = mode === "party" ? "partyWeight" : "soloWeight";
-    const beast = pickWeighted(config.beasts, weightKey) || config.beasts[0];
+
+    /*
+     * Cấp 5–7 được thiết kế dành cho tổ đội.
+     * Solo chỉ có thể gặp yêu thú cấp 1–4.
+     */
+    const maximumLevel = mode === "party" ? Number.POSITIVE_INFINITY : 4;
+
+    let pool = config.beasts.filter((beast) => {
+        const level = Number(beast.level || 1);
+
+        return (
+            level >= safeMinimumLevel &&
+            level <= maximumLevel &&
+            Number(beast[weightKey] || 0) > 0
+        );
+    });
+
+    /*
+     * Fallback an toàn nếu config bị sửa sai hoặc
+     * không còn thú phù hợp với cấp tối thiểu.
+     */
+    if (pool.length <= 0) {
+        pool = config.beasts.filter((beast) => {
+            const level = Number(beast.level || 1);
+
+            return level <= maximumLevel && Number(beast[weightKey] || 0) > 0;
+        });
+    }
+
+    if (pool.length <= 0) {
+        pool = config.beasts;
+    }
+
+    const beast = pickWeighted(pool, weightKey) || pool[0] || config.beasts[0];
 
     return JSON.parse(JSON.stringify(beast));
+}
+function getPendingHuntLure(userId) {
+    const profile = getAlchemyProfile(userId);
+
+    const lure = profile?.pendingHuntLure;
+
+    if (!lure) {
+        return null;
+    }
+
+    const minBeastLevel = Math.max(
+        1,
+        Math.floor(Number(lure.minBeastLevel || 1)),
+    );
+
+    return {
+        recipeId: String(lure.recipeId || ""),
+        recipeName: String(lure.recipeName || "Dẫn Yêu Đan"),
+        qualityLevel: Math.max(1, Math.floor(Number(lure.qualityLevel || 1))),
+        minBeastLevel,
+        activatedAt: Number(lure.activatedAt || 0),
+    };
+}
+
+function consumePendingHuntLure(userId, expectedLure) {
+    if (!expectedLure) {
+        return {
+            consumed: false,
+        };
+    }
+
+    return updateAlchemyProfile(userId, (profile) => {
+        const current = profile.pendingHuntLure;
+
+        if (!current) {
+            return {
+                consumed: false,
+            };
+        }
+
+        /*
+         * Chỉ xóa đúng viên đã được chụp lại
+         * khi tạo cuộc săn.
+         */
+        const sameLure =
+            String(current.recipeId || "") ===
+                String(expectedLure.recipeId || "") &&
+            Number(current.activatedAt || 0) ===
+                Number(expectedLure.activatedAt || 0);
+
+        if (!sameLure) {
+            return {
+                consumed: false,
+            };
+        }
+
+        delete profile.pendingHuntLure;
+
+        return {
+            consumed: true,
+            lure: current,
+        };
+    });
+}
+
+function getLureDisplayText(lure) {
+    if (!lure) {
+        return "Không sử dụng";
+    }
+
+    return (
+        `🧭 **${lure.recipeName}**` +
+        ` — bảo đảm yêu thú cấp ` +
+        `**${lure.minBeastLevel}+**`
+    );
 }
 
 function pickMechanic(hunt) {
@@ -588,7 +702,8 @@ function buildLobbyEmbed(hunt) {
         .setDescription(
             `👑 Host: <@${hunt.hostId}>\n` +
                 `👥 Thành viên: **${hunt.memberIds.length}/${hunt.maxMembers}**\n` +
-                `📌 Tối thiểu bắt đầu: **${hunt.minMembers} người**\n\n` +
+                `📌 Tối thiểu bắt đầu: **${hunt.minMembers} người**\n` +
+                `🧪 Dẫn Yêu Đan: ${getLureDisplayText(hunt.lure)}\n\n` +
                 `${memberLines.join("\n")}\n\n` +
                 "Bấm **Tham gia** để vào đội. Khi host bấm **Bắt đầu**, kênh sẽ khóa như Bí Cảnh.",
         )
@@ -1683,10 +1798,31 @@ async function openBattleRound(channel, hunt) {
 async function beginBattle(channel, hunt) {
     hunt.status = "battle";
     hunt.startedAt = Date.now();
-    hunt.beast = pickBeast(hunt.mode);
+
+    const minimumBeastLevel = hunt.lure
+        ? Math.max(1, Number(hunt.lure.minBeastLevel || 1))
+        : 1;
+
+    hunt.beast = pickBeast(hunt.mode, minimumBeastLevel);
+
+    /*
+     * Chỉ đến đây trận mới thật sự bắt đầu.
+     * Nếu lobby hết hạn hoặc bị giải tán,
+     * hiệu lực trong profile vẫn được giữ.
+     */
+    const lureResult = consumePendingHuntLure(hunt.hostId, hunt.lure);
+
+    hunt.lureConsumed = lureResult?.consumed === true;
+
     hunt.battle = createBattleState(hunt);
 
     saveHunt(hunt);
+
+    const lureText = hunt.lure
+        ? hunt.lureConsumed
+            ? `\n🧭 **${hunt.lure.recipeName}** đã phát huy tác dụng.`
+            : `\n⚠️ Không tìm thấy hiệu lực Dẫn Yêu Đan đang chờ; yêu thú được chọn theo dữ liệu đã khóa của cuộc săn.`
+        : "";
 
     await channel.send({
         content: hunt.memberIds.map((id) => `<@${id}>`).join(" "),
@@ -1696,8 +1832,11 @@ async function beginBattle(channel, hunt) {
                 .setTitle("⚔️ CUỘC SĂN BẮT ĐẦU")
                 .setDescription(
                     `${hunt.beast.emoji} **${hunt.beast.name}** xuất hiện!\n` +
-                        `Cấp: **${hunt.beast.tierName}**\n\n` +
-                        "Đọc dấu hiệu từng lượt rồi chọn hành động. Quà trong túi chỉ là **quà tạm**, đánh lệch nhịp có thể làm rơi mất.",
+                        `Cấp thú: **${hunt.beast.level}**\n` +
+                        `Phân loại: **${hunt.beast.tierName}**` +
+                        `${lureText}\n\n` +
+                        "Đọc dấu hiệu từng lượt rồi chọn hành động. " +
+                        "Quà trong túi chỉ là **quà tạm**, đánh lệch nhịp có thể làm rơi mất.",
                 ),
         ],
     });
@@ -1928,6 +2067,27 @@ async function createHunt(interaction, mode) {
         });
     }
 
+    const pendingLure = getPendingHuntLure(userId);
+
+    /*
+     * Đan gọi cấp 5–7 không thể dùng khi solo.
+     * Không xóa đan ở đây nên người chơi không mất đan.
+     */
+    if (
+        mode === "solo" &&
+        pendingLure &&
+        Number(pendingLure.minBeastLevel || 1) >= 5
+    ) {
+        return interaction.reply({
+            content:
+                `❌ **${pendingLure.recipeName}** có thể dẫn dụ yêu thú ` +
+                `cấp **${pendingLure.minBeastLevel}+**.\n\n` +
+                `Yêu thú cấp 5–7 bắt buộc săn ở chế độ **Tổ đội**.\n` +
+                `Đan chưa bị tiêu hao.`,
+            ephemeral: true,
+        });
+    }
+
     const power = getCombatPower(userId);
     const huntId = createHuntId();
     const hunt = {
@@ -1953,6 +2113,12 @@ async function createHunt(interaction, mode) {
                 supportReward: false,
             },
         },
+        /*
+         * Snapshot đan tại thời điểm mở cuộc săn.
+         * Nếu lobby bị hủy, pendingHuntLure vẫn còn trong profile.
+         */
+        lure: pendingLure ? JSON.parse(JSON.stringify(pendingLure)) : null,
+
         beast: null,
         battle: null,
     };
@@ -1966,7 +2132,10 @@ async function createHunt(interaction, mode) {
     await interaction.editReply({
         content:
             `✅ Đã mở kênh săn yêu thú: ${channel}\n` +
-            `${getHuntRunText(userId)}`,
+            `${getHuntRunText(userId)}` +
+            (hunt.lure
+                ? `\n🧭 Đã chuẩn bị: **${hunt.lure.recipeName}** — yêu thú cấp **${hunt.lure.minBeastLevel}+**`
+                : ""),
     });
     if (mode === "solo") {
         return startHuntDirect(channel, hunt);
@@ -1993,6 +2162,9 @@ async function start(interaction) {
 async function materials(interaction) {
     const userId = String(interaction.user.id);
     const materialsData = getBeastMaterials(userId);
+    const alchemyProfile = getAlchemyProfile(userId);
+
+    const pendingLure = alchemyProfile.pendingHuntLure;
     const lines = Object.entries(config.materials).map(
         ([materialId, material]) => {
             return `${material.emoji} **${material.name}**: ${formatNumber(materialsData[materialId] || 0)}`;
@@ -2006,7 +2178,12 @@ async function materials(interaction) {
                 .setTitle("📦 KHO NGUYÊN LIỆU YÊU THÚ")
                 .setDescription(
                     `${lines.join("\n")}\n\n` +
-                        "Nguyên liệu này đang tách riêng khỏi kho đồ. Bản sau có thể dùng cho luyện đan, rèn pháp bảo hoặc bán nguyên liệu.",
+                        `🧪 **Luyện Đan Sư:** Lv.${formatNumber(alchemyProfile.level || 1)}\n` +
+                        `🔥 **Đan lô:** Cấp ${formatNumber(alchemyProfile.furnaceLevel || 1)}\n` +
+                        (pendingLure
+                            ? `🧭 **Đang chờ:** ${pendingLure.recipeName} — bảo đảm yêu thú cấp ${pendingLure.minBeastLevel}+\n`
+                            : "🧭 **Dẫn Yêu Đan:** Chưa kích hoạt\n") +
+                        "\nDùng **/luyendan** để luyện, sử dụng hoặc bán đan dược.",
                 )
                 .setTimestamp(),
         ],
