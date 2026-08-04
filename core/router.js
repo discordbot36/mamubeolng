@@ -28,6 +28,7 @@ const phapbao = require("../phapbao");
 const raidserver = require("../raidserver");
 const duyen = require("../duyen");
 const molinhthach = require("../molinhthach");
+const limbo = require("../limbo");
 const modules = {
     economy,
     race,
@@ -57,6 +58,7 @@ const modules = {
     phapbao,
     quest,
     raidserver,
+    limbo,
 };
 
 function resolve(path) {

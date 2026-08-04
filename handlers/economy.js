@@ -20,6 +20,8 @@ const {
     getInventory,
 } = require("../database");
 
+const dailyWheel = require("../dailywheel");
+
 function isTowerChestItem(item) {
     return item && item.type === "tower_chest";
 }
@@ -373,11 +375,21 @@ async function balance(interaction) {
 
 async function daily(interaction) {
     const result = claimDaily(interaction.user.id);
+
     const coin = getCurrencyEmoji();
 
+    /*
+     * Đã điểm danh trong ngày.
+     *
+     * database.js hiện tại đã tính thời gian
+     * theo múi giờ Asia/Ho_Chi_Minh và reset
+     * vào đúng 00:00 giờ Việt Nam.
+     */
     if (!result.success) {
         const totalMinutes = Math.ceil(result.timeLeft / 1000 / 60);
+
         const hours = Math.floor(totalMinutes / 60);
+
         const minutes = totalMinutes % 60;
 
         return interaction.reply({
@@ -385,16 +397,54 @@ async function daily(interaction) {
                 `⏳ Bạn đã điểm danh hôm nay rồi!\n` +
                 `Qua **00:00 mỗi ngày** là điểm danh lại được.\n` +
                 `Còn khoảng **${hours} giờ ${minutes} phút**.`,
+
             ephemeral: true,
         });
     }
 
-    return interaction.reply({
-        content:
-            `🎁 Daily Reward\n\n` +
-            `${coin} Nhận: ${formatMoney(result.reward)}\n` +
-            `🔥 Streak: ${result.streak} ngày`,
-    });
+    const dailyContent =
+        `🎁 **ĐIỂM DANH THÀNH CÔNG**\n` +
+        `${coin} Nhận: ` +
+        `**${formatMoney(result.reward)}**\n` +
+        `🔥 Streak: ` +
+        `**${result.streak} ngày**`;
+
+    /*
+     * Lấy mốc mở vòng quay từ file
+     * config/economy.js mà bạn đã sửa.
+     */
+    const unlockStreak = Math.max(
+        1,
+        Math.floor(Number(economyConfig.daily?.wheel?.unlockStreak || 5)),
+    );
+
+    /*
+     * Streak chưa đủ 5 ngày:
+     * vẫn nhận tiền điểm danh nhưng
+     * không nhận lượt quay.
+     */
+    if (result.streak < unlockStreak) {
+        return interaction.reply({
+            content:
+                dailyContent +
+                `\n🔒 Duy trì streak tới ` +
+                `**${unlockStreak} ngày** ` +
+                `để mở vòng quay mỗi ngày.`,
+        });
+    }
+
+    /*
+     * Từ streak ngày 5 trở lên:
+     * mỗi ngày cộng đúng số lượt đã đặt
+     * trong spinsPerDay (hiện tại là 1).
+     */
+    return dailyWheel.start(
+        interaction,
+
+        dailyContent + `\n🎟️ Bạn nhận được ` + `**1 lượt vòng quay**.`,
+
+        true,
+    );
 }
 
 const SHOP_PAGE_SIZE = 10;
@@ -626,6 +676,11 @@ async function shop(interaction) {
 }
 
 async function handleButton(interaction) {
+    const dailyWheelResult = await dailyWheel.handleButton(interaction);
+
+    if (dailyWheelResult !== undefined) {
+        return dailyWheelResult;
+    }
     if (interaction.customId.startsWith("shop_cat_")) {
         const parts = interaction.customId.split("_");
         const userId = parts[2];

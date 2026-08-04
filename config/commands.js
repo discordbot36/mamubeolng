@@ -2,6 +2,39 @@ const { GAMBLE_MAX_BET } = require("./gamble");
 
 module.exports = [
     {
+        name: "limbo",
+
+        description: "Đặt cược Limbo với hệ số mục tiêu tối đa 999999x",
+
+        handler: "limbo.play",
+
+        options: [
+            {
+                type: "integer",
+                name: "cuoc",
+
+                description: "Số tiền muốn cược",
+
+                required: true,
+
+                minValue: 100,
+                maxValue: GAMBLE_MAX_BET,
+            },
+
+            {
+                type: "number",
+                name: "heso",
+
+                description: "Hệ số mục tiêu từ 1.01x đến 999999x",
+
+                required: true,
+
+                minValue: 1.01,
+                maxValue: 999999,
+            },
+        ],
+    },
+    {
         name: "race",
         description: "Bắt đầu cuộc đua",
         handler: "race.start",
@@ -957,148 +990,148 @@ module.exports = [
         ],
     },
     {
-    name: "luyendan",
-    description: "Luyện đan, dùng đan và phát triển nghề Luyện Đan Sư",
-    handler: "luyendan.execute",
-    options: [
-        {
-            type: "string",
-            name: "hanhdong",
-            description: "Chọn việc muốn thực hiện",
-            required: true,
-            choices: [
-                {
-                    name: "Xem hồ sơ Luyện Đan Sư",
-                    value: "hoso",
-                },
-                {
-                    name: "Xem đan phương",
-                    value: "congthuc",
-                },
-                {
-                    name: "Khai lò luyện đan",
-                    value: "luyen",
-                },
-                {
-                    name: "Dùng đan dược",
-                    value: "dung",
-                },
-                {
-                    name: "Bán cho Đan Các",
-                    value: "ban",
-                },
-                {
-                    name: "Nâng cấp đan lô",
-                    value: "nanglo",
-                },
-                {
-                    name: "Sửa chữa đan lô",
-                    value: "sualo",
-                },
-            ],
-        },
-        {
-            type: "string",
-            name: "dan",
-            description: "Chọn đan phương hoặc loại đan",
-            required: false,
-            choices: [
-                {
-                    name: "Tụ Khí Đan",
-                    value: "tu_khi_dan",
-                },
-                {
-                    name: "Ngưng Nguyên Đan",
-                    value: "ngung_nguyen_dan",
-                },
-                {
-                    name: "Hóa Linh Đan",
-                    value: "hoa_linh_dan",
-                },
-                {
-                    name: "Hồi Liệp Đan",
-                    value: "hoi_liep_dan",
-                },
-                {
-                    name: "Tầm Yêu Đan",
-                    value: "tam_yeu_dan",
-                },
-                {
-                    name: "Thượng Cổ Dẫn Yêu Đan",
-                    value: "thuong_co_dan_yeu_dan",
-                },
-                {
-                    name: "Linh Trư Trúc Cơ Đan",
-                    value: "linh_tru_truc_co_dan",
-                },
-                {
-                    name: "Kim Nha Ngưng Đan",
-                    value: "kim_nha_ngung_dan",
-                },
-                {
-                    name: "Trư Anh Hóa Sinh Đan",
-                    value: "tru_anh_hoa_sinh_dan",
-                },
-                {
-                    name: "Thiên Bồng Hóa Thần Đan",
-                    value: "thien_bong_hoa_than_dan",
-                },
-                {
-                    name: "Thôn Thiên Phá Hư Đan",
-                    value: "thon_thien_pha_hu_dan",
-                },
-                {
-                    name: "Vạn Trư Hợp Đạo Đan",
-                    value: "van_tru_hop_dao_dan",
-                },
-                {
-                    name: "Trư Hoàng Thừa Thiên Đan",
-                    value: "tru_hoang_thua_thien_dan",
-                },
-                {
-                    name: "Cửu Lôi Dẫn Kiếp Đan",
-                    value: "cuu_loi_dan_kiep_dan",
-                },
-                {
-                    name: "Thiên Bồng Phi Tiên Đan",
-                    value: "thien_bong_phi_tien_dan",
-                },
-            ],
-        },
-        {
-            type: "integer",
-            name: "soluong",
-            description: "Số lượng muốn luyện, dùng hoặc bán",
-            required: false,
-            minValue: 1,
-            maxValue: 50,
-        },
-        {
-            type: "integer",
-            name: "pham",
-            description: "Phẩm chất đan muốn dùng hoặc bán",
-            required: false,
-            choices: [
-                {
-                    name: "Hạ phẩm",
-                    value: 1,
-                },
-                {
-                    name: "Trung phẩm",
-                    value: 2,
-                },
-                {
-                    name: "Thượng phẩm",
-                    value: 3,
-                },
-                {
-                    name: "Cực phẩm",
-                    value: 4,
-                },
-            ],
-        },
-    ],
-},
+        name: "luyendan",
+        description: "Luyện đan, dùng đan và phát triển nghề Luyện Đan Sư",
+        handler: "luyendan.execute",
+        options: [
+            {
+                type: "string",
+                name: "hanhdong",
+                description: "Chọn việc muốn thực hiện",
+                required: true,
+                choices: [
+                    {
+                        name: "Xem hồ sơ Luyện Đan Sư",
+                        value: "hoso",
+                    },
+                    {
+                        name: "Xem đan phương",
+                        value: "congthuc",
+                    },
+                    {
+                        name: "Khai lò luyện đan",
+                        value: "luyen",
+                    },
+                    {
+                        name: "Dùng đan dược",
+                        value: "dung",
+                    },
+                    {
+                        name: "Bán cho Đan Các",
+                        value: "ban",
+                    },
+                    {
+                        name: "Nâng cấp đan lô",
+                        value: "nanglo",
+                    },
+                    {
+                        name: "Sửa chữa đan lô",
+                        value: "sualo",
+                    },
+                ],
+            },
+            {
+                type: "string",
+                name: "dan",
+                description: "Chọn đan phương hoặc loại đan",
+                required: false,
+                choices: [
+                    {
+                        name: "Tụ Khí Đan",
+                        value: "tu_khi_dan",
+                    },
+                    {
+                        name: "Ngưng Nguyên Đan",
+                        value: "ngung_nguyen_dan",
+                    },
+                    {
+                        name: "Hóa Linh Đan",
+                        value: "hoa_linh_dan",
+                    },
+                    {
+                        name: "Hồi Liệp Đan",
+                        value: "hoi_liep_dan",
+                    },
+                    {
+                        name: "Tầm Yêu Đan",
+                        value: "tam_yeu_dan",
+                    },
+                    {
+                        name: "Thượng Cổ Dẫn Yêu Đan",
+                        value: "thuong_co_dan_yeu_dan",
+                    },
+                    {
+                        name: "Linh Trư Trúc Cơ Đan",
+                        value: "linh_tru_truc_co_dan",
+                    },
+                    {
+                        name: "Kim Nha Ngưng Đan",
+                        value: "kim_nha_ngung_dan",
+                    },
+                    {
+                        name: "Trư Anh Hóa Sinh Đan",
+                        value: "tru_anh_hoa_sinh_dan",
+                    },
+                    {
+                        name: "Thiên Bồng Hóa Thần Đan",
+                        value: "thien_bong_hoa_than_dan",
+                    },
+                    {
+                        name: "Thôn Thiên Phá Hư Đan",
+                        value: "thon_thien_pha_hu_dan",
+                    },
+                    {
+                        name: "Vạn Trư Hợp Đạo Đan",
+                        value: "van_tru_hop_dao_dan",
+                    },
+                    {
+                        name: "Trư Hoàng Thừa Thiên Đan",
+                        value: "tru_hoang_thua_thien_dan",
+                    },
+                    {
+                        name: "Cửu Lôi Dẫn Kiếp Đan",
+                        value: "cuu_loi_dan_kiep_dan",
+                    },
+                    {
+                        name: "Thiên Bồng Phi Tiên Đan",
+                        value: "thien_bong_phi_tien_dan",
+                    },
+                ],
+            },
+            {
+                type: "integer",
+                name: "soluong",
+                description: "Số lượng muốn luyện, dùng hoặc bán",
+                required: false,
+                minValue: 1,
+                maxValue: 50,
+            },
+            {
+                type: "integer",
+                name: "pham",
+                description: "Phẩm chất đan muốn dùng hoặc bán",
+                required: false,
+                choices: [
+                    {
+                        name: "Hạ phẩm",
+                        value: 1,
+                    },
+                    {
+                        name: "Trung phẩm",
+                        value: 2,
+                    },
+                    {
+                        name: "Thượng phẩm",
+                        value: 3,
+                    },
+                    {
+                        name: "Cực phẩm",
+                        value: 4,
+                    },
+                ],
+            },
+        ],
+    },
     {
         name: "chet",
         description: "Ép Boss Thế Giới chết và chia thưởng",
@@ -1182,90 +1215,82 @@ module.exports = [
         ],
     },
     {
-    name: "keno",
-    description:
-        "Chọn 1-10 số từ 1-40 và chơi Keno một người",
-    handler: "keno.play",
+        name: "keno",
+        description: "Chọn 1-10 số từ 1-40 và chơi Keno một người",
+        handler: "keno.play",
 
-    options: [
-        {
-            type: "integer",
-            name: "cuoc",
-            description:
-                "Số tiền muốn cược",
-            required: true,
+        options: [
+            {
+                type: "integer",
+                name: "cuoc",
+                description: "Số tiền muốn cược",
+                required: true,
 
-            minValue: 1000,
-            maxValue: GAMBLE_MAX_BET,
-        },
+                minValue: 1000,
+                maxValue: GAMBLE_MAX_BET,
+            },
 
-        {
-            type: "string",
-            name: "chedo",
-            description:
-                "Mức rủi ro và bảng thưởng",
-            required: true,
+            {
+                type: "string",
+                name: "chedo",
+                description: "Mức rủi ro và bảng thưởng",
+                required: true,
 
-            choices: [
-                {
-                    name:
-                        "Thấp - dễ nhận tiền hơn",
-                    value: "low",
-                },
+                choices: [
+                    {
+                        name: "Thấp - dễ nhận tiền hơn",
+                        value: "low",
+                    },
 
-                {
-                    name:
-                        "Trung bình - cân bằng",
-                    value: "medium",
-                },
+                    {
+                        name: "Trung bình - cân bằng",
+                        value: "medium",
+                    },
 
-                {
-                    name:
-                        "Cao - ít trúng, hệ số lớn",
-                    value: "high",
-                },
-            ],
-        },
+                    {
+                        name: "Cao - ít trúng, hệ số lớn",
+                        value: "high",
+                    },
+                ],
+            },
 
-        {
-            type: "string",
-            name: "so",
-            description:
-                "Các số cách nhau bằng dấu phẩy, ví dụ 3,7,12,25",
-            required: false,
-        },
+            {
+                type: "string",
+                name: "so",
+                description: "Các số cách nhau bằng dấu phẩy, ví dụ 3,7,12,25",
+                required: false,
+            },
 
-        {
-            type: "integer",
-            name: "soluong",
-            description:
-                "Nếu không nhập số, bot tự chọn bao nhiêu số; mặc định 5",
-            required: false,
+            {
+                type: "integer",
+                name: "soluong",
+                description:
+                    "Nếu không nhập số, bot tự chọn bao nhiêu số; mặc định 5",
+                required: false,
 
-            minValue: 1,
-            maxValue: 10,
-        },
-    ],
-},
-{
-    name: "kenonote",
-    description:
-        "Xem luật, ghi chú và bảng thưởng Keno",
-    handler: "keno.note",
+                minValue: 1,
+                maxValue: 10,
+            },
+        ],
+    },
+    {
+        name: "kenonote",
+        description: "Xem luật, ghi chú và bảng thưởng Keno",
+        handler: "keno.note",
 
-    options: [
-        {
-            type: "integer",
-            name: "soluong",
-            description:
-                "Xem bảng thưởng khi chọn bao nhiêu số; mặc định 5",
-            required: false,
+        options: [
+            {
+                type: "integer",
+                name: "soluong",
+                description:
+                    "Xem bảng thưởng khi chọn bao nhiêu số; mặc định 5",
+                required: false,
 
-            minValue: 1,
-            maxValue: 10,
-        },
-    ],
-},
+                minValue: 1,
+                maxValue: 10,
+            },
+        ],
+    },
     {
         name: "flip",
         description: "50-50 cược tiền, thắng gấp đôi",
