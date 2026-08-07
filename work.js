@@ -85,7 +85,7 @@ function createShipperButtons(userId, disabled = false) {
             .setDisabled(disabled),
     );
 }
-function finishWork(interaction, basePayload, responseType = "reply") {
+function finishWork(interaction, basePayload, responseType = "editReply") {
     return runLuckyWheel(interaction, {
         userId: interaction.user.id,
         source: "work",
@@ -110,11 +110,13 @@ class WorkManager {
     }
 
     async start(interaction) {
+        await interaction.deferReply();
+
         const jobId = interaction.options.getString("job");
         const job = getJob(jobId);
 
         if (!job) {
-            return interaction.reply({
+            return interaction.editReply({
                 content: "❌ Có lỗi xảy ra",
                 ephemeral: true,
             });
@@ -126,7 +128,7 @@ class WorkManager {
         );
 
         if (!cooldownResult.success) {
-            return interaction.reply({
+            return interaction.editReply({
                 content:
                     `⏳ Bạn vừa đi làm rồi!
 ` + `Quay lại sau ${formatTimeLeft(cooldownResult.timeLeft)}`,
@@ -144,7 +146,7 @@ class WorkManager {
         const handler = handlers[job.type];
 
         if (!handler) {
-            return interaction.reply({
+            return interaction.editReply({
                 content: "❌ Có lỗi xảy ra",
                 ephemeral: true,
             });
@@ -167,7 +169,7 @@ class WorkManager {
 
     async handleJailRiskJob(interaction, job) {
         if (roll(job.jailChance)) {
-            return interaction.reply({
+            return interaction.editReply({
                 content:
                     `${interaction.user} đi làm ${job.name}\n\n` + `🚓 Tù ngay`,
             });
@@ -212,7 +214,7 @@ class WorkManager {
             });
         }
 
-        return interaction.reply({
+        return interaction.editReply({
             content:
                 `${interaction.user} giao trúng đơn hàng iPhone 17 Promax
 
@@ -223,7 +225,7 @@ class WorkManager {
 
     async handleDogStealJob(interaction, job) {
         if (roll(job.jailChance)) {
-            return interaction.reply({
+            return interaction.editReply({
                 content:
                     `${interaction.user} đi ${job.name}
 
@@ -270,7 +272,7 @@ class WorkManager {
         const userId = parts.slice(3).join("_");
 
         if (interaction.user.id !== userId) {
-            return interaction.reply({
+            return interaction.editReply({
                 content: "❌ Không phải đơn của bạn",
                 ephemeral: true,
             });
@@ -301,7 +303,7 @@ class WorkManager {
 
         if (action === "steal") {
             if (roll(job.stealJailChance)) {
-                return interaction.update({
+                return interaction.editReply({
                     content: `${interaction.user} chọn Bú\n\n` + `🚓 Tù Ngay\n`,
                     components: [disabledRow],
                 });
@@ -329,7 +331,7 @@ class WorkManager {
             );
         }
 
-        return interaction.reply({
+        return interaction.editReply({
             content: "❌ Có lỗi xảy ra",
             ephemeral: true,
         });
