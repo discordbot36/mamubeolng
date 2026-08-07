@@ -198,26 +198,35 @@ function isIgnoredInteractionError(error) {
     );
 }
 
-client.once("clientReady", () => {
+client.once("clientReady", async () => {
     console.log(`Logged in as ${client.user.tag}`);
 
-    bicanh.recover(client).catch((error) => {
-        console.error("[BiCanh Recover]", error);
-    });
-    scheduleAutoDuyen(client);
-    sanyeuthu.recover(client).catch((error) => {
-        console.error("[SanYeuThu Recover]", error);
-    });
-    raidserver.recover(client).catch((error) => {
-        console.error("[RaidServer Recover]", error);
-    });
-    molinhthach.recover(client).catch((error) => {
-        console.error("[MoLinhThach Recover]", error);
-    });
+    /*
+     * Khôi phục tuần tự để tránh nhiều hệ thống cùng lúc
+     * đọc/sửa database và gọi Discord API khi khởi động.
+     */
+    const recoveryTasks = [
+        ["BiCanh", () => bicanh.recover(client)],
+        ["SanYeuThu", () => sanyeuthu.recover(client)],
+        ["RaidServer", () => raidserver.recover(client)],
+        ["MoLinhThach", () => molinhthach.recover(client)],
+    ];
 
+    for (const [name, recover] of recoveryTasks) {
+        try {
+            await recover();
+            console.log(`[${name} Recover] Hoàn tất`);
+        } catch (error) {
+            console.error(`[${name} Recover]`, error);
+        }
+    }
+
+    /*
+     * Chỉ khởi động lịch tự động sau khi recover hoàn tất.
+     */
+    scheduleAutoDuyen(client);
     raidserver.startAutoSchedule(client);
     router.startAutoActiveRain?.(client);
-
     leaderboard.startAutoUpdate(client);
     worldboss.startAutoSpawn(client);
 });

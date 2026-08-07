@@ -10,7 +10,7 @@ const questConfig = require("./config/quest");
 
 const DATA_FILE = databaseConfig.dataFile;
 const DEFAULT_DATA = { users: {}, system: {} };
-const SAVE_DEBOUNCE_MS = 1500;
+const SAVE_DEBOUNCE_MS = 10000;
 
 let dataCache = null;
 let saveTimer = null;
@@ -42,7 +42,7 @@ function loadData() {
 }
 
 async function saveData(data) {
-    const content = JSON.stringify(data, null, 2);
+    const content = JSON.stringify(data);
     const tempFile = `${DATA_FILE}.tmp`;
 
     await fs.promises.writeFile(tempFile, content, "utf8");
@@ -103,15 +103,26 @@ function scheduleSaveData() {
 
 process.once("beforeExit", flushData);
 
-process.once("SIGINT", () => {
-    flushData();
-    process.exit(0);
-});
+let isShuttingDown = false;
 
-process.once("SIGTERM", () => {
-    flushData();
-    process.exit(0);
-});
+async function shutdown() {
+    if (isShuttingDown) {
+        return;
+    }
+
+    isShuttingDown = true;
+
+    try {
+        await flushData();
+    } catch (error) {
+        console.error("[DATABASE] Lỗi khi lưu trước lúc tắt:", error);
+    } finally {
+        process.exit(0);
+    }
+}
+
+process.once("SIGINT", shutdown);
+process.once("SIGTERM", shutdown);
 
 function getShiftedDate(offsetHours = 7) {
     return new Date(Date.now() + offsetHours * 60 * 60 * 1000);
@@ -1719,20 +1730,14 @@ function ensureAlchemyProfile(user) {
     profile.level = Math.max(1, Number(profile.level || 1));
     profile.exp = Math.max(0, Number(profile.exp || 0));
 
-    profile.furnaceLevel = Math.max(
-        1,
-        Number(profile.furnaceLevel || 1),
-    );
+    profile.furnaceLevel = Math.max(1, Number(profile.furnaceLevel || 1));
 
     profile.furnaceDurability = Math.max(
         0,
         Number(profile.furnaceDurability ?? 100),
     );
 
-    profile.medicineResidue = Math.max(
-        0,
-        Number(profile.medicineResidue || 0),
-    );
+    profile.medicineResidue = Math.max(0, Number(profile.medicineResidue || 0));
 
     return profile;
 }
@@ -1758,11 +1763,7 @@ function updateAlchemyProfile(userId, updater) {
         const profile = ensureAlchemyProfile(user);
         const beastMaterials = ensureBeastMaterials(user);
 
-        const result = updater(
-            profile,
-            user,
-            beastMaterials,
-        );
+        const result = updater(profile, user, beastMaterials);
 
         return result === undefined ? profile : result;
     });
