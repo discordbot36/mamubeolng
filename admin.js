@@ -1576,6 +1576,14 @@ class AdminManager {
             return undefined;
         }
 
+        /*
+         * Auto Active Rain chỉ cần thống kê tại các channel được cấu hình.
+         * Không lưu và xử lý tin nhắn của toàn bộ server.
+         */
+        if (!AUTO_ACTIVE_RAIN_CHANNEL_IDS.includes(String(message.channelId))) {
+            return undefined;
+        }
+
         const content = normalizeMessageContent(message.content);
 
         if (!content) {

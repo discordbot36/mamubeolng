@@ -192,8 +192,6 @@ class LimboManager {
         if (processingUsers.has(userId)) {
             return interaction.editReply({
                 content: "⏳ Một lượt Limbo của bạn " + "đang được xử lý.",
-
-                ephemeral: true,
             });
         }
 
@@ -209,8 +207,6 @@ class LimboManager {
                     `❌ Cược phải từ ` +
                     `**${coin} ${formatMoney(MIN_BET)}** đến ` +
                     `**${coin} ${formatMoney(MAX_BET)}**.`,
-
-                ephemeral: true,
             });
         }
 
@@ -224,8 +220,6 @@ class LimboManager {
                     `❌ Hệ số mục tiêu phải từ ` +
                     `**${formatMultiplier(MIN_TARGET)}** đến ` +
                     `**${formatMultiplier(MAX_TARGET)}**.`,
-
-                ephemeral: true,
             });
         }
 
@@ -236,8 +230,6 @@ class LimboManager {
                 content:
                     `❌ Không đủ tiền. Số dư: ` +
                     `**${coin} ${formatMoney(balance)}**.`,
-
-                ephemeral: true,
             });
         }
 
@@ -252,8 +244,6 @@ class LimboManager {
             if (!removeResult.success) {
                 return interaction.reply({
                     content: `❌ ${removeResult.message}`,
-
-                    ephemeral: true,
                 });
             }
 

@@ -46,12 +46,15 @@ function pickRandom(items) {
 function findNextValidWord(currentWord, usedWords) {
     const requiredWord = getLastWord(currentWord);
 
-    const choices = getValidWords().filter((word) => {
+    /*
+     * Chỉ lấy nhóm từ bắt đầu bằng từ cần nối.
+     * Không quét lại toàn bộ hơn 58.000 từ mỗi lượt.
+     */
+    const choices = getWordsStartingWith(requiredWord).filter((word) => {
         const normalizedWord = normalizeText(word);
 
         return (
-            getFirstWord(normalizedWord) === requiredWord &&
-            !usedWords.has(normalizedWord)
+            isTwoWordPhrase(normalizedWord) && !usedWords.has(normalizedWord)
         );
     });
 
@@ -61,7 +64,6 @@ function findNextValidWord(currentWord, usedWords) {
 
     return pickRandom(choices);
 }
-
 function getRewardPerCorrect() {
     return Number(noituConfig.rewardPerCorrect || 0);
 }
