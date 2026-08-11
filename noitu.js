@@ -15,6 +15,7 @@ const {
     isValidVietnameseWord,
     countWords,
     getOfficialWords,
+    getWordsStartingWith,
     getRandomPlayableWord,
     reloadDictionary,
 } = require("./utils/dictionary");
