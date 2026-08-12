@@ -1896,22 +1896,25 @@ class TuTienManager {
 
         if (success) {
             const profile = updateTuTienProfile(interaction.user.id, (data) => {
-                const realms = getRealms();
-
                 const oldMaxExp = getMaxExp(data);
-                const leftoverExp = Math.max(0, (data.exp || 0) - oldMaxExp);
+
+                const leftoverExp = Math.max(
+                    0,
+                    Number(data.exp || 0) - oldMaxExp,
+                );
 
                 delete data.breakthroughPill;
 
-                if ((data.realmIndex || 0) < realms.length - 1) {
-                    data.realmIndex = (data.realmIndex || 0) + 1;
-                    data.floor = 1;
-                    data.exp = leftoverExp;
-                    autoAdvanceFloors(data);
-                } else {
-                    data.floor = 10;
-                    data.exp = leftoverExp;
-                }
+                /*
+                 * canBreakthroughRealm() đã xác nhận chắc chắn
+                 * còn cảnh giới tiếp theo.
+                 */
+                data.realmIndex = Number(data.realmIndex || 0) + 1;
+
+                data.floor = 1;
+                data.exp = leftoverExp;
+
+                autoAdvanceFloors(data);
             });
 
             return interaction.update({
