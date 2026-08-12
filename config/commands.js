@@ -252,6 +252,10 @@ module.exports = [
                         name: "Từ A trở xuống",
                         value: "A",
                     },
+                    {
+                        name: "Từ S trở xuống",
+                        value: "S",
+                    },
                 ],
             },
             {

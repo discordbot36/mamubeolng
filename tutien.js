@@ -235,9 +235,18 @@ function pickWeightedChestDrop(drops) {
 }
 
 function canBreakthroughRealm(profile) {
+    const realms = getRealms();
+    const realmIndex = Math.max(0, Number(profile.realmIndex || 0));
     const maxExp = getMaxExp(profile);
 
-    return (profile.floor || 1) >= 10 && (profile.exp || 0) >= maxExp;
+    // Đã đạt cảnh giới cuối cùng thì không thể đột phá tiếp.
+    if (realmIndex >= realms.length - 1) {
+        return false;
+    }
+
+    return (
+        Number(profile.floor || 1) >= 10 && Number(profile.exp || 0) >= maxExp
+    );
 }
 
 function autoAdvanceFloors(profile) {
@@ -1763,6 +1772,21 @@ class TuTienManager {
     }
     async breakthrough(interaction) {
         const currentProfile = ensureTuTienProfile(interaction.user.id);
+        const realms = getRealms();
+        const currentRealmIndex = Math.max(
+            0,
+            Number(currentProfile.realmIndex || 0),
+        );
+
+        if (currentRealmIndex >= realms.length - 1) {
+            return interaction.reply({
+                content:
+                    `👑 **ĐÃ ĐẠT CẢNH GIỚI TỐI CAO**\n\n` +
+                    `${interaction.user} hiện đã đạt **${getRealmName(currentProfile)}**.\n` +
+                    `Thiên đạo hiện tại không còn cảnh giới nào cao hơn.`,
+                ephemeral: true,
+            });
+        }
 
         if (!currentProfile.rootId) {
             return interaction.reply({

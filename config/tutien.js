@@ -143,6 +143,31 @@ module.exports = {
             maxExp: 50000000,
             breakthroughChance: 0.05,
         },
+        {
+            name: "Thiên Tiên",
+            maxExp: 150000000,
+            breakthroughChance: 0.045,
+        },
+        {
+            name: "Huyền Tiên",
+            maxExp: 500000000,
+            breakthroughChance: 0.04,
+        },
+        {
+            name: "Kim Tiên",
+            maxExp: 1500000000,
+            breakthroughChance: 0.035,
+        },
+        {
+            name: "Đại La Kim Tiên",
+            maxExp: 5000000000,
+            breakthroughChance: 0.03,
+        },
+        {
+            name: "Tiên Đế",
+            maxExp: 15000000000,
+            breakthroughChance: 0.03,
+        },
     ],
 
     defaultProfile: {

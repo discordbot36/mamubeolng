@@ -1478,15 +1478,13 @@ function getBulkDismantleCandidates(user, maxRarityId) {
 }
 
 function formatBulkDismantleScope(maxRarityId) {
-    if (maxRarityId === "A") {
-        return "A trở xuống";
-    }
+    const scopeNames = {
+        C: "C trở xuống",
+        A: "A trở xuống",
+        S: "S trở xuống",
+    };
 
-    if (maxRarityId === "C") {
-        return "C trở xuống";
-    }
-
-    return `${maxRarityId} trở xuống`;
+    return scopeNames[maxRarityId] || `${maxRarityId} trở xuống`;
 }
 
 function buildBulkDismantleEmbed(interaction, result) {
@@ -1549,7 +1547,7 @@ function bulkDismantleWeapons(interaction) {
 
     const confirm = interaction.options.getString("xacnhan");
 
-    if (!["C", "A"].includes(maxRarityId)) {
+    if (!["C", "A", "S"].includes(maxRarityId)) {
         return interaction.reply({
             content: "❌ Phạm vi phân giải không hợp lệ.",
             ephemeral: true,
