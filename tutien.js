@@ -13,6 +13,8 @@ const {
     addMoney,
     getInventory,
     getShop,
+    getUser,
+    getSystemValue,
 } = require("./database");
 const sharedCombat = require("./utils/combat");
 const tuTienConfig = require("./config/tutien");
@@ -749,6 +751,34 @@ function buildAwakenEmbed(user, profile) {
         })
         .setTimestamp();
 }
+function getSpecialTitleText(userId) {
+    const userIdText = String(userId);
+    const titles = getSystemValue("flexLeaderboardTitles") || {};
+
+    const titleLines = [];
+
+    if (String(titles.combatTopUserId || "") === userIdText) {
+        titleLines.push("🐷 **Lợn Đầu Đàn** — Top 1 Chiến Lực");
+    }
+
+    if (String(titles.moneyTopUserId || "") === userIdText) {
+        titleLines.push("💰 **Thần Tày** — Top 1 Tài Phú");
+    }
+
+    const databaseUser = getUser(userIdText);
+    const seasonTitle = databaseUser.currentSeasonTitle || null;
+
+    if (seasonTitle) {
+        titleLines.push(`🏆 **${seasonTitle}**`);
+    }
+
+    if (titleLines.length <= 0) {
+        return "";
+    }
+
+    return `\n\n👑 **Danh Hiệu Đặc Biệt**\n` + titleLines.join("\n");
+}
+f;
 
 function buildProfileEmbed(user, profile) {
     autoAdvanceFloors(profile);
@@ -769,7 +799,7 @@ function buildProfileEmbed(user, profile) {
     const combatStats = calculateCombatStats(profile);
     const equippedSkills = formatEquippedSkills(profile);
     const passiveBonus = combatStats.passiveBonus;
-
+    const specialTitleText = getSpecialTitleText(user.id);
     return new EmbedBuilder()
         .setColor(0xf1c40f)
         .setAuthor({
@@ -779,7 +809,8 @@ function buildProfileEmbed(user, profile) {
         .setTitle("🪷 Hồ Sơ Tu Tiên Của Lợn")
         .setDescription(
             `**Danh Hiệu:** \`${profile.danhHieu || "Phàm Trần Tục Tử"}\`\n` +
-                `**Đạo Hiệu:** \`${profile.daoHieu || "Lợn Vô Danh"}\`\n\n` +
+                `**Đạo Hiệu:** \`${profile.daoHieu || "Lợn Vô Danh"}\`` +
+                `${specialTitleText}\n\n` +
                 `📜 **Cảnh Giới:** ${getRealmName(profile)}\n` +
                 `🌱 **Linh Căn:** ${rootText}${pillText}\n` +
                 `⚔️ **Chiến Lực:** **${formatNumber(combatStats.combatPower)}**\n\n` +

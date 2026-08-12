@@ -290,8 +290,7 @@ class NoiTuManager {
             if (winnerId && forfeitWinReward > 0) {
                 addMoney(winnerId, forfeitWinReward);
                 addWin(winnerId);
-                recordNoiTuWin(winnerId, "forfeit");
-
+                recordNoiTuWin(winnerId, 0, "forfeit");
                 winnerText =
                     `🏆 Người thắng: <@${winnerId}>\n` +
                     `Từ thắng: **${winnerWord}**\n` +
@@ -407,8 +406,7 @@ class NoiTuManager {
             }
 
             addWin(message.author.id);
-            recordNoiTuWin(message.author.id, "bot_stuck");
-
+            recordNoiTuWin(message.author.id, 0, "bot_stuck");
             await message.channel.send(
                 `🏆 ${message.author} làm bot bí từ và thắng nối từ!\n\n` +
                     `Từ cuối cùng: **${rawPlayerWord}**\n` +

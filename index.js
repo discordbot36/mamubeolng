@@ -4,6 +4,7 @@ const { Client, GatewayIntentBits } = require("discord.js");
 const botConfig = require("./config/bot");
 const router = require("./core/router");
 const leaderboard = require("./leaderboard");
+const season = require("./season");
 const bicanh = require("./bicanh");
 const worldboss = require("./worldboss");
 const sanyeuthu = require("./sanyeuthu");
@@ -228,6 +229,7 @@ client.once("clientReady", async () => {
     raidserver.startAutoSchedule(client);
     router.startAutoActiveRain?.(client);
     leaderboard.startAutoUpdate(client);
+    await season.startAutoSeason(client);
     worldboss.startAutoSpawn(client);
 });
 

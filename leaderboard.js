@@ -11,6 +11,7 @@ const tuTienConfig = require("./config/tutien");
 const skillConfig = require("./config/kynang");
 const leaderboardConfig = require("./config/leaderboard");
 const sharedCombat = require("./utils/combat");
+const season = require("./season");
 function isHiddenLeaderboardUser(userId) {
     const excludedUserIds = Array.isArray(leaderboardConfig.excludedUserIds)
         ? leaderboardConfig.excludedUserIds.map(String)
@@ -23,8 +24,10 @@ const STATE_KEY = "combatPowerLeaderboard";
 
 const LEADERBOARD_TYPES = {
     COMBAT: "combat",
-    DOG: "dog",
     MONEY: "money",
+    SEASON: "season",
+
+    DOG: "dog",
     TOWER: "tower",
     NOITU: "noitu",
 };
@@ -65,18 +68,8 @@ function createLeaderboardButtons(activeType = LEADERBOARD_TYPES.COMBAT) {
             ),
 
         new ButtonBuilder()
-            .setCustomId("leaderboard_dog")
-            .setLabel("Bảng xếp hạng chó")
-            .setEmoji("🐕")
-            .setStyle(
-                activeType === LEADERBOARD_TYPES.DOG
-                    ? ButtonStyle.Success
-                    : ButtonStyle.Secondary,
-            ),
-
-        new ButtonBuilder()
             .setCustomId("leaderboard_money")
-            .setLabel("Đại gia")
+            .setLabel("Tài phú")
             .setEmoji("💰")
             .setStyle(
                 activeType === LEADERBOARD_TYPES.MONEY
@@ -85,27 +78,16 @@ function createLeaderboardButtons(activeType = LEADERBOARD_TYPES.COMBAT) {
             ),
 
         new ButtonBuilder()
-            .setCustomId("leaderboard_tower")
-            .setLabel("Leo tháp")
-            .setEmoji("🗼")
+            .setCustomId("leaderboard_season")
+            .setLabel("Mùa giải")
+            .setEmoji("🏆")
             .setStyle(
-                activeType === LEADERBOARD_TYPES.TOWER
-                    ? ButtonStyle.Success
-                    : ButtonStyle.Secondary,
-            ),
-
-        new ButtonBuilder()
-            .setCustomId("leaderboard_noitu")
-            .setLabel("Nối từ")
-            .setEmoji("📚")
-            .setStyle(
-                activeType === LEADERBOARD_TYPES.NOITU
+                activeType === LEADERBOARD_TYPES.SEASON
                     ? ButtonStyle.Success
                     : ButtonStyle.Secondary,
             ),
     );
 }
-
 function getInventoryDogs(user) {
     const items = Array.isArray(user.inventoryItems) ? user.inventoryItems : [];
 
@@ -368,7 +350,8 @@ function buildMoneyEmbed(ranked) {
 
     const lines = ranked.map((item, index) => {
         return (
-            `${getRankIcon(index)} **${item.username}**\n` +
+            `${getRankIcon(index)} **${item.username}**` +
+            `${index === 0 ? "  💰 **Thần tày**" : ""}\n` +
             `> 💰 Tài sản: **${formatNumber(item.money)}**`
         );
     });
@@ -449,6 +432,23 @@ function buildNoiTuEmbed(ranked) {
 }
 
 async function buildLeaderboardByType(client, type) {
+    if (type === LEADERBOARD_TYPES.SEASON) {
+        const ranked = season.buildSeasonRanking(10);
+        const embed = await season.buildSeasonEmbed(client);
+
+        return {
+            embed,
+            signature: ranked
+                .map((item) => {
+                    return (
+                        `${item.userId}:${item.points}:` +
+                        `${item.dogPoints}:${item.noituPoints}:` +
+                        `${item.towerPoints}`
+                    );
+                })
+                .join("|"),
+        };
+    }
     if (type === LEADERBOARD_TYPES.DOG) {
         const ranked = await buildDogRanking(client);
 
@@ -874,7 +874,9 @@ function buildEmbed(ranked) {
                 : "Không có";
 
         return {
-            name: `${getRankIcon(index)}  『 ${daoHieu} 』`,
+            name:
+                `${getRankIcon(index)}  『 ${daoHieu} 』` +
+                `${index === 0 ? "  🐷 Lợn Đầu Đàn" : ""}`,
             value:
                 `👤 Chủ nhân: **${item.username}**\n` +
                 `⚔️ Chiến lực: **${formatNumber(item.combatPower)}**\n` +
@@ -916,7 +918,40 @@ async function getLeaderboardChannel(client) {
 
     return channel;
 }
+async function syncFlexLeaderboardTitles(client) {
+    const combatRanking = await buildRanking(client);
+    const moneyRanking = await buildMoneyRanking(client);
 
+    const combatTopUserId =
+        combatRanking.length > 0 ? String(combatRanking[0].userId) : null;
+
+    const moneyTopUserId =
+        moneyRanking.length > 0 ? String(moneyRanking[0].userId) : null;
+
+    const oldTitles = getSystemValue("flexLeaderboardTitles") || {};
+
+    const newTitles = {
+        combatTopUserId,
+        moneyTopUserId,
+        updatedAt: Date.now(),
+    };
+
+    if (
+        String(oldTitles.combatTopUserId || "") !==
+            String(combatTopUserId || "") ||
+        String(oldTitles.moneyTopUserId || "") !== String(moneyTopUserId || "")
+    ) {
+        setSystemValue("flexLeaderboardTitles", newTitles);
+
+        console.log(
+            `[Leaderboard] Danh hiệu đã cập nhật: ` +
+                `Chiến Thần=${combatTopUserId || "không có"}, ` +
+                `Tài Thần=${moneyTopUserId || "không có"}`,
+        );
+    }
+
+    return newTitles;
+}
 async function updateCombatPowerLeaderboard(client, options = {}) {
     if (isUpdating) {
         return;
@@ -930,6 +965,7 @@ async function updateCombatPowerLeaderboard(client, options = {}) {
         if (!channel) {
             return;
         }
+        await syncFlexLeaderboardTitles(client);
 
         const oldState = getSystemValue(STATE_KEY) || {};
         const type = oldState.type || LEADERBOARD_TYPES.COMBAT;
@@ -1014,20 +1050,31 @@ async function handleButton(interaction) {
 
     let type = LEADERBOARD_TYPES.COMBAT;
 
-    if (interaction.customId === "leaderboard_dog") {
-        type = LEADERBOARD_TYPES.DOG;
-    }
-
     if (interaction.customId === "leaderboard_money") {
         type = LEADERBOARD_TYPES.MONEY;
+    }
+
+    if (interaction.customId === "leaderboard_season") {
+        type = LEADERBOARD_TYPES.SEASON;
+    }
+
+    /*
+     * Tương thích với các nút cũ nếu Discord vẫn đang
+     * hiển thị message trước khi bot cập nhật giao diện.
+     */
+    if (interaction.customId === "leaderboard_dog") {
+        type = LEADERBOARD_TYPES.DOG;
     }
 
     if (interaction.customId === "leaderboard_tower") {
         type = LEADERBOARD_TYPES.TOWER;
     }
+
     if (interaction.customId === "leaderboard_noitu") {
         type = LEADERBOARD_TYPES.NOITU;
     }
+
+    await syncFlexLeaderboardTitles(interaction.client);
 
     const oldState = getSystemValue(STATE_KEY) || {};
     const data = await buildLeaderboardByType(interaction.client, type);

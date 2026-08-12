@@ -1376,4 +1376,57 @@ module.exports = [
             },
         ],
     },
+    {
+        name: "muagiai",
+        description: "Xem bảng xếp hạng Quán Quân Mùa",
+        handler: "season.show",
+    },
+    {
+        name: "muagiai_mo",
+        description: "Admin mở mùa giải thủ công",
+        handler: "season.start",
+        adminOnly: true,
+        defaultMemberPermissions: "8",
+        dmPermission: false,
+        options: [
+            {
+                type: "integer",
+                name: "mua",
+                description: "Số thứ tự của mùa giải",
+                required: true,
+                minValue: 1,
+                maxValue: 999,
+            },
+        ],
+    },
+    {
+        name: "muagiai_chot",
+        description: "Admin chốt mùa và phát thưởng Top 10",
+        handler: "season.finish",
+        adminOnly: true,
+        defaultMemberPermissions: "8",
+        dmPermission: false,
+        options: [
+            {
+                type: "string",
+                name: "xacnhan",
+                description: "Xác nhận chốt và phát thưởng",
+                required: true,
+                choices: [
+                    {
+                        name: "Đồng ý",
+                        value: "dongy",
+                    },
+                ],
+            },
+        ],
+    },
+    {
+        name: "muagiai_status",
+        description: "Admin xem trạng thái mùa giải",
+        handler: "season.status",
+        adminOnly: true,
+        defaultMemberPermissions: "8",
+        dmPermission: false,
+    },
 ];

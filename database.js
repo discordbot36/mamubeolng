@@ -656,6 +656,100 @@ function addWin(userId) {
         ensureUser(data, userId).wins += 1;
     });
 }
+function getActiveSeason(data) {
+    const season = data.system?.seasonLeague;
+
+    if (!season || season.status !== "active" || !season.id) {
+        return null;
+    }
+
+    return season;
+}
+
+function ensureSeasonStats(user, data) {
+    const season = getActiveSeason(data);
+
+    if (!season) {
+        return null;
+    }
+
+    if (
+        !user.seasonStats ||
+        String(user.seasonStats.seasonId) !== String(season.id)
+    ) {
+        user.seasonStats = {
+            seasonId: season.id,
+            dog: {
+                totalCaught: 0,
+                totalValue: 0,
+                bestDogValue: 0,
+                bestDogName: null,
+                bestDogWeightKg: 0,
+            },
+            noitu: {
+                correct: 0,
+                wins: 0,
+                botStuckWins: 0,
+                forfeitWins: 0,
+            },
+            tower: {
+                floorsCleared: 0,
+                chestsEarned: 0,
+            },
+            updatedAt: Date.now(),
+        };
+    }
+
+    if (!user.seasonStats.dog) {
+        user.seasonStats.dog = {
+            totalCaught: 0,
+            totalValue: 0,
+            bestDogValue: 0,
+            bestDogName: null,
+            bestDogWeightKg: 0,
+        };
+    }
+
+    if (!user.seasonStats.noitu) {
+        user.seasonStats.noitu = {
+            correct: 0,
+            wins: 0,
+            botStuckWins: 0,
+            forfeitWins: 0,
+        };
+    }
+
+    if (!user.seasonStats.tower) {
+        user.seasonStats.tower = {
+            floorsCleared: 0,
+            chestsEarned: 0,
+        };
+    }
+
+    return user.seasonStats;
+}
+
+function recordSeasonDog(user, data, dog) {
+    const seasonStats = ensureSeasonStats(user, data);
+
+    if (!seasonStats || !dog || dog.type !== "dog") {
+        return;
+    }
+
+    const dogValue = Math.max(0, Math.floor(Number(dog.value || 0)));
+    const dogStats = seasonStats.dog;
+
+    dogStats.totalCaught = Number(dogStats.totalCaught || 0) + 1;
+    dogStats.totalValue = Number(dogStats.totalValue || 0) + dogValue;
+
+    if (dogValue > Number(dogStats.bestDogValue || 0)) {
+        dogStats.bestDogValue = dogValue;
+        dogStats.bestDogName = dog.name || "Chó không tên";
+        dogStats.bestDogWeightKg = Number(dog.weightKg || 0);
+    }
+
+    seasonStats.updatedAt = Date.now();
+}
 
 function ensureNoiTuStats(user) {
     if (!user.noituStats) {
@@ -700,10 +794,18 @@ function recordNoiTuCorrect(userId, reward = 0) {
     return withData((data) => {
         const user = ensureUser(data, userId);
         const stats = ensureNoiTuStats(user);
+        const seasonStats = ensureSeasonStats(user, data);
 
         stats.correct += 1;
         stats.totalMoney += Math.max(0, Math.floor(Number(reward || 0)));
         stats.updatedAt = Date.now();
+
+        if (seasonStats) {
+            seasonStats.noitu.correct =
+                Number(seasonStats.noitu.correct || 0) + 1;
+
+            seasonStats.updatedAt = Date.now();
+        }
 
         return stats;
     });
@@ -713,6 +815,7 @@ function recordNoiTuWin(userId, reward = 0, type = "normal") {
     return withData((data) => {
         const user = ensureUser(data, userId);
         const stats = ensureNoiTuStats(user);
+        const seasonStats = ensureSeasonStats(user, data);
 
         stats.wins += 1;
 
@@ -726,6 +829,22 @@ function recordNoiTuWin(userId, reward = 0, type = "normal") {
 
         stats.totalMoney += Math.max(0, Math.floor(Number(reward || 0)));
         stats.updatedAt = Date.now();
+
+        if (seasonStats) {
+            seasonStats.noitu.wins = Number(seasonStats.noitu.wins || 0) + 1;
+
+            if (type === "bot_stuck") {
+                seasonStats.noitu.botStuckWins =
+                    Number(seasonStats.noitu.botStuckWins || 0) + 1;
+            }
+
+            if (type === "forfeit") {
+                seasonStats.noitu.forfeitWins =
+                    Number(seasonStats.noitu.forfeitWins || 0) + 1;
+            }
+
+            seasonStats.updatedAt = Date.now();
+        }
 
         return stats;
     });
@@ -1368,6 +1487,7 @@ function addInventoryItem(userId, item) {
             }
 
             storedItem.dogStatsCounted = true;
+            recordSeasonDog(user, data, storedItem);
         }
 
         user.inventoryItems.push(storedItem);
@@ -1462,6 +1582,9 @@ function updateTowerProfile(userId, updater) {
             };
         }
 
+        const oldFloor = Number(user.tower.floor || 0);
+        const oldChestCount = Number(user.tower.totalChests || 0);
+
         updater(user.tower, user);
 
         user.tower.floor = Number(user.tower.floor || 0);
@@ -1475,6 +1598,24 @@ function updateTowerProfile(userId, updater) {
         );
         user.tower.totalEarned = Number(user.tower.totalEarned || 0);
         user.tower.totalChests = Number(user.tower.totalChests || 0);
+
+        const clearedDelta = Math.max(0, user.tower.floor - oldFloor);
+
+        const chestDelta = Math.max(0, user.tower.totalChests - oldChestCount);
+
+        if (clearedDelta > 0 || chestDelta > 0) {
+            const seasonStats = ensureSeasonStats(user, data);
+
+            if (seasonStats) {
+                seasonStats.tower.floorsCleared =
+                    Number(seasonStats.tower.floorsCleared || 0) + clearedDelta;
+
+                seasonStats.tower.chestsEarned =
+                    Number(seasonStats.tower.chestsEarned || 0) + chestDelta;
+
+                seasonStats.updatedAt = Date.now();
+            }
+        }
 
         return user.tower;
     });

@@ -741,4 +741,29 @@ module.exports = {
             },
         ],
     },
+    ruong_quan_quan_ex: {
+        name: "Rương Quán Quân EX",
+        emoji: "🌈",
+        price: 0,
+
+        type: "phap_bao_chest",
+        shopCategory: "phapbao",
+
+        hidden: true,
+        buyable: false,
+        sellable: false,
+
+        description:
+            "Rương đặc biệt dành cho Top BXH Mùa. " +
+            "Mở chắc chắn nhận 1 Phôi EX chưa giám định. " +
+            "Khi giám định: 95% ra SSS, 5% ra EX.",
+
+        phapBaoDrops: [
+            {
+                type: "unidentified_weapon",
+                rarity: "EX",
+                weight: 100,
+            },
+        ],
+    },
 };

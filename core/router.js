@@ -13,6 +13,7 @@ const kynang = require("../kynang");
 const tower = require("../tower");
 const worldboss = require("../worldboss");
 const leaderboard = require("../leaderboard");
+const season = require("../season");
 const dungeon = require("../dungeon");
 const blackjack = require("../blackjack");
 const pigRoad = require("../pigRoad");
@@ -45,6 +46,7 @@ const modules = {
     tower,
     kynang,
     leaderboard,
+    season,
     worldboss,
     blackjack,
     dungeon,
