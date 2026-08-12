@@ -778,8 +778,6 @@ function getSpecialTitleText(userId) {
 
     return `\n\n👑 **Danh Hiệu Đặc Biệt**\n` + titleLines.join("\n");
 }
-f;
-
 function buildProfileEmbed(user, profile) {
     autoAdvanceFloors(profile);
 
