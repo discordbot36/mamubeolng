@@ -1429,4 +1429,19 @@ module.exports = [
         defaultMemberPermissions: "8",
         dmPermission: false,
     },
+    {
+        name: "hilo",
+        description: "Đoán lá bài tiếp theo cao hơn hoặc thấp hơn",
+        handler: "hilo.play",
+        options: [
+            {
+                type: "integer",
+                name: "cuoc",
+                description: "Số tiền muốn cược",
+                required: true,
+                minValue: 100,
+                maxValue: GAMBLE_MAX_BET,
+            },
+        ],
+    },
 ];
