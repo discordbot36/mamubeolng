@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require("discord.js");
-
+const { announceGambleWin } = require("./utils/rareDrop");
 const {
     getBalance,
     addMoney,
@@ -414,6 +414,13 @@ function buildResultEmbed({
     const hitSet = new Set(hitNumbers);
 
     const profit = payout - bet;
+    if (profit > 0) {
+        void announceGambleWin(interaction.client, {
+            user: interaction.user,
+            game: "Keno",
+            payout,
+        });
+    }
 
     const style = getResultStyle(multiplier, profit);
 

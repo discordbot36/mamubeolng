@@ -6,7 +6,7 @@ const {
     TextInputBuilder,
     TextInputStyle,
 } = require("discord.js");
-
+const { announceGambleWin } = require("./utils/rareDrop");
 const {
     getUser,
     addMoney,
@@ -521,7 +521,11 @@ class TaiXiuManager {
             } else {
                 addLoss(bet.userId);
             }
-
+            void announceGambleWin(interaction.client, {
+                user: `<@${bet.userId}>`,
+                game: "Tày xỉu",
+                payout: receive,
+            });
             resultLines.push(
                 `<@${bet.userId}> ${getBetLabel(bet.betKey)} ` +
                     `${

@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-
+const { announceGambleWin } = require("./utils/rareDrop");
 const { EmbedBuilder } = require("discord.js");
 
 const {
@@ -270,9 +270,16 @@ class LimboManager {
             });
 
             await sleep(900);
-
             if (payout > 0) {
                 addMoney(userId, payout);
+
+                if (won) {
+                    void announceGambleWin(interaction.client, {
+                        user: interaction.user,
+                        game: "Limbo",
+                        payout,
+                    });
+                }
             }
 
             moneySettled = true;

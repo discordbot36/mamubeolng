@@ -6,8 +6,6 @@ const {
     StringSelectMenuBuilder,
 } = require("discord.js");
 
-const { announceRareDrop, isRareSkill } = require("./utils/rareDrop");
-
 const {
     getShop,
     getInventory,
@@ -1181,7 +1179,6 @@ async function useSkillScroll(interaction) {
     const tierCounts = {};
     const newSkillLines = [];
     const duplicateMap = new Map();
-    const rareDrops = [];
 
     updateTuTienProfile(interaction.user.id, (profile) => {
         for (let index = 0; index < requestedQuantity; index += 1) {
@@ -1235,25 +1232,8 @@ async function useSkillScroll(interaction) {
                     `${skill.emoji || "✨"} **${skill.name}** | ${skill.tier} | ${getTypeText(skill.type)}`,
                 );
             }
-
-            if (isRareSkill(skill)) {
-                rareDrops.push(skill);
-            }
         }
     });
-
-    for (const skill of rareDrops) {
-        await announceRareDrop(interaction.client, {
-            user: interaction.user,
-            emoji: skill.emoji || "📚",
-            name: skill.name,
-            detail:
-                `📚 Bí tịch: **${item.name}**\n` +
-                `🎲 Tier: **${skill.tier} - ${skillTierNames[skill.tier] || skill.tier}**\n` +
-                `📌 Loại: **${getTypeText(skill.type)}**\n` +
-                `${skill.description || ""}`,
-        });
-    }
 
     const duplicateLines = Array.from(duplicateMap.values()).map((entry) => {
         const nextCostText = entry.nextUpgradeCost

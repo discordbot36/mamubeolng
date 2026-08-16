@@ -1,5 +1,5 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
-
+const { announceRareDrop, isRareDog } = require("./utils/rareDrop");
 const {
     addMoney,
     addInventoryItem,
@@ -182,7 +182,9 @@ class WorkManager {
                 type: "stolen",
                 value: job.stolenItem.price,
             });
+
             quest.trackQuestProgress(interaction.user.id, "work", 1);
+
             return finishWork(interaction, {
                 content:
                     `${interaction.user} đi làm ${job.name}\n\n` +
@@ -241,14 +243,27 @@ class WorkManager {
         );
         const value = Math.round(weightKg * dog.pricePerKg);
 
-        addInventoryItem(interaction.user.id, {
+        const dogItem = {
             id: dog.id,
             name: dog.name,
             type: "dog",
             weightKg,
             pricePerKg: dog.pricePerKg,
             value,
-        });
+        };
+
+        addInventoryItem(interaction.user.id, dogItem);
+
+        if (isRareDog(dogItem)) {
+            await announceRareDrop(interaction.client, {
+                user: interaction.user,
+                emoji: "🐕",
+                name: dogItem.name,
+                detail:
+                    `⚖️ Cân nặng: **${dogItem.weightKg}kg**\n` +
+                    `💰 Giá trị: **${formatMoney(dogItem.value)}**`,
+            });
+        }
 
         quest.trackQuestProgress(interaction.user.id, "work", 1);
 

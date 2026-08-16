@@ -1,5 +1,9 @@
 const { EmbedBuilder } = require("discord.js");
 
+const GAMBLE_DROP_MIN_PAYOUT = 50_000_000;
+const GEM_DROP_MIN_VALUE = 5_000_000;
+const DOG_DROP_MIN_VALUE = 800;
+
 async function announceRareDrop(client, data) {
     const channelId = process.env.RARE_DROP_CHANNEL_ID;
 
@@ -10,10 +14,10 @@ async function announceRareDrop(client, data) {
     if (!channel || !channel.isTextBased()) return;
 
     const embed = new EmbedBuilder()
-        .setTitle("🌟 VẬT PHẨM HIẾM XUẤT HIỆN")
+        .setTitle("🌟 LUCKY DROPS")
         .setColor(0xffd700)
         .setDescription(
-            `${data.user} vừa mở ra vật phẩm hiếm!\n\n` +
+            `${data.user} vừa nổ Lucky Drop!\n\n` +
                 `${data.emoji || "🎁"} **${data.name}**\n` +
                 `${data.detail || ""}`,
         )
@@ -27,28 +31,41 @@ async function announceRareDrop(client, data) {
 function isRareDog(item) {
     if (!item) return false;
 
-    const dogId = item.id || item.dogId || "";
-    const name = `${item.name || ""} ${item.dogName || ""}`.toLowerCase();
-    const weight = Number(item.weightKg || item.weight || 0);
-
-    return (dogId === "cho_do" || name.includes("chộ đó")) && weight > 10;
+    return item.type === "dog" && Number(item.value || 0) > DOG_DROP_MIN_VALUE;
 }
 
 function isRareGem(item) {
     if (!item) return false;
 
-    return Number(item.value || 0) > 100000;
+    return Number(item.value || 0) > GEM_DROP_MIN_VALUE;
 }
 
-function isRareSkill(skill) {
-    if (!skill) return false;
+function isRareGamblePayout(payout) {
+    return Number(payout || 0) > GAMBLE_DROP_MIN_PAYOUT;
+}
 
-    return ["A", "S"].includes(skill.tier);
+async function announceGambleWin(client, data) {
+    if (!isRareGamblePayout(data?.payout)) return;
+
+    try {
+        return await announceRareDrop(client, {
+            user: data.user,
+            emoji: "💰",
+            name: `NỔ GAMBLE ${data.game || ""}`.trim(),
+            detail:
+                `🎰 Game: **${data.game || "Gamble"}**\n` +
+                `💵 Nhận: **${Number(data.payout).toLocaleString("vi-VN")}**`,
+        });
+    } catch (error) {
+        console.error("[LUCKY DROPS] Không thể thông báo gamble:", error);
+        return undefined;
+    }
 }
 
 module.exports = {
     announceRareDrop,
+    announceGambleWin,
     isRareDog,
     isRareGem,
-    isRareSkill,
+    isRareGamblePayout,
 };
