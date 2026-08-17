@@ -152,49 +152,35 @@ function getRootChanceList(pillUses = 0) {
         finalChance: Number(root.chance || 0),
     }));
 
-    if (chanceList.length <= 1 || pillUses <= 0) {
+    const safePillUses = Math.max(0, Math.floor(Number(pillUses || 0)));
+
+    if (chanceList.length <= 1 || safePillUses <= 0) {
         return chanceList;
     }
 
-    const RARENESS_POWER = 4;
-    const MAMU_THANH_CAN_WEIGHT_MULTIPLIER = 0.08;
+    /*
+     * Mỗi lần dùng đan:
+     * - Tạp Linh Căn giảm 0.001 điểm phần trăm.
+     * - Linh căn mạnh nhất tăng 0.001 điểm phần trăm.
+     *
+     * Linh căn mạnh nhất là phần tử cuối danh sách:
+     * Thái Sơ Thần Căn nếu đã thêm,
+     * nếu chưa thêm thì là Mamu Thánh Căn.
+     */
+    const BOOST_PER_USE = 0.001;
 
-    let reduceLeft = pillUses * 5;
+    const lowestRoot = chanceList[0];
+    const strongestRoot = chanceList[chanceList.length - 1];
 
-    for (let i = 0; i < chanceList.length - 1; i++) {
-        if (reduceLeft <= 0) break;
+    const requestedBoost = safePillUses * BOOST_PER_USE;
 
-        const currentRoot = chanceList[i];
+    const actualBoost = Math.min(
+        requestedBoost,
+        Math.max(0, lowestRoot.finalChance),
+    );
 
-        if (currentRoot.finalChance <= 0) continue;
-
-        const reduceAmount = Math.min(currentRoot.finalChance, reduceLeft);
-
-        currentRoot.finalChance -= reduceAmount;
-        reduceLeft -= reduceAmount;
-
-        const higherRoots = chanceList.slice(i + 1);
-
-        const totalWeight = higherRoots.reduce((total, root, index) => {
-            let weight = 1 / Math.pow(index + 1, RARENESS_POWER);
-
-            if (root.id === "mamu_thanh_can") {
-                weight *= MAMU_THANH_CAN_WEIGHT_MULTIPLIER;
-            }
-
-            return total + weight;
-        }, 0);
-
-        higherRoots.forEach((root, index) => {
-            let weight = 1 / Math.pow(index + 1, RARENESS_POWER);
-
-            if (root.id === "mamu_thanh_can") {
-                weight *= MAMU_THANH_CAN_WEIGHT_MULTIPLIER;
-            }
-
-            root.finalChance += reduceAmount * (weight / totalWeight);
-        });
-    }
+    lowestRoot.finalChance -= actualBoost;
+    strongestRoot.finalChance += actualBoost;
 
     return chanceList;
 }
@@ -1648,8 +1634,8 @@ class TuTienManager {
                     ? reducedRoots
                           .map((root) => {
                               return (
-                                  `${root.emoji || "🌱"} **${root.name}** bị giảm tỉ lệ thêm **${root.reducedAmount.toFixed(2)}%**.\n` +
-                                  `📉 Tỉ lệ ${root.name} hiện tại: **${root.afterChance.toFixed(2)}%**`
+                                  `${root.emoji || "🌱"} **${root.name}** bị giảm tỉ lệ thêm **${root.reducedAmount.toFixed(3)}%**.\n` +
+                                  `📉 Tỉ lệ ${root.name} hiện tại: **${root.afterChance.toFixed(3)}%**`
                               );
                           })
                           .join("\n")

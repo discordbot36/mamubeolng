@@ -16,7 +16,7 @@ module.exports = {
             id: "tap_linh_can",
             name: "Tạp Linh Căn",
             emoji: "🌫️",
-            chance: 45,
+            chance: 44.95,
             expBonus: 0,
             breakthroughBonus: 0,
             description: "Lợn phàm tục, tu chậm như rùa bò.",
@@ -84,6 +84,16 @@ module.exports = {
             breakthroughBonus: 0.2,
             description:
                 "Căn cốt cấm kỵ, nghe đồn Mamu từng để lại trong chuồng.",
+        },
+        {
+            id: "thai_so_than_can",
+            name: "Thái Sơ Thần Căn",
+            emoji: "☯️",
+            chance: 0.05,
+            expBonus: 1.2,
+            breakthroughBonus: 0.3,
+            description:
+                "Thần căn sinh ra trước cả thiên địa, một hơi nuốt sạch linh khí tam giới.",
         },
     ],
 
