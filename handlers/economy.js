@@ -596,7 +596,7 @@ function buildShopEmbed(interaction, page = 0, category = "all") {
         }
 
         if (item.type === "root_gacha_pill") {
-            detail += `🌱 Linh căn: **Gacha lại linh căn, mỗi viên giảm 5% tỉ lệ linh căn rác**\n`;
+            detail += `🌱 Linh căn: **Mỗi viên giảm 0,1% linh căn thấp; dùng nhiều sẽ giữ kết quả mạnh nhất**\n`;
         }
 
         if (item.type === "phap_bao_chest") {

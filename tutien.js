@@ -149,7 +149,7 @@ function getRootChanceList(pillUses = 0) {
 
     const chanceList = roots.map((root) => ({
         ...root,
-        finalChance: Number(root.chance || 0),
+        finalChance: Math.max(0, Number(root.chance || 0)),
     }));
 
     const safePillUses = Math.max(0, Math.floor(Number(pillUses || 0)));
@@ -159,28 +159,46 @@ function getRootChanceList(pillUses = 0) {
     }
 
     /*
-     * Mỗi lần dùng đan:
-     * - Tạp Linh Căn giảm 0.001 điểm phần trăm.
-     * - Linh căn mạnh nhất tăng 0.001 điểm phần trăm.
-     *
-     * Linh căn mạnh nhất là phần tử cuối danh sách:
-     * Thái Sơ Thần Căn nếu đã thêm,
-     * nếu chưa thêm thì là Mamu Thánh Căn.
+     * Mỗi viên giảm 0,1 điểm % linh căn thấp.
+     * Khi một linh căn thấp về 0%, tiếp tục giảm linh căn
+     * thấp kế tiếp.
      */
-    const BOOST_PER_USE = 0.001;
+    const REDUCTION_PER_USE = 0.1;
+    const RARENESS_POWER = 4;
 
-    const lowestRoot = chanceList[0];
-    const strongestRoot = chanceList[chanceList.length - 1];
+    let reduceLeft = safePillUses * REDUCTION_PER_USE;
 
-    const requestedBoost = safePillUses * BOOST_PER_USE;
+    for (let i = 0; i < chanceList.length - 1; i += 1) {
+        if (reduceLeft <= 0) break;
 
-    const actualBoost = Math.min(
-        requestedBoost,
-        Math.max(0, lowestRoot.finalChance),
-    );
+        const currentRoot = chanceList[i];
 
-    lowestRoot.finalChance -= actualBoost;
-    strongestRoot.finalChance += actualBoost;
+        if (currentRoot.finalChance <= 0) continue;
+
+        const reduceAmount = Math.min(currentRoot.finalChance, reduceLeft);
+
+        currentRoot.finalChance -= reduceAmount;
+        reduceLeft -= reduceAmount;
+
+        const higherRoots = chanceList.slice(i + 1);
+
+        const weights = higherRoots.map((root, index) => {
+            /*
+             * Linh căn càng mạnh thì phần tỉ lệ được cộng
+             * càng ít, tránh Mamu/Thái Sơ tăng quá nhanh.
+             */
+            return 1 / Math.pow(index + 1, RARENESS_POWER);
+        });
+
+        const totalWeight = weights.reduce(
+            (total, weight) => total + weight,
+            0,
+        );
+
+        higherRoots.forEach((root, index) => {
+            root.finalChance += reduceAmount * (weights[index] / totalWeight);
+        });
+    }
 
     return chanceList;
 }
@@ -1450,12 +1468,16 @@ class TuTienManager {
             });
         }
 
-        if (
-            ["breakthrough_pill", "root_gacha_pill"].includes(item.type) &&
-            quantity > 1
-        ) {
+        if (item.type === "breakthrough_pill" && quantity > 1) {
             return interaction.reply({
-                content: "❌ Vật phẩm này chỉ có thể dùng từng cái một.",
+                content: "❌ Đan đột phá chỉ có thể dùng từng viên.",
+                ephemeral: true,
+            });
+        }
+
+        if (item.type === "root_gacha_pill" && quantity > 1000) {
+            return interaction.reply({
+                content: "❌ Mỗi lần chỉ được dùng tối đa 1.000 viên.",
                 ephemeral: true,
             });
         }
@@ -1585,7 +1607,7 @@ class TuTienManager {
             const consumeResult = consumeShopItem(
                 interaction.user.id,
                 itemId,
-                1,
+                quantity,
             );
 
             if (!consumeResult.success) {
@@ -1595,25 +1617,76 @@ class TuTienManager {
                 });
             }
 
-            const currentUseCount = currentProfile.rootGachaPillUses || 0;
-            const nextUseCount = currentUseCount + 1;
+            const roots = Array.isArray(tuTienConfig.spiritualRoots)
+                ? tuTienConfig.spiritualRoots
+                : [];
 
+            const currentUseCount = Math.max(
+                0,
+                Math.floor(Number(currentProfile.rootGachaPillUses || 0)),
+            );
+
+            const nextUseCount = currentUseCount + quantity;
             const oldRoot = getRootById(currentProfile.rootId);
 
             const beforeChanceList = getRootChanceList(currentUseCount);
             const afterChanceList = getRootChanceList(nextUseCount);
 
+            /*
+             * Vị trí trong spiritualRoots cũng là thứ hạng:
+             * phần tử càng nằm sau càng mạnh.
+             */
+            const rootRankMap = new Map(
+                roots.map((root, index) => [root.id, index]),
+            );
+
+            const rolledCounts = new Map();
+            let bestRoot = null;
+            let bestRank = -1;
+
+            /*
+             * Roll đúng số viên đã dùng.
+             * Mỗi lượt dùng tỉ lệ tích lũy tăng thêm 0,1%.
+             */
+            for (let index = 0; index < quantity; index += 1) {
+                const useCountForThisRoll = currentUseCount + index + 1;
+
+                const rolledRoot = pickWeightedRoot(useCountForThisRoll);
+
+                if (!rolledRoot) continue;
+
+                rolledCounts.set(
+                    rolledRoot.id,
+                    Number(rolledCounts.get(rolledRoot.id) || 0) + 1,
+                );
+
+                const rolledRank = Number(rootRankMap.get(rolledRoot.id) ?? -1);
+
+                if (!bestRoot || rolledRank > bestRank) {
+                    bestRoot = rolledRoot;
+                    bestRank = rolledRank;
+                }
+            }
+
+            /*
+             * Trường hợp dự phòng, bình thường không thể xảy ra.
+             */
+            if (!bestRoot) {
+                bestRoot = getRootById(currentProfile.rootId) || roots[0];
+
+                bestRank = Number(rootRankMap.get(bestRoot?.id) ?? 0);
+            }
+
             const reducedRoots = afterChanceList
                 .map((afterRoot) => {
-                    const beforeRoot = beforeChanceList.find((root) => {
-                        return root.id === afterRoot.id;
-                    });
+                    const beforeRoot = beforeChanceList.find(
+                        (root) => root.id === afterRoot.id,
+                    );
 
-                    const beforeChance = beforeRoot
-                        ? Number(beforeRoot.finalChance || 0)
-                        : 0;
+                    const beforeChance = Number(beforeRoot?.finalChance || 0);
 
                     const afterChance = Number(afterRoot.finalChance || 0);
+
                     const reducedAmount = beforeChance - afterChance;
 
                     if (reducedAmount <= 0) {
@@ -1634,31 +1707,48 @@ class TuTienManager {
                     ? reducedRoots
                           .map((root) => {
                               return (
-                                  `${root.emoji || "🌱"} **${root.name}** bị giảm tỉ lệ thêm **${root.reducedAmount.toFixed(3)}%**.\n` +
-                                  `📉 Tỉ lệ ${root.name} hiện tại: **${root.afterChance.toFixed(3)}%**`
+                                  `${root.emoji || "🌱"} **${root.name}** giảm **${root.reducedAmount.toFixed(3)}%**\n` +
+                                  `📉 Tỉ lệ hiện tại: **${root.afterChance.toFixed(3)}%**`
                               );
                           })
                           .join("\n")
-                    : "✨ Tỉ lệ linh căn thấp đã giảm hết mức, không còn linh căn nào bị giảm thêm.";
+                    : "✨ Các linh căn thấp đã giảm hết mức.";
 
-            const newRoot = pickWeightedRoot(nextUseCount);
+            const rollSummary = roots
+                .map((root) => {
+                    const count = Number(rolledCounts.get(root.id) || 0);
 
-            const profile = updateTuTienProfile(interaction.user.id, (data) => {
+                    if (count <= 0) return null;
+
+                    return `${root.emoji || "🌱"} ${root.name}: **x${count}**`;
+                })
+                .filter(Boolean)
+                .join("\n");
+
+            updateTuTienProfile(interaction.user.id, (data) => {
                 data.rootGachaPillUses = nextUseCount;
-                data.rootId = newRoot.id;
-                data.linhCan = newRoot.name;
-                data.rootDescription = newRoot.description;
+                data.rootId = bestRoot.id;
+                data.linhCan = bestRoot.name;
+                data.rootDescription = bestRoot.description;
             });
 
             return interaction.reply({
                 content:
-                    `${interaction.user} đã dùng **${item.emoji || "🌱"} ${item.name}**\n\n` +
+                    `${interaction.user} đã dùng **${item.emoji || "🌱"} ${item.name} x${quantity}**\n\n` +
                     `${reduceText}\n` +
-                    `🧪 Số lần đã dùng đan linh căn: **${nextUseCount}**\n\n` +
-                    `🌱 Linh căn cũ: **${oldRoot ? `${oldRoot.emoji} ${oldRoot.name}` : "Không rõ"}**\n` +
-                    `✨ Linh căn mới: **${newRoot.emoji} ${newRoot.name}**\n` +
-                    `📈 Bonus tu luyện: **+${Math.floor((newRoot.expBonus || 0) * 100)}% tu vi**\n\n` +
-                    `${newRoot.description}`,
+                    `🧪 Tổng số đan từng dùng: **${nextUseCount}**\n\n` +
+                    `🎲 **Kết quả ${quantity} lượt roll:**\n` +
+                    `${rollSummary || "Không có kết quả"}\n\n` +
+                    `🌱 Linh căn cũ: **${
+                        oldRoot
+                            ? `${oldRoot.emoji} ${oldRoot.name}`
+                            : "Không rõ"
+                    }**\n` +
+                    `🏆 Giữ lại linh căn mạnh nhất: **${bestRoot.emoji} ${bestRoot.name}**\n` +
+                    `📈 Bonus tu luyện: **+${Math.floor(
+                        Number(bestRoot.expBonus || 0) * 100,
+                    )}% tu vi**\n\n` +
+                    `${bestRoot.description}`,
             });
         }
 

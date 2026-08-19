@@ -24,7 +24,7 @@ const MIN_BET = 100;
 const MAX_BET = GAMBLE_MAX_BET;
 
 const RTP = 0.99;
-const MAX_PAYOUT = 10_000_000_000;
+const MAX_PAYOUT = 10_000_000_000;s
 const MAX_SKIPS = 52;
 const SESSION_TIMEOUT_MS = 3 * 60 * 1000;
 
