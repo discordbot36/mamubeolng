@@ -31,6 +31,7 @@ const BOSS_ROTATION_KEY = "worldBossNextIndex";
 
 let worldBossAttackQueue = Promise.resolve();
 let worldBossRespawnTimer = null;
+let worldBossExpireTimer = null;
 
 function runWorldBossAttackLocked(callback) {
     const currentTask = worldBossAttackQueue.then(callback, callback);
@@ -62,6 +63,10 @@ function getAttackCooldownMs() {
 
 function getRespawnMs() {
     return Number(worldBossConfig.respawnHours || 3.6) * 60 * 60 * 1000;
+}
+
+function getBossLifetimeMs() {
+    return Number(worldBossConfig.lifetimeHours || 4) * 60 * 60 * 1000;
 }
 
 function formatRespawnTime(timestamp) {
@@ -601,6 +606,8 @@ function createBossState(options = {}) {
         bossTemplate.imageUrl ||
         worldBossConfig.defaultBoss.imageUrl;
 
+    const spawnedAt = Date.now();
+
     return {
         active: true,
 
@@ -647,7 +654,8 @@ function createBossState(options = {}) {
 
         damage: {},
 
-        spawnedAt: Date.now(),
+        spawnedAt,
+        expiresAt: spawnedAt + getBossLifetimeMs(),
         spawnedBy: options.spawnedBy || "auto",
     };
 }
@@ -705,6 +713,70 @@ function clearWorldBossRespawnTimer() {
         clearTimeout(worldBossRespawnTimer);
         worldBossRespawnTimer = null;
     }
+}
+function clearWorldBossExpireTimer() {
+    if (worldBossExpireTimer) {
+        clearTimeout(worldBossExpireTimer);
+        worldBossExpireTimer = null;
+    }
+}
+
+function scheduleWorldBossExpiration(client, boss) {
+    clearWorldBossExpireTimer();
+
+    if (!boss || !boss.active) {
+        return;
+    }
+
+    /*
+     * expiresAt được lưu trong data.json.
+     * Restart bot sẽ không làm reset lại 4 giờ.
+     */
+    const expiresAt = Number(
+        boss.expiresAt ||
+            Number(boss.spawnedAt || Date.now()) + getBossLifetimeMs(),
+    );
+
+    if (!boss.expiresAt) {
+        boss.expiresAt = expiresAt;
+        setSystemValue(STATE_KEY, boss);
+    }
+
+    const delay = Math.max(1000, expiresAt - Date.now());
+
+    worldBossExpireTimer = setTimeout(() => {
+        runWorldBossAttackLocked(async () => {
+            const currentBoss = getSystemValue(STATE_KEY);
+
+            if (!currentBoss || !currentBoss.active) {
+                return;
+            }
+
+            /*
+             * Không để timer của boss cũ
+             * giết nhầm boss mới.
+             */
+            if (
+                Number(currentBoss.spawnedAt || 0) !==
+                Number(boss.spawnedAt || 0)
+            ) {
+                return;
+            }
+
+            /*
+             * Phòng trường hợp timer chạy sớm.
+             */
+            if (Number(currentBoss.expiresAt || expiresAt) > Date.now()) {
+                scheduleWorldBossExpiration(client, currentBoss);
+
+                return;
+            }
+
+            await finishBoss(client, "expired");
+        }).catch((error) => {
+            console.error("[WorldBoss Expiration]", error);
+        });
+    }, delay);
 }
 
 function scheduleWorldBossRespawn(client, respawnAt) {
@@ -771,7 +843,7 @@ async function finishBoss(client, reason = "killed") {
             message: "Hiện không có boss nào đang sống.",
         };
     }
-
+    clearWorldBossExpireTimer();
     boss.active = false;
     boss.killedAt = Date.now();
     boss.killReason = reason;
@@ -906,6 +978,7 @@ async function finishBoss(client, reason = "killed") {
 
     setSystemValue(STATE_KEY, boss);
     deleteSystemValue(RESPAWN_KEY);
+    scheduleWorldBossExpiration(client, boss);
 
     const channel = await client.channels
         .fetch(boss.channelId)
@@ -980,6 +1053,8 @@ class WorldBossManager {
         const currentBoss = getSystemValue(STATE_KEY);
 
         if (currentBoss && currentBoss.active) {
+            scheduleWorldBossExpiration(client, currentBoss);
+
             return;
         }
 
@@ -1055,8 +1130,10 @@ class WorldBossManager {
             });
 
             boss.messageId = bossMessage.id;
-
             setSystemValue(STATE_KEY, boss);
+            deleteSystemValue(RESPAWN_KEY);
+
+            scheduleWorldBossExpiration(interaction.client, boss);
 
             return interaction.editReply({
                 content: `✅ Đã spawn boss **${boss.name}** tại <#${interaction.channelId}>.`,

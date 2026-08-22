@@ -31,6 +31,7 @@ const SESSION_TIMEOUT_MS = 3 * 60 * 1000;
 const activeSessions = new Map();
 
 const RANKS = [
+    "A",
     "2",
     "3",
     "4",
@@ -43,7 +44,6 @@ const RANKS = [
     "J",
     "Q",
     "K",
-    "A",
 ];
 
 const SUITS = [
@@ -103,28 +103,31 @@ function formatCard(card) {
 }
 
 function getCardColor(card) {
-    return card?.suit?.color === "red"
-        ? 0xe74c3c
-        : 0x2c3e50;
+    return card?.suit?.color === "red" ? 0xe74c3c : 0x2c3e50;
 }
 
-function isSameRankWinAllowed(card) {
-    /*
-     * Theo luật Stake:
-     * - Lá 2 đến Q: cùng hạng vẫn thắng.
-     * - K và A: cùng hạng không thắng.
-     */
-    return Number(card?.rankIndex || 0) <= 10;
+function isSameRankWinAllowed(card, choice) {
+    const rankIndex = Number(card?.rankIndex || 0);
+
+    if (rankIndex === 0) {
+        return choice === "lower";
+    }
+
+    if (rankIndex === RANKS.length - 1) {
+        return choice === "higher";
+    }
+
+    return true;
 }
 
 function getWinningOutcomeCount(card, choice) {
     const rankIndex = Number(card?.rankIndex || 0);
-    const sameRankWin = isSameRankWinAllowed(card);
+    const sameRankWin = isSameRankWinAllowed(card, choice);
 
     let winningRanks = 0;
 
     if (choice === "higher") {
-        winningRanks = 12 - rankIndex;
+        winningRanks = RANKS.length - 1 - rankIndex;
     }
 
     if (choice === "lower") {
@@ -136,10 +139,10 @@ function getWinningOutcomeCount(card, choice) {
     }
 
     /*
-     * Mỗi rank có 4 chất nhưng xác suất rank đều bằng nhau,
-     * nên có thể tính trực tiếp trên 13 hạng.
+     * Mỗi rank có 4 chất và xác suất bằng nhau,
+     * nên tính trực tiếp trên 13 hạng bài.
      */
-    return Math.max(0, Math.min(13, winningRanks));
+    return Math.max(0, Math.min(RANKS.length, winningRanks));
 }
 
 function getChoiceChance(card, choice) {
@@ -167,19 +170,17 @@ function formatMultiplier(multiplier) {
 function getPayout(session) {
     return Math.min(
         MAX_PAYOUT,
-        Math.floor(
-            Number(session.bet || 0) *
-                Number(session.multiplier || 1),
-        ),
+        Math.floor(Number(session.bet || 0) * Number(session.multiplier || 1)),
     );
 }
 
 function isWinningChoice(currentCard, nextCard, choice) {
     const currentRank = Number(currentCard.rankIndex);
+
     const nextRank = Number(nextCard.rankIndex);
 
     if (nextRank === currentRank) {
-        return isSameRankWinAllowed(currentCard);
+        return isSameRankWinAllowed(currentCard, choice);
     }
 
     if (choice === "higher") {
@@ -210,36 +211,27 @@ function formatHistory(session) {
 }
 
 function buildButtons(session, disabled = false) {
-    const higherChance = getChoiceChance(
-        session.currentCard,
-        "higher",
-    );
+    const rankIndex = Number(session.currentCard?.rankIndex || 0);
 
-    const lowerChance = getChoiceChance(
-        session.currentCard,
-        "lower",
-    );
+    const isAce = rankIndex === 0;
 
-    const higherMultiplier = getChoiceMultiplier(
-        session.currentCard,
-        "higher",
-    );
+    const isKing = rankIndex === RANKS.length - 1;
+    const higherChance = getChoiceChance(session.currentCard, "higher");
 
-    const lowerMultiplier = getChoiceMultiplier(
-        session.currentCard,
-        "lower",
-    );
+    const lowerChance = getChoiceChance(session.currentCard, "lower");
+
+    const higherMultiplier = getChoiceMultiplier(session.currentCard, "higher");
+
+    const lowerMultiplier = getChoiceMultiplier(session.currentCard, "lower");
 
     return new ActionRowBuilder().addComponents(
         new ButtonBuilder()
-            .setCustomId(
-                `hilo_higher_${session.userId}_${session.id}`,
-            )
+            .setCustomId(`hilo_higher_${session.userId}_${session.id}`)
             .setLabel(
                 higherChance > 0
-                    ? `Cao hơn ${formatMultiplier(
-                          higherMultiplier,
-                      )}`
+                    ? `${
+                          isKing ? "Lớn hơn hoặc bằng" : "Cao hơn"
+                      } ${formatMultiplier(higherMultiplier)}`
                     : "Không thể cao hơn",
             )
             .setEmoji("⬆️")
@@ -247,14 +239,12 @@ function buildButtons(session, disabled = false) {
             .setDisabled(disabled || higherChance <= 0),
 
         new ButtonBuilder()
-            .setCustomId(
-                `hilo_lower_${session.userId}_${session.id}`,
-            )
+            .setCustomId(`hilo_lower_${session.userId}_${session.id}`)
             .setLabel(
                 lowerChance > 0
-                    ? `Thấp hơn ${formatMultiplier(
-                          lowerMultiplier,
-                      )}`
+                    ? `${
+                          isAce ? "Nhỏ hơn hoặc bằng" : "Thấp hơn"
+                      } ${formatMultiplier(lowerMultiplier)}`
                     : "Không thể thấp hơn",
             )
             .setEmoji("⬇️")
@@ -262,54 +252,37 @@ function buildButtons(session, disabled = false) {
             .setDisabled(disabled || lowerChance <= 0),
 
         new ButtonBuilder()
-            .setCustomId(
-                `hilo_skip_${session.userId}_${session.id}`,
-            )
-            .setLabel(
-                `Bỏ qua ${session.skipsUsed}/${MAX_SKIPS}`,
-            )
+            .setCustomId(`hilo_skip_${session.userId}_${session.id}`)
+            .setLabel(`Bỏ qua ${session.skipsUsed}/${MAX_SKIPS}`)
             .setEmoji("⏭️")
             .setStyle(ButtonStyle.Secondary)
-            .setDisabled(
-                disabled ||
-                    session.skipsUsed >= MAX_SKIPS,
-            ),
+            .setDisabled(disabled || session.skipsUsed >= MAX_SKIPS),
 
         new ButtonBuilder()
-            .setCustomId(
-                `hilo_cashout_${session.userId}_${session.id}`,
-            )
+            .setCustomId(`hilo_cashout_${session.userId}_${session.id}`)
             .setLabel("Chốt lời")
             .setEmoji("💰")
             .setStyle(ButtonStyle.Success)
-            .setDisabled(
-                disabled || session.correctGuesses <= 0,
-            ),
+            .setDisabled(disabled || session.correctGuesses <= 0),
     );
 }
 
 function buildGameEmbed(session, title = "🃏 CAO HƠN – THẤP HƠN") {
     const coin = getCurrencyEmoji();
+    const rankIndex = Number(session.currentCard?.rankIndex || 0);
 
-    const higherChance = getChoiceChance(
-        session.currentCard,
-        "higher",
-    );
+    const higherLabel =
+        rankIndex === RANKS.length - 1 ? "Lớn hơn hoặc bằng" : "Cao hơn";
 
-    const lowerChance = getChoiceChance(
-        session.currentCard,
-        "lower",
-    );
+    const lowerLabel = rankIndex === 0 ? "Nhỏ hơn hoặc bằng" : "Thấp hơn";
 
-    const higherMultiplier = getChoiceMultiplier(
-        session.currentCard,
-        "higher",
-    );
+    const higherChance = getChoiceChance(session.currentCard, "higher");
 
-    const lowerMultiplier = getChoiceMultiplier(
-        session.currentCard,
-        "lower",
-    );
+    const lowerChance = getChoiceChance(session.currentCard, "lower");
+
+    const higherMultiplier = getChoiceMultiplier(session.currentCard, "higher");
+
+    const lowerMultiplier = getChoiceMultiplier(session.currentCard, "lower");
 
     return new EmbedBuilder()
         .setColor(getCardColor(session.currentCard))
@@ -318,19 +291,13 @@ function buildGameEmbed(session, title = "🃏 CAO HƠN – THẤP HƠN") {
             `<@${session.userId}>\n\n` +
                 `## ${formatCard(session.currentCard)}\n` +
                 `Lá hiện tại: **${session.currentCard.rank} ${session.currentCard.suit.name}**\n\n` +
-                `⬆️ **Cao hơn:** ${formatPercent(
+                `⬆️ **${higherLabel}:** ${formatPercent(
                     higherChance,
-                )} • **${formatMultiplier(
-                    higherMultiplier,
-                )}**\n` +
-                `⬇️ **Thấp hơn:** ${formatPercent(
+                )} • **${formatMultiplier(higherMultiplier)}**\n` +
+                `⬇️ **${lowerLabel}:** ${formatPercent(
                     lowerChance,
-                )} • **${formatMultiplier(
-                    lowerMultiplier,
-                )}**\n\n` +
-                `💰 Cược: **${coin} ${formatMoney(
-                    session.bet,
-                )}**\n` +
+                )} • **${formatMultiplier(lowerMultiplier)}**\n\n` +
+                `💰 Cược: **${coin} ${formatMoney(session.bet)}**\n` +
                 `🔥 Chuỗi đúng: **${session.correctGuesses}**\n` +
                 `📈 Hệ số cộng dồn: **${formatMultiplier(
                     session.multiplier,
@@ -342,18 +309,12 @@ function buildGameEmbed(session, title = "🃏 CAO HƠN – THẤP HƠN") {
                 `🃏 Lịch sử:\n${formatHistory(session)}`,
         )
         .setFooter({
-            text:
-                "Lá 2–Q: trùng hạng vẫn thắng. K và A: trùng hạng sẽ thua. RTP 99%.",
+            text: "A nhỏ nhất, K lớn nhất. A có Nhỏ hơn hoặc bằng; K có Lớn hơn hoặc bằng. RTP 99%.",
         })
         .setTimestamp();
 }
 
-function buildLoseEmbed(
-    session,
-    previousCard,
-    resultCard,
-    choice,
-) {
+function buildLoseEmbed(session, previousCard, resultCard, choice) {
     const coin = getCurrencyEmoji();
 
     return new EmbedBuilder()
@@ -361,21 +322,13 @@ function buildLoseEmbed(
         .setTitle("💥 CAO HƠN – THẤP HƠN: THUA")
         .setDescription(
             `<@${session.userId}> đã chọn **${
-                choice === "higher"
-                    ? "⬆️ Cao hơn"
-                    : "⬇️ Thấp hơn"
+                choice === "higher" ? "⬆️ Cao hơn" : "⬇️ Thấp hơn"
             }**.\n\n` +
-                `Lá trước: **${formatCard(
-                    previousCard,
-                )}**\n` +
-                `Lá mới: **${formatCard(
-                    resultCard,
-                )}**\n\n` +
+                `Lá trước: **${formatCard(previousCard)}**\n` +
+                `Lá mới: **${formatCard(resultCard)}**\n\n` +
                 `❌ Dự đoán sai.\n` +
                 `🔥 Chuỗi dừng tại: **${session.correctGuesses}**\n` +
-                `💸 Mất tiền cược: **${coin} ${formatMoney(
-                    session.bet,
-                )}**\n` +
+                `💸 Mất tiền cược: **${coin} ${formatMoney(session.bet)}**\n` +
                 `💼 Số dư: **${coin} ${formatMoney(
                     getBalance(session.userId),
                 )}**`,
@@ -398,15 +351,9 @@ function buildCashoutEmbed(session, auto = false) {
         .setDescription(
             `<@${session.userId}> đã dừng đúng lúc.\n\n` +
                 `🔥 Chuỗi đúng: **${session.correctGuesses}**\n` +
-                `📈 Hệ số cuối: **${formatMultiplier(
-                    session.multiplier,
-                )}**\n` +
-                `🎁 Nhận về: **${coin} ${formatMoney(
-                    payout,
-                )}**\n` +
-                `📊 Lợi nhuận: **${coin} ${formatMoney(
-                    profit,
-                )}**\n` +
+                `📈 Hệ số cuối: **${formatMultiplier(session.multiplier)}**\n` +
+                `🎁 Nhận về: **${coin} ${formatMoney(payout)}**\n` +
+                `📊 Lợi nhuận: **${coin} ${formatMoney(profit)}**\n` +
                 `💼 Số dư mới: **${coin} ${formatMoney(
                     getBalance(session.userId),
                 )}**`,
@@ -416,21 +363,11 @@ function buildCashoutEmbed(session, auto = false) {
 
 function safeTrackQuest(userId, result) {
     try {
-        if (
-            quest &&
-            typeof quest.trackGambleResult === "function"
-        ) {
-            quest.trackGambleResult(
-                userId,
-                "hilo",
-                result,
-            );
+        if (quest && typeof quest.trackGambleResult === "function") {
+            quest.trackGambleResult(userId, "hilo", result);
         }
     } catch (error) {
-        console.error(
-            "[Hilo trackGambleResult]",
-            error,
-        );
+        console.error("[Hilo trackGambleResult]", error);
     }
 }
 
@@ -439,9 +376,7 @@ function clearSession(session) {
         clearTimeout(session.timeout);
     }
 
-    activeSessions.delete(
-        getSessionKey(session.userId),
-    );
+    activeSessions.delete(getSessionKey(session.userId));
 }
 
 function scheduleTimeout(session, client) {
@@ -450,10 +385,9 @@ function scheduleTimeout(session, client) {
     }
 
     session.timeout = setTimeout(async () => {
-        const currentSession =
-            activeSessions.get(
-                getSessionKey(session.userId),
-            );
+        const currentSession = activeSessions.get(
+            getSessionKey(session.userId),
+        );
 
         if (
             !currentSession ||
@@ -479,25 +413,17 @@ function scheduleTimeout(session, client) {
                 won: true,
             });
 
-            embed = buildCashoutEmbed(
-                currentSession,
-                true,
-            );
+            embed = buildCashoutEmbed(currentSession, true);
         } else {
             /*
              * Chưa đoán lần nào thì hoàn cược,
              * tránh người chơi mất tiền vì quên hoặc Discord lag.
              */
-            addMoney(
-                currentSession.userId,
-                currentSession.bet,
-            );
+            addMoney(currentSession.userId, currentSession.bet);
 
             embed = new EmbedBuilder()
                 .setColor(0x95a5a6)
-                .setTitle(
-                    "⏰ CAO HƠN – THẤP HƠN: HẾT HẠN",
-                )
+                .setTitle("⏰ CAO HƠN – THẤP HƠN: HẾT HẠN")
                 .setDescription(
                     `<@${currentSession.userId}> chưa dự đoán lần nào.\n` +
                         `Tiền cược đã được hoàn lại.`,
@@ -511,12 +437,11 @@ function scheduleTimeout(session, client) {
             .fetch(currentSession.channelId)
             .catch(() => null);
 
-        const message =
-            channel?.isTextBased()
-                ? await channel.messages
-                      .fetch(currentSession.messageId)
-                      .catch(() => null)
-                : null;
+        const message = channel?.isTextBased()
+            ? await channel.messages
+                  .fetch(currentSession.messageId)
+                  .catch(() => null)
+            : null;
 
         if (message) {
             await message
@@ -532,22 +457,14 @@ function scheduleTimeout(session, client) {
 class HiloManager {
     async play(interaction) {
         const userId = String(interaction.user.id);
-        const bet =
-            interaction.options.getInteger("cuoc");
+        const bet = interaction.options.getInteger("cuoc");
         const coin = getCurrencyEmoji();
 
-        if (
-            !Number.isInteger(bet) ||
-            bet < MIN_BET ||
-            bet > MAX_BET
-        ) {
+        if (!Number.isInteger(bet) || bet < MIN_BET || bet > MAX_BET) {
             return interaction.reply({
-                content:
-                    `❌ Cược phải từ **${coin} ${formatMoney(
-                        MIN_BET,
-                    )}** đến **${coin} ${formatMoney(
-                        MAX_BET,
-                    )}**.`,
+                content: `❌ Cược phải từ **${coin} ${formatMoney(
+                    MIN_BET,
+                )}** đến **${coin} ${formatMoney(MAX_BET)}**.`,
                 ephemeral: true,
             });
         }
@@ -566,9 +483,7 @@ class HiloManager {
             return interaction.reply({
                 content:
                     `❌ Không đủ tiền.\n` +
-                    `💰 Số dư: **${coin} ${formatMoney(
-                        balance,
-                    )}**`,
+                    `💰 Số dư: **${coin} ${formatMoney(balance)}**`,
                 ephemeral: true,
             });
         }
@@ -603,10 +518,7 @@ class HiloManager {
             createdAt: Date.now(),
         };
 
-        activeSessions.set(
-            getSessionKey(userId),
-            session,
-        );
+        activeSessions.set(getSessionKey(userId), session);
 
         const message = await interaction.reply({
             embeds: [buildGameEmbed(session)],
@@ -622,9 +534,7 @@ class HiloManager {
     }
 
     async handleButton(interaction) {
-        if (
-            !interaction.customId.startsWith("hilo_")
-        ) {
+        if (!interaction.customId.startsWith("hilo_")) {
             return undefined;
         }
 
@@ -633,33 +543,25 @@ class HiloManager {
         const userId = parts[2];
         const sessionId = parts.slice(3).join("_");
 
-        if (
-            String(interaction.user.id) !==
-            String(userId)
-        ) {
+        if (String(interaction.user.id) !== String(userId)) {
             return interaction.reply({
-                content:
-                    "❌ Đây không phải ván Cao hơn – Thấp hơn của bạn.",
+                content: "❌ Đây không phải ván Cao hơn – Thấp hơn của bạn.",
                 ephemeral: true,
             });
         }
 
-        const session = activeSessions.get(
-            getSessionKey(userId),
-        );
+        const session = activeSessions.get(getSessionKey(userId));
 
         if (!session || session.id !== sessionId) {
             return interaction.reply({
-                content:
-                    "❌ Ván này đã kết thúc hoặc hết hạn.",
+                content: "❌ Ván này đã kết thúc hoặc hết hạn.",
                 ephemeral: true,
             });
         }
 
         if (session.processing) {
             return interaction.reply({
-                content:
-                    "⏳ Lượt trước đang được xử lý.",
+                content: "⏳ Lượt trước đang được xử lý.",
                 ephemeral: true,
             });
         }
@@ -674,10 +576,7 @@ class HiloManager {
             if (action === "cashout") {
                 if (session.correctGuesses <= 0) {
                     session.processing = false;
-                    scheduleTimeout(
-                        session,
-                        interaction.client,
-                    );
+                    scheduleTimeout(session, interaction.client);
 
                     return interaction.reply({
                         content:
@@ -700,12 +599,7 @@ class HiloManager {
                 clearSession(session);
 
                 return interaction.update({
-                    embeds: [
-                        buildCashoutEmbed(
-                            session,
-                            false,
-                        ),
-                    ],
+                    embeds: [buildCashoutEmbed(session, false)],
                     components: [],
                 });
             }
@@ -713,14 +607,10 @@ class HiloManager {
             if (action === "skip") {
                 if (session.skipsUsed >= MAX_SKIPS) {
                     session.processing = false;
-                    scheduleTimeout(
-                        session,
-                        interaction.client,
-                    );
+                    scheduleTimeout(session, interaction.client);
 
                     return interaction.reply({
-                        content:
-                            "❌ Bạn đã dùng hết 52 lượt bỏ qua.",
+                        content: "❌ Bạn đã dùng hết 52 lượt bỏ qua.",
                         ephemeral: true,
                     });
                 }
@@ -732,52 +622,30 @@ class HiloManager {
                 session.skipsUsed += 1;
                 session.processing = false;
 
-                scheduleTimeout(
-                    session,
-                    interaction.client,
-                );
+                scheduleTimeout(session, interaction.client);
 
                 return interaction.update({
-                    embeds: [
-                        buildGameEmbed(
-                            session,
-                            "⏭️ ĐÃ BỎ QUA LÁ BÀI",
-                        ),
-                    ],
+                    embeds: [buildGameEmbed(session, "⏭️ ĐÃ BỎ QUA LÁ BÀI")],
                     components: [buildButtons(session)],
                 });
             }
 
-            if (
-                action !== "higher" &&
-                action !== "lower"
-            ) {
+            if (action !== "higher" && action !== "lower") {
                 session.processing = false;
-                scheduleTimeout(
-                    session,
-                    interaction.client,
-                );
+                scheduleTimeout(session, interaction.client);
 
                 return undefined;
             }
 
             const previousCard = session.currentCard;
-            const stepMultiplier =
-                getChoiceMultiplier(
-                    previousCard,
-                    action,
-                );
+            const stepMultiplier = getChoiceMultiplier(previousCard, action);
 
             if (stepMultiplier <= 0) {
                 session.processing = false;
-                scheduleTimeout(
-                    session,
-                    interaction.client,
-                );
+                scheduleTimeout(session, interaction.client);
 
                 return interaction.reply({
-                    content:
-                        "❌ Không thể chọn hướng này với lá hiện tại.",
+                    content: "❌ Không thể chọn hướng này với lá hiện tại.",
                     ephemeral: true,
                 });
             }
@@ -786,11 +654,7 @@ class HiloManager {
 
             session.history.push(nextCard);
 
-            const won = isWinningChoice(
-                previousCard,
-                nextCard,
-                action,
-            );
+            const won = isWinningChoice(previousCard, nextCard, action);
 
             if (!won) {
                 addLoss(userId);
@@ -805,12 +669,7 @@ class HiloManager {
 
                 return interaction.update({
                     embeds: [
-                        buildLoseEmbed(
-                            session,
-                            previousCard,
-                            nextCard,
-                            action,
-                        ),
+                        buildLoseEmbed(session, previousCard, nextCard, action),
                     ],
                     components: [],
                 });
@@ -835,61 +694,37 @@ class HiloManager {
                 clearSession(session);
 
                 return interaction.update({
-                    embeds: [
-                        buildCashoutEmbed(
-                            session,
-                            true,
-                        ),
-                    ],
+                    embeds: [buildCashoutEmbed(session, true)],
                     components: [],
                 });
             }
 
             session.processing = false;
 
-            scheduleTimeout(
-                session,
-                interaction.client,
-            );
+            scheduleTimeout(session, interaction.client);
 
             return interaction.update({
-                embeds: [
-                    buildGameEmbed(
-                        session,
-                        "✅ ĐOÁN ĐÚNG — CHƠI TIẾP?",
-                    ),
-                ],
+                embeds: [buildGameEmbed(session, "✅ ĐOÁN ĐÚNG — CHƠI TIẾP?")],
                 components: [buildButtons(session)],
             });
         } catch (error) {
             session.processing = false;
 
-            scheduleTimeout(
-                session,
-                interaction.client,
-            );
+            scheduleTimeout(session, interaction.client);
 
-            console.error(
-                "[Hilo] Lỗi xử lý:",
-                error,
-            );
+            console.error("[Hilo] Lỗi xử lý:", error);
 
-            if (
-                interaction.replied ||
-                interaction.deferred
-            ) {
+            if (interaction.replied || interaction.deferred) {
                 return interaction
                     .editReply({
-                        content:
-                            "❌ Có lỗi khi xử lý Cao hơn – Thấp hơn.",
+                        content: "❌ Có lỗi khi xử lý Cao hơn – Thấp hơn.",
                     })
                     .catch(() => null);
             }
 
             return interaction
                 .reply({
-                    content:
-                        "❌ Có lỗi khi xử lý Cao hơn – Thấp hơn.",
+                    content: "❌ Có lỗi khi xử lý Cao hơn – Thấp hơn.",
                     ephemeral: true,
                 })
                 .catch(() => null);

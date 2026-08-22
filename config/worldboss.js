@@ -5,13 +5,13 @@ module.exports = {
         {
             id: "lao_ga_kho",
             name: "Lão Gà Khô",
-            maxHp: 30000000,
+            maxHp: 80000000,
             imageUrl: "https://i.imgur.com/toV5hvO.jpeg",
         },
         {
             id: "huy_serum",
             name: "Huy serum",
-            maxHp: 30000000,
+            maxHp: 80000000,
             imageUrl:
                 "https://khoanhdep.com/wp-content/uploads/2025/10/huyforum-meme-2.jpg",
         },
@@ -19,7 +19,7 @@ module.exports = {
 
     defaultBoss: {
         name: "Lão Gà Khô",
-        maxHp: 30000000,
+        maxHp: 80000000,
         imageUrl: "https://i.imgur.com/toV5hvO.jpeg",
     },
 
@@ -48,6 +48,7 @@ module.exports = {
     attackCooldownMinutes: 5,
 
     respawnHours: 3.6,
+    lifetimeHours: 4,
     autoSpawnOnStartup: true,
 
     consolationReward: 700,
