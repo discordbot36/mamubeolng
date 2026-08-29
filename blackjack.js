@@ -357,6 +357,10 @@ class BlackjackManager {
         const game = games.get(userId);
 
         if (!game || String(game.id) !== String(gameId)) {
+            /*
+             * Game đã biến mất.
+             * Không defer vì chúng ta vẫn có thể reply bình thường.
+             */
             await interaction.message
                 ?.edit({
                     components: [
@@ -378,6 +382,9 @@ class BlackjackManager {
             });
         }
 
+        /*
+         * Kiểm tra timeout trước khi ACK.
+         */
         if (Date.now() - Number(game.createdAt || 0) > GAME_EXPIRE_MS) {
             games.delete(userId);
 
@@ -395,54 +402,134 @@ class BlackjackManager {
             });
         }
 
+        /*
+         * QUAN TRỌNG:
+         *
+         * ACK Discord NGAY LẬP TỨC.
+         *
+         * Code cũ gọi interaction.update()
+         * sau khi xử lý game.
+         *
+         * Khi bot lag -> Discord không nhận ACK
+         * -> người chơi thấy nút bị treo.
+         */
+        try {
+            await interaction.deferUpdate();
+        } catch (error) {
+            console.error("[Blackjack] Không thể ACK interaction:", error);
+
+            game.processing = false;
+
+            return undefined;
+        }
+
         game.processing = true;
 
         try {
+            /*
+             * =========================
+             * HIT
+             * =========================
+             */
             if (action === "hit") {
                 game.playerHand.push(drawCard(game));
 
                 const playerValue = calculateHandValue(game.playerHand);
 
+                /*
+                 * PLAYER BUST
+                 */
                 if (playerValue > 21) {
                     const resultText = finishGame(game, "player_bust");
 
-                    return await interaction.update({
+                    return await interaction.editReply({
                         embeds: [buildGameEmbed(game, true, resultText)],
                         components: [createButtons(game, true)],
                     });
                 }
 
+                /*
+                 * PLAYER ĐẠT 21
+                 */
                 if (playerValue === 21) {
                     const outcome = resolveDealer(game);
+
                     const resultText = finishGame(game, outcome);
 
-                    return await interaction.update({
+                    return await interaction.editReply({
                         embeds: [buildGameEmbed(game, true, resultText)],
                         components: [createButtons(game, true)],
                     });
                 }
 
-                return await interaction.update({
+                /*
+                 * VẪN CHƠI TIẾP
+                 */
+                return await interaction.editReply({
                     embeds: [buildGameEmbed(game)],
                     components: [createButtons(game)],
                 });
             }
 
+            /*
+             * =========================
+             * STAND
+             * =========================
+             */
             if (action === "stand") {
                 const outcome = resolveDealer(game);
+
                 const resultText = finishGame(game, outcome);
 
-                return await interaction.update({
+                return await interaction.editReply({
                     embeds: [buildGameEmbed(game, true, resultText)],
                     components: [createButtons(game, true)],
                 });
             }
 
-            return undefined;
+            /*
+             * Action không hợp lệ.
+             */
+            return await interaction.editReply({
+                content: "❌ Lựa chọn không hợp lệ.",
+                components: [createButtons(game)],
+            });
+        } catch (error) {
+            console.error("[Blackjack] Lỗi xử lý:", error);
+
+            /*
+             * Nếu game vẫn tồn tại thì unlock.
+             * Nếu finishGame() đã xóa game thì không cần.
+             */
+            const currentGame = games.get(userId);
+
+            if (currentGame && String(currentGame.id) === String(gameId)) {
+                currentGame.processing = false;
+            }
+
+            /*
+             * Vì interaction đã deferUpdate()
+             * nên phải dùng editReply(), tuyệt đối
+             * không dùng interaction.reply() nữa.
+             */
+            return interaction
+                .editReply({
+                    content:
+                        "❌ Có lỗi khi xử lý Blackjack. Ván đã được mở khóa, bạn có thể thử lại.",
+                    components:
+                        currentGame && String(currentGame.id) === String(gameId)
+                            ? [createButtons(currentGame)]
+                            : [],
+                })
+                .catch(() => null);
         } finally {
+            /*
+             * finishGame() sẽ games.delete(userId).
+             * Nếu game vẫn còn thì mở khóa processing.
+             */
             const current = games.get(userId);
 
-            if (current && current.id === game.id) {
+            if (current && String(current.id) === String(gameId)) {
                 current.processing = false;
             }
         }

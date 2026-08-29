@@ -566,22 +566,51 @@ class HiloManager {
             });
         }
 
+        /*
+         * QUAN TRỌNG:
+         * ACK interaction NGAY LẬP TỨC.
+         *
+         * Không chạy database / quest / game logic
+         * trước khi Discord nhận được ACK.
+         *
+         * Điều này tránh lỗi:
+         * "This interaction failed"
+         * khi bot đang lag.
+         */
+        try {
+            await interaction.deferUpdate();
+        } catch (error) {
+            console.error("[Hilo] Không thể ACK interaction:", error);
+
+            session.processing = false;
+            scheduleTimeout(session, interaction.client);
+
+            return undefined;
+        }
+
         session.processing = true;
 
         if (session.timeout) {
             clearTimeout(session.timeout);
+            session.timeout = null;
         }
 
         try {
+            /*
+             * =========================
+             * CASHOUT
+             * =========================
+             */
             if (action === "cashout") {
                 if (session.correctGuesses <= 0) {
                     session.processing = false;
                     scheduleTimeout(session, interaction.client);
 
-                    return interaction.reply({
+                    return interaction.editReply({
                         content:
                             "❌ Phải đoán đúng ít nhất một lần mới có thể chốt lời.",
-                        ephemeral: true,
+                        embeds: [],
+                        components: [buildButtons(session)],
                     });
                 }
 
@@ -598,20 +627,25 @@ class HiloManager {
 
                 clearSession(session);
 
-                return interaction.update({
+                return interaction.editReply({
                     embeds: [buildCashoutEmbed(session, false)],
                     components: [],
                 });
             }
 
+            /*
+             * =========================
+             * SKIP
+             * =========================
+             */
             if (action === "skip") {
                 if (session.skipsUsed >= MAX_SKIPS) {
                     session.processing = false;
                     scheduleTimeout(session, interaction.client);
 
-                    return interaction.reply({
+                    return interaction.editReply({
                         content: "❌ Bạn đã dùng hết 52 lượt bỏ qua.",
-                        ephemeral: true,
+                        components: [buildButtons(session)],
                     });
                 }
 
@@ -620,33 +654,43 @@ class HiloManager {
                 session.currentCard = nextCard;
                 session.history.push(nextCard);
                 session.skipsUsed += 1;
+
                 session.processing = false;
 
                 scheduleTimeout(session, interaction.client);
 
-                return interaction.update({
+                return interaction.editReply({
                     embeds: [buildGameEmbed(session, "⏭️ ĐÃ BỎ QUA LÁ BÀI")],
                     components: [buildButtons(session)],
                 });
             }
 
+            /*
+             * =========================
+             * HIGHER / LOWER
+             * =========================
+             */
             if (action !== "higher" && action !== "lower") {
                 session.processing = false;
                 scheduleTimeout(session, interaction.client);
 
-                return undefined;
+                return interaction.editReply({
+                    content: "❌ Lựa chọn không hợp lệ.",
+                    components: [buildButtons(session)],
+                });
             }
 
             const previousCard = session.currentCard;
+
             const stepMultiplier = getChoiceMultiplier(previousCard, action);
 
             if (stepMultiplier <= 0) {
                 session.processing = false;
                 scheduleTimeout(session, interaction.client);
 
-                return interaction.reply({
+                return interaction.editReply({
                     content: "❌ Không thể chọn hướng này với lá hiện tại.",
-                    ephemeral: true,
+                    components: [buildButtons(session)],
                 });
             }
 
@@ -656,6 +700,11 @@ class HiloManager {
 
             const won = isWinningChoice(previousCard, nextCard, action);
 
+            /*
+             * =========================
+             * THUA
+             * =========================
+             */
             if (!won) {
                 addLoss(userId);
 
@@ -667,7 +716,7 @@ class HiloManager {
 
                 clearSession(session);
 
-                return interaction.update({
+                return interaction.editReply({
                     embeds: [
                         buildLoseEmbed(session, previousCard, nextCard, action),
                     ],
@@ -675,12 +724,20 @@ class HiloManager {
                 });
             }
 
+            /*
+             * =========================
+             * THẮNG
+             * =========================
+             */
             session.correctGuesses += 1;
             session.multiplier *= stepMultiplier;
             session.currentCard = nextCard;
 
             const payout = getPayout(session);
 
+            /*
+             * Đạt MAX PAYOUT
+             */
             if (payout >= MAX_PAYOUT) {
                 addMoney(userId, payout);
                 addWin(userId);
@@ -693,7 +750,7 @@ class HiloManager {
 
                 clearSession(session);
 
-                return interaction.update({
+                return interaction.editReply({
                     embeds: [buildCashoutEmbed(session, true)],
                     components: [],
                 });
@@ -703,29 +760,39 @@ class HiloManager {
 
             scheduleTimeout(session, interaction.client);
 
-            return interaction.update({
+            return interaction.editReply({
                 embeds: [buildGameEmbed(session, "✅ ĐOÁN ĐÚNG — CHƠI TIẾP?")],
                 components: [buildButtons(session)],
             });
         } catch (error) {
-            session.processing = false;
-
-            scheduleTimeout(session, interaction.client);
-
             console.error("[Hilo] Lỗi xử lý:", error);
 
-            if (interaction.replied || interaction.deferred) {
-                return interaction
-                    .editReply({
-                        content: "❌ Có lỗi khi xử lý Cao hơn – Thấp hơn.",
-                    })
-                    .catch(() => null);
+            session.processing = false;
+
+            /*
+             * Nếu lỗi xảy ra nhưng session vẫn còn,
+             * phải mở khóa để người chơi có thể bấm tiếp.
+             */
+            const currentSession = activeSessions.get(getSessionKey(userId));
+
+            if (currentSession && currentSession.id === sessionId) {
+                scheduleTimeout(currentSession, interaction.client);
             }
 
+            /*
+             * Interaction đã deferUpdate() nên KHÔNG được
+             * interaction.reply() nữa.
+             *
+             * Phải dùng editReply().
+             */
             return interaction
-                .reply({
-                    content: "❌ Có lỗi khi xử lý Cao hơn – Thấp hơn.",
-                    ephemeral: true,
+                .editReply({
+                    content:
+                        "❌ Có lỗi khi xử lý Cao hơn – Thấp hơn. Ván đã được mở khóa, bạn có thể thử lại.",
+                    components:
+                        currentSession && currentSession.id === sessionId
+                            ? [buildButtons(currentSession)]
+                            : [],
                 })
                 .catch(() => null);
         }
