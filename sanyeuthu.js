@@ -558,7 +558,7 @@ function pickMechanic(hunt) {
     } else {
         const memberCount = Math.max(2, Number(hunt.memberIds.length || 2));
         const targetRoleCount =
-            memberCount >= 3 && rolePool.length >= 3 ? 3 : 2;
+            memberCount >= 4 && rolePool.length >= 3 ? 3 : 2;
 
         requiredRoles = rolePool.slice(0, targetRoleCount);
     }
@@ -1603,34 +1603,51 @@ async function resolveBattleRound(channel, huntId) {
     }
 
     const requiredRoles = battle.currentMechanic?.roles || [];
+
     const matchedRoleCount = requiredRoles.filter((role) =>
         matchedRoles.has(role),
     ).length;
-    const completedMechanic = matchedRoleCount >= requiredRoles.length;
+    // Party 3+ người: chỉ cần đạt ít nhất 2 role đúng.
+    const partyFlexibleMechanic =
+        hunt.mode === "party" &&
+        hunt.memberIds.length >= 3 &&
+        requiredRoles.length >= 2;
+
+    const requiredMatchedRoles = partyFlexibleMechanic
+        ? Math.min(2, requiredRoles.length)
+        : requiredRoles.length;
+
+    const completedMechanic = matchedRoleCount >= requiredMatchedRoles;
+
     const cleanSolved =
-        completedMechanic && wrongActionCount <= 0 && afkCount <= 0;
+        completedMechanic && wrongActionCount === 0 && afkCount === 0;
     const uniqueActions = Object.keys(actionCounts).length;
     const oneButtonSpam =
         hunt.mode === "party" &&
-        hunt.memberIds.length >= 2 &&
+        hunt.memberIds.length >= 3 &&
         uniqueActions === 1;
 
     if (oneButtonSpam) {
-        totalRhythm -= 12;
-        wrongActionCount += 1;
+        // Vẫn phạt spam 1 nút nhưng không biến nó thành một lỗi mechanic.
+        totalRhythm -= 5;
+
         resultLines.push(
-            "💢 Cả đội dồn cùng một kiểu hành động, trận hình mất biến hóa.",
+            "💢 Cả đội dồn cùng một kiểu hành động, hiệu quả phối hợp giảm.",
         );
     }
 
     if (completedMechanic) {
         totalDamage = Math.floor(totalDamage * (cleanSolved ? 1.45 : 1.18));
+
         totalRhythm += cleanSolved ? 12 : 5;
+
         battle.perfectTurns =
             Number(battle.perfectTurns || 0) + (cleanSolved ? 1 : 0);
     } else {
-        totalDamage = Math.floor(totalDamage * 0.35);
-        totalRhythm -= 14 + wrongActionCount * 4 + afkCount * 5;
+        totalDamage = Math.floor(totalDamage * 0.55);
+
+        totalRhythm -= 8 + wrongActionCount * 2 + afkCount * 3;
+
         battle.failedTurns = Number(battle.failedTurns || 0) + 1;
     }
 
@@ -1742,7 +1759,7 @@ async function resolveBattleRound(channel, huntId) {
 
     if (battle.turn >= battle.maxTurns) {
         const success =
-            battle.beastHp <= battle.maxBeastHp * 0.12 && battle.rhythm >= 25;
+            battle.beastHp <= battle.maxBeastHp * 0.25 && battle.rhythm >= 20;
 
         return finishBattle(channel, hunt, success);
     }
