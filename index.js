@@ -12,6 +12,7 @@ const duyen = require("./duyen");
 const duyenConfig = require("./config/duyen");
 const raidserver = require("./raidserver");
 const molinhthach = require("./molinhthach");
+const channelCleanup = require("./utils/channelCleanup");
 
 function requireEnv(name) {
     const value = process.env[name];
@@ -207,6 +208,7 @@ client.once("clientReady", async () => {
      * đọc/sửa database và gọi Discord API khi khởi động.
      */
     const recoveryTasks = [
+        ["ChannelCleanup", () => channelCleanup.recover(client)],
         ["BiCanh", () => bicanh.recover(client)],
         ["SanYeuThu", () => sanyeuthu.recover(client)],
         ["RaidServer", () => raidserver.recover(client)],

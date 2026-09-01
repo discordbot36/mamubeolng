@@ -27,6 +27,7 @@ const {
 const adminConfig = require("./config/admin");
 const config = require("./config/sanyeuthu");
 const combat = require("./utils/combat");
+const channelCleanup = require("./utils/channelCleanup");
 const quest = require("./quest");
 
 const activeTimers = new Map();
@@ -1437,19 +1438,12 @@ async function finishBattle(channel, hunt, success) {
         Number(config.channel.deleteDelayMs || 10 * 60 * 1000),
     );
 
-    setTimeout(() => {
-        const latestHunt = getHunt(hunt.id);
-
-        if (
-            !latestHunt ||
-            latestHunt.status !== "finished" ||
-            String(latestHunt.channelId) !== String(channel.id)
-        ) {
-            return;
-        }
-
-        channel.delete("Săn yêu thú đã kết thúc").catch(() => null);
-    }, deleteDelayMs);
+    channelCleanup.schedule(
+        channel.client,
+        channel,
+        deleteDelayMs,
+        "Săn yêu thú đã kết thúc",
+    );
 }
 
 async function resolveBattleRound(channel, huntId) {
@@ -2023,19 +2017,12 @@ async function expireLobby(client, huntId) {
         })
         .catch(() => null);
 
-    setTimeout(() => {
-        const latestHunt = getHunt(huntId);
-
-        if (
-            !latestHunt ||
-            latestHunt.status !== "cancelled" ||
-            String(latestHunt.channelId) !== String(channel.id)
-        ) {
-            return;
-        }
-
-        channel.delete("Săn yêu thú hết thời gian tập hợp").catch(() => null);
-    }, 10 * 1000);
+    channelCleanup.schedule(
+        client,
+        channel,
+        10 * 1000,
+        "Săn yêu thú hết thời gian tập hợp",
+    );
 }
 
 async function createHunt(interaction, mode) {

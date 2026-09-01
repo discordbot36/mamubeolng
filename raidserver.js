@@ -10,6 +10,7 @@ const {
 const database = require("./database");
 const raidConfig = require("./config/raidserver");
 const combat = require("./utils/combat");
+const channelCleanup = require("./utils/channelCleanup");
 
 const STATE_KEY = "raidServer";
 const VIETNAM_UTC_OFFSET_HOURS = 7;
@@ -1713,6 +1714,20 @@ class RaidServerManager {
         }
 
         clearRaidTimers(raid.id);
+        const raidChannel = raid.raidChannelId
+            ? await interaction.client.channels
+                  .fetch(raid.raidChannelId)
+                  .catch(() => null)
+            : null;
+
+        if (raidChannel) {
+            channelCleanup.schedule(
+                interaction.client,
+                raidChannel,
+                10 * 1000,
+                `Raid ${raid.id} đã bị hủy`,
+            );
+        }
 
         raid.status = "cancelled";
         raid.result = "cancelled";
@@ -2001,7 +2016,16 @@ class RaidServerManager {
                 .catch(() => null);
 
             clearRaidTimers(raid.id);
+
+            channelCleanup.schedule(
+                client,
+                channel,
+                10 * 1000,
+                `Raid ${raid.id} không đủ người`,
+            );
+
             clearCurrentRaid();
+
             return;
         }
 
@@ -2235,6 +2259,21 @@ class RaidServerManager {
             .catch(() => null);
 
         clearRaidTimers(raid.id);
+
+        if (channel) {
+            const deleteDelayMs = Math.max(
+                5000,
+                Number(raidConfig.channelDeleteDelayMs || 10 * 60 * 1000),
+            );
+
+            channelCleanup.schedule(
+                client,
+                channel,
+                deleteDelayMs,
+                `Raid ${raid.id} đã kết thúc`,
+            );
+        }
+
         clearCurrentRaid();
     }
 

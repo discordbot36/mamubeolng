@@ -23,6 +23,7 @@ const shopConfig = require("./config/shop");
 const config = require("./config/bicanh");
 
 const combat = require("./utils/combat");
+const channelCleanup = require("./utils/channelCleanup");
 const {
     givePhapBaoFarmReward,
     formatPhapBaoFarmReward,
@@ -1255,19 +1256,12 @@ async function expireLobby(client, realmId) {
         })
         .catch(() => null);
 
-    setTimeout(() => {
-        const latestRealm = getRealm(realmId);
-
-        if (
-            !latestRealm ||
-            latestRealm.status !== "cancelled" ||
-            String(latestRealm.channelId) !== String(channel.id)
-        ) {
-            return;
-        }
-
-        channel.delete("Bí cảnh hết thời gian tập hợp").catch(() => null);
-    }, 10 * 1000);
+    channelCleanup.schedule(
+        client,
+        channel,
+        10 * 1000,
+        "Bí cảnh hết thời gian tập hợp",
+    );
 }
 
 async function toggleBattleModVote(interaction, modId, realm) {
@@ -2348,9 +2342,12 @@ async function finishBattle(channel, realm, success) {
         Number(config.channel.deleteDelayMs || 10 * 60 * 1000),
     );
 
-    setTimeout(() => {
-        channel.delete("Bí cảnh đã kết thúc").catch(() => null);
-    }, deleteDelayMs);
+    channelCleanup.schedule(
+        channel.client,
+        channel,
+        deleteDelayMs,
+        "Bí cảnh đã kết thúc",
+    );
 }
 
 async function resolveBattleRound(channel, realmId) {
