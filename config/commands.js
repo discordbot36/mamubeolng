@@ -868,10 +868,10 @@ module.exports = [
             {
                 type: "integer",
                 name: "soluong",
-                description: "Số lượng muốn dùng, tối đa 1.000",
+                description: "Số lượng muốn dùng, tối đa 1.000.000.000",
                 required: false,
                 minValue: 1,
-                maxValue: 1000,
+                maxValue: 1000000000,
             },
         ],
     },

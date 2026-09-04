@@ -31,7 +31,8 @@ const activeSkills = Array.isArray(skillConfig.activeSkills)
 const passiveSkills = Array.isArray(skillConfig.passiveSkills)
     ? skillConfig.passiveSkills
     : [];
-
+const MAX_BULK_FEED_QUANTITY = 1_000_000_000;
+const MAX_CULTIVATION_CHEST_QUANTITY = 1_000;
 function normalizeVietnamese(text) {
     return text
         .toLowerCase()
@@ -1481,7 +1482,22 @@ class TuTienManager {
                 ephemeral: true,
             });
         }
+        if (item.type === "tu_tien_exp" && quantity > MAX_BULK_FEED_QUANTITY) {
+            return interaction.reply({
+                content: `❌ Cám chỉ được dùng tối đa ${formatNumber(MAX_BULK_FEED_QUANTITY)} cái mỗi lần.`,
+                ephemeral: true,
+            });
+        }
 
+        if (
+            item.type === "cultivation_chest" &&
+            quantity > MAX_CULTIVATION_CHEST_QUANTITY
+        ) {
+            return interaction.reply({
+                content: `❌ Rương chỉ được mở tối đa ${formatNumber(MAX_CULTIVATION_CHEST_QUANTITY)} cái mỗi lần.`,
+                ephemeral: true,
+            });
+        }
         if (item.type === "cultivation_chest") {
             const consumeResult = consumeShopItem(
                 interaction.user.id,
