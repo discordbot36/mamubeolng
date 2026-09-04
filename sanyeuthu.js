@@ -2577,7 +2577,59 @@ async function recover(client) {
         if (hunt.status === "battle" && hunt.battle) {
             await lockHuntChannel(channel, hunt).catch(() => null);
 
-            const remaining = Number(hunt.battle.roundEndsAt || 0) - Date.now();
+            const battle = hunt.battle;
+
+            /*
+             * Bot có thể bị kill giữa lúc đang xử lý lượt.
+             * Nếu giữ resolving=true sau khi restart, cuộc săn sẽ kẹt vĩnh viễn.
+             */
+            if (battle.resolving === true) {
+                const resolutionAlreadySaved =
+                    Number(battle.resolvedTurn || 0) >=
+                    Number(battle.turn || 0);
+
+                if (resolutionAlreadySaved) {
+                    if (Number(battle.beastHp || 0) <= 0) {
+                        await finishBattle(channel, hunt, true);
+                        continue;
+                    }
+
+                    if (Number(battle.teamHp || 0) <= 0) {
+                        await finishBattle(channel, hunt, false);
+                        continue;
+                    }
+
+                    if (
+                        Number(battle.turn || 0) >= Number(battle.maxTurns || 0)
+                    ) {
+                        const success =
+                            Number(battle.beastHp || 0) <=
+                                Number(battle.maxBeastHp || 0) * 0.25 &&
+                            Number(battle.rhythm || 0) >= 20;
+
+                        await finishBattle(channel, hunt, success);
+                        continue;
+                    }
+
+                    battle.turn = Number(battle.turn || 0) + 1;
+                    battle.actions = {};
+                    battle.resolving = false;
+                    battle.emptyRoundExtended = false;
+                    saveHunt(hunt);
+
+                    await openBattleRound(channel, hunt).catch((error) => {
+                        console.error("[SanYeuThu Recover New Round]", error);
+                    });
+
+                    continue;
+                }
+
+                // Lượt chưa được lưu hoàn tất: bỏ cờ kẹt để xử lý lại lượt đó.
+                battle.resolving = false;
+                saveHunt(hunt);
+            }
+
+            const remaining = Number(battle.roundEndsAt || 0) - Date.now();
             const timerKey = `round_${hunt.id}`;
 
             if (remaining <= 0) {
