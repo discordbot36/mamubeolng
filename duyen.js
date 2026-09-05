@@ -14,6 +14,7 @@ const shop = require("./config/shop");
 const weaponConfig = require("./weapon");
 const adminConfig = require("./config/admin");
 const combatUtils = require("./utils/combat");
+const channelCleanup = require("./utils/channelCleanup");
 const events = new Map();
 const timers = new Map();
 const activePuzzles = new Map();
@@ -4271,7 +4272,7 @@ async function cleanup(event, delay = 0) {
     }
 
     /*
-     * Dừng tất cả timer thuộc event.
+     * Dừng toàn bộ timer của Bí Cảnh.
      */
     for (const [timerKey, timer] of timers.entries()) {
         if (!timerKey.includes(event.id)) {
@@ -4283,19 +4284,16 @@ async function cleanup(event, delay = 0) {
     }
 
     /*
-     * Xóa các câu đố tạm thuộc event.
+     * Xóa puzzle tạm.
      */
     for (const [puzzleKey, state] of activePuzzles.entries()) {
-        if (state.eventId !== event.id) {
-            continue;
+        if (state.eventId === event.id) {
+            activePuzzles.delete(puzzleKey);
         }
-
-        activePuzzles.delete(puzzleKey);
     }
 
     /*
-     * Xóa các trạng thái boss tạm
-     * thuộc event.
+     * Tắt nút của boss đang chạy.
      */
     for (const [bossKey, state] of activeBosses.entries()) {
         if (state.eventId !== event.id) {
@@ -4304,13 +4302,59 @@ async function cleanup(event, delay = 0) {
 
         if (state.publicMessage) {
             await state.publicMessage
-                .edit({
-                    components: [],
-                })
+                .edit({ components: [] })
                 .catch(() => undefined);
         }
 
         activeBosses.delete(bossKey);
+    }
+
+    /*
+     * Xóa các kênh đội sau 5 phút.
+     * channelCleanup lưu lịch xóa vào database, nên bot restart
+     * giữa chừng vẫn tiếp tục xóa được.
+     */
+    const deleteDelayMs = 5 * 60 * 1000;
+    const client = event.guild?.client;
+
+    if (client) {
+        for (const team of event.teams || []) {
+            if (!team.channelId) {
+                continue;
+            }
+
+            const teamChannel = await event.guild.channels
+                .fetch(team.channelId)
+                .catch(() => null);
+
+            if (teamChannel) {
+                channelCleanup.schedule(
+                    client,
+                    teamChannel,
+                    deleteDelayMs,
+                    "Bí Cảnh đã kết thúc — tự động dọn kênh đội",
+                );
+            }
+        }
+
+        /*
+         * Xóa category sau kênh đội 15 giây để Discord không
+         * thả các channel con ra ngoài category.
+         */
+        if (event.categoryId) {
+            const category = await event.guild.channels
+                .fetch(event.categoryId)
+                .catch(() => null);
+
+            if (category) {
+                channelCleanup.schedule(
+                    client,
+                    category,
+                    deleteDelayMs + 15_000,
+                    "Bí Cảnh đã kết thúc — tự động dọn category",
+                );
+            }
+        }
     }
 
     events.delete(event.key);

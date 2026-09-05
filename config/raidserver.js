@@ -22,63 +22,49 @@ module.exports = {
 
     startHour: 21,
     startMinute: 30,
-
     prepareMinutes: 15,
 
-    // Ít thời gian chọn hành động hơn
-    phaseSeconds: 24,
+    // Thời gian chọn hành động mỗi phase
+    phaseSeconds: 22,
 
-    // DPS check gắt hơn
-    maxBattleMinutes: 16,
+    // Tổng thời gian hạ boss
+    maxBattleMinutes: 14,
 
     minPlayers: 2,
 
     boss: {
         name: "Mamu siêu béo",
 
-        // Cũ: 8.000.000
-        baseHp: 12000000,
+        baseHp: 15000000,
+        hpPerPlayer: 4000000,
 
-        // Cũ: 2.500.000 mỗi người
-        hpPerPlayer: 3500000,
-
-        // Cũ: 2.500
-        baseAtk: 3300,
-
-        // Cũ: 180 mỗi người
-        atkPerPlayer: 260,
+        baseAtk: 3700,
+        atkPerPlayer: 310,
 
         maxRage: 100,
         maxSpirit: 100,
     },
 
     perfectMechanic: {
-        // Cũ: mechanic đúng gây 3,5% máu tối đa
-        // Mới: chỉ còn 2,2%
-        successBossHpPercent: 0.022,
+        // Sát thương thật khi xử lý mechanic thành công
+        successBossHpPercent: 0.02,
     },
 
     difficulty: {
-        // Damage của người chơi còn 78%
-        playerDamageMultiplier: 0.78,
+        // Damage người chơi còn 74%
+        playerDamageMultiplier: 0.74,
 
-        // Tăng thêm 8% số người cần làm đúng mechanic
-        requiredRatioBonus: 0.08,
+        // Tăng số người bắt buộc phải làm đúng mechanic
+        requiredRatioBonus: 0.12,
 
-        // Boss tự tăng nộ mỗi phase
-        passiveRagePerPhase: 4,
+        // Nộ tăng theo phase
+        passiveRagePerPhase: 6,
+        stage2ExtraRage: 3,
+        stage3ExtraRage: 6,
 
-        // Boss dưới 70% HP tăng thêm 2 nộ
-        stage2ExtraRage: 2,
-
-        // Boss dưới 35% HP tăng thêm 4 nộ nữa
-        stage3ExtraRage: 4,
-
-        // Damage toàn đội khi boss đủ 100 nộ
-        rageBurstDamageMultiplier: 2.1,
-
-        // Sau khi bùng nộ không trở về 0
-        rageAfterBurst: 45,
+        // Bùng nộ nguy hiểm hơn
+        rageBurstDamageMultiplier: 2.4,
+        rageAfterBurst: 55,
     },
 
     reward: {
@@ -105,16 +91,9 @@ module.exports = {
         enabled: true,
         maxPerRaid: 1,
 
-        // Cũ: 28%
         triggerChance: 0.12,
-
-        // Chỉ cứu khi boss còn dưới 20%
         minBossHpPercent: 20,
-
-        // Hoặc ít nhất 65% người chơi đã chết
         minDeadRatio: 0.65,
-
-        // Hoặc boss đã đủ 100 nộ
         minRage: 100,
     },
 };

@@ -8,7 +8,7 @@ const {
 } = require("discord.js");
 
 const database = require("./database");
-const raidConfig = require("./config/raidserver");
+const raidConfig = require("./config/raidServer");
 const combat = require("./utils/combat");
 const channelCleanup = require("./utils/channelCleanup");
 
@@ -37,6 +37,12 @@ const MECHANICS = {
         weight: 14,
         minStage: 1,
         hint: "Boss tách thành ba bóng. Cần Tụ Linh để tìm bản thể trước khi dồn sát thương.",
+    },
+    meteor_siege: {
+        title: "☄️ Huyết Hỏa Thiên Thạch",
+        weight: 13,
+        minStage: 2,
+        hint: "Hai đạo hữu bị khóa bởi thiên thạch. Người bị chọn phải Né Tránh, cả đội cần Hộ Pháp để bẻ quỹ đạo.",
     },
     top_damage_target: {
         title: "👑 Sát Ý Phản Phệ",
@@ -798,6 +804,13 @@ function chooseTargets(raid, mechanicId) {
         return [first?.userId, second?.userId].filter(Boolean);
     }
 
+    if (mechanicId === "meteor_siege") {
+        const first = pickOne(alive);
+        const second = pickOne(alive.filter((p) => p.userId !== first?.userId));
+
+        return [first?.userId, second?.userId].filter(Boolean);
+    }
+
     if (mechanicId === "top_damage_target") {
         const top = [...alive].sort((a, b) => {
             return Number(b.damage || 0) - Number(a.damage || 0);
@@ -1182,6 +1195,68 @@ function resolveBellyRoll(raid, logs) {
         );
     }
 }
+function resolveMeteorSiege(raid, logs) {
+    const targets = (raid.phase.targetUserIds || [])
+        .map((id) => raid.players[id])
+        .filter(Boolean);
+
+    const guards = actionCount(raid, "guard");
+    const requiredGuards = requiredByAlive(raid, 0.25);
+
+    const targetsDodged =
+        targets.length > 0 &&
+        targets.every((player) => {
+            return raid.phase.actions[player.userId] === "dodge";
+        });
+
+    // Hai người bị chọn Né Tránh, đồng đội đủ Hộ Pháp
+    if (targetsDodged && guards >= requiredGuards) {
+        const dmg = addMechanicDamage(raid, 1.45);
+
+        addRage(raid, -10);
+        addSpirit(raid, 12);
+
+        targets.forEach((player) => {
+            player.mechanicScore += 2;
+        });
+
+        logs.push(
+            `☄️ Thiên thạch bị đổi hướng. Boss tự lãnh **${formatNumber(dmg)}** sát thương thật.`,
+        );
+
+        return;
+    }
+
+    // Người bị khóa chịu sát thương lớn
+    for (const target of targets) {
+        damagePlayer(
+            raid,
+            target,
+            raid.boss.atk * 3.2,
+            "Trúng Huyết Hỏa Thiên Thạch",
+        );
+
+        target.mistakes += 1;
+    }
+
+    // Người vẫn tham công chịu dư chấn
+    for (const player of getAlivePlayers(raid)) {
+        if (raid.phase.actions[player.userId] === "attack") {
+            damagePlayer(
+                raid,
+                player,
+                raid.boss.atk * 0.85,
+                "Bị dư chấn thiên thạch",
+            );
+        }
+    }
+
+    addRage(raid, 18);
+
+    logs.push(
+        "☄️ Thiên thạch rơi trúng đội hình. Người bị khóa và người tham công đều chịu dư chấn.",
+    );
+}
 function resolveHeavenSave(raid, logs) {
     raid.stats.heavenSaveUsed = true;
 
@@ -1244,24 +1319,36 @@ function resolveMechanic(raid, logs) {
     switch (raid.phase.mechanicId) {
         case "death_mark":
             return resolveDeathMark(raid, logs);
+
         case "clones":
             return resolveClones(raid, logs);
+
         case "top_damage_target":
             return resolveTopDamageTarget(raid, logs);
+
         case "anti_spam":
             return resolveAntiSpam(raid, logs);
+
         case "dice_fate":
             return resolveDiceFate(raid, logs);
+
         case "soul_link":
             return resolveSoulLink(raid, logs);
+
         case "lantern_holder":
             return resolveLanternHolder(raid, logs);
-        case "heaven_save":
-            return resolveHeavenSave(raid, logs);
-        default:
-            return resolveDeathMark(raid, logs);
+
         case "belly_roll":
             return resolveBellyRoll(raid, logs);
+
+        case "meteor_siege":
+            return resolveMeteorSiege(raid, logs);
+
+        case "heaven_save":
+            return resolveHeavenSave(raid, logs);
+
+        default:
+            return resolveDeathMark(raid, logs);
     }
 }
 
