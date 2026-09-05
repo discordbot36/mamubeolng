@@ -8,7 +8,7 @@ const {
 } = require("discord.js");
 
 const database = require("./database");
-const raidConfig = require("./config/raidServer");
+const raidConfig = require("./config/raidserver");
 const combat = require("./utils/combat");
 const channelCleanup = require("./utils/channelCleanup");
 
