@@ -600,9 +600,9 @@ function createBattleState(hunt) {
 
     const beast = hunt.beast;
     const level = Math.max(1, Number(beast.level || 1));
-    const modeDifficulty = hunt.mode === "party" ? 0.058 : 0.065;
+    const modeDifficulty = hunt.mode === "party" ? 0.048 : 0.065;
     const partyTacticTax =
-        hunt.mode === "party" ? 1 + (memberCount - 1) * 0.1 : 1;
+        hunt.mode === "party" ? 1 + (memberCount - 1) * 0.05 : 1;
 
     const maxBeastHp = Math.max(
         80,
@@ -1270,6 +1270,30 @@ function scaleMaterialReward(materials, multiplier) {
     return result;
 }
 
+function hasWonOnTime(hunt) {
+    const battle = hunt.battle;
+    const maxTurns = Math.max(1, Number(battle.maxTurns || 1));
+    const perfectTurns = Number(battle.perfectTurns || 0);
+    const rhythm = Number(battle.rhythm || 0);
+
+    // Tổ đội phối hợp tốt được nới điều kiện thắng khi hết lượt.
+    const playedWellAsTeam =
+        hunt.mode === "party" &&
+        perfectTurns >= Math.ceil(maxTurns * 0.75) &&
+        rhythm >= 70;
+
+    const remainingHpRatio = playedWellAsTeam
+        ? 0.5 // Chơi chuẩn: boss còn tối đa 50% máu vẫn tính thắng.
+        : hunt.mode === "party"
+          ? 0.35 // Tổ đội bình thường: boss còn tối đa 35% máu.
+          : 0.25; // Solo giữ nguyên độ khó.
+
+    return (
+        Number(battle.beastHp || 0) <=
+            Number(battle.maxBeastHp || 0) * remainingHpRatio && rhythm >= 20
+    );
+}
+
 async function finishBattle(channel, hunt, success) {
     hunt = getHunt(hunt.id) || hunt;
 
@@ -1752,8 +1776,7 @@ async function resolveBattleRound(channel, huntId) {
     }
 
     if (battle.turn >= battle.maxTurns) {
-        const success =
-            battle.beastHp <= battle.maxBeastHp * 0.25 && battle.rhythm >= 20;
+        const success = hasWonOnTime(hunt);
 
         return finishBattle(channel, hunt, success);
     }
@@ -2602,10 +2625,7 @@ async function recover(client) {
                     if (
                         Number(battle.turn || 0) >= Number(battle.maxTurns || 0)
                     ) {
-                        const success =
-                            Number(battle.beastHp || 0) <=
-                                Number(battle.maxBeastHp || 0) * 0.25 &&
-                            Number(battle.rhythm || 0) >= 20;
+                        const success = hasWonOnTime(hunt);
 
                         await finishBattle(channel, hunt, success);
                         continue;
