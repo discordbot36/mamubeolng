@@ -15,6 +15,7 @@ const weaponConfig = require("./weapon");
 const adminConfig = require("./config/admin");
 const combatUtils = require("./utils/combat");
 const channelCleanup = require("./utils/channelCleanup");
+const randomDuyen = require("./duyen-random");
 const events = new Map();
 const timers = new Map();
 const activePuzzles = new Map();
@@ -4428,18 +4429,47 @@ async function forceStop(interaction) {
     return cleanup(event);
 }
 
+async function startDuyen(interaction) {
+    if (duyenConfig.randomEvents?.enabled) {
+        return randomDuyen.start(interaction);
+    }
+
+    return start(interaction);
+}
+
+async function autoStartDuyen(client) {
+    if (duyenConfig.randomEvents?.enabled) {
+        return randomDuyen.autoStart(client);
+    }
+
+    return autoStart(client);
+}
+
+async function handleDuyenButton(interaction) {
+    const randomResult = await randomDuyen.handleButton(interaction);
+
+    if (randomResult !== undefined) {
+        return randomResult;
+    }
+
+    return handleInteraction(interaction);
+}
+
+async function recover(client) {
+    if (duyenConfig.randomEvents?.enabled) {
+        return randomDuyen.recover(client);
+    }
+}
+
 module.exports = {
-    start,
-
-    autoStart,
-
-    handleInteraction,
-    handleButton: handleInteraction,
+    start: startDuyen,
+    autoStart: autoStartDuyen,
+    recover,
+    handleInteraction: handleDuyenButton,
+    handleButton: handleDuyenButton,
 
     showLastResult,
-
     forceStop,
-
     hasActiveEvent,
     getActiveEvent,
     getActiveEvents,

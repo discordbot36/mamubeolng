@@ -1,4 +1,14 @@
 module.exports = {
+    randomEvents: {
+        enabled: true,
+        durationMs: 5 * 60 * 1000,
+        beastHp: 6000,
+        weights: {
+            doors: 45,
+            merchant: 30,
+            beast: 25,
+        },
+    },
     autoOpen: {
         enabled: true,
 

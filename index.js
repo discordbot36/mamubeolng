@@ -213,6 +213,7 @@ client.once("clientReady", async () => {
         ["SanYeuThu", () => sanyeuthu.recover(client)],
         ["RaidServer", () => raidserver.recover(client)],
         ["MoLinhThach", () => molinhthach.recover(client)],
+        ["Duyen", () => duyen.recover(client)],
     ];
 
     for (const [name, recover] of recoveryTasks) {
