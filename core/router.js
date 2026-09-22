@@ -31,6 +31,7 @@ const duyen = require("../duyen");
 const molinhthach = require("../molinhthach");
 const limbo = require("../limbo");
 const hilo = require("../hilo");
+const caorua = require("../caorua");
 const modules = {
     economy,
     race,
@@ -63,6 +64,7 @@ const modules = {
     raidserver,
     limbo,
     hilo,
+    caorua,
 };
 
 function resolve(path) {
@@ -162,6 +164,7 @@ async function handleButton(interaction) {
         sanyeuthu,
         flip,
         hilo,
+        caorua,
         vecao,
         raidserver,
     ];

@@ -2,6 +2,16 @@ const { GAMBLE_MAX_BET } = require("./gamble");
 
 module.exports = [
     {
+        name: "caorua",
+        description: "Tạo phòng chơi Ba Cào tối đa 6 người",
+        handler: "caorua.create",
+    },
+    {
+        name: "diemcaorua",
+        description: "Xem điểm Ba Cào của bạn",
+        handler: "caorua.points",
+    },
+    {
         name: "limbo",
 
         description: "Đặt cược Limbo với hệ số mục tiêu tối đa 999999x",
