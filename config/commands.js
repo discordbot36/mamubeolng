@@ -487,6 +487,35 @@ module.exports = [
         ],
     },
     {
+        name: "nuoicho",
+        description: "Nuôi dưỡng, huấn luyện và tiến hóa chó đã bắt được",
+        handler: "cho.execute",
+        autocomplete: "cho.autocomplete",
+        options: [
+            {
+                type: "string",
+                name: "hanhdong",
+                description: "Chọn hoạt động với chó",
+                required: true,
+                choices: [
+                    { name: "Xem chuồng chó", value: "hoso" },
+                    { name: "Cho ăn tăng trọng", value: "choan" },
+                    { name: "Huấn luyện tăng lực chiến", value: "huanluyen" },
+                    { name: "Tiến hóa", value: "tienhoa" },
+                    { name: "Rèn trang bị", value: "trangbi" },
+                    { name: "Bán chó", value: "ban" },
+                ],
+            },
+            {
+                type: "string",
+                name: "cho",
+                description: "Chọn chó trong kho (không cần khi xem chuồng)",
+                required: false,
+                autocomplete: true,
+            },
+        ],
+    },
+    {
         name: "noitu",
         description: "Chơi nối từ farm tiền",
         handler: "noitu.start",
@@ -1110,6 +1139,10 @@ module.exports = [
                     {
                         name: "Thiên Bồng Phi Tiên Đan",
                         value: "thien_bong_phi_tien_dan",
+                    },
+                    {
+                        name: "Bí Cảnh Khai Giới Đan",
+                        value: "bi_canh_khai_gioi_dan",
                     },
                 ],
             },

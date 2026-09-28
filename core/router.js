@@ -3,6 +3,7 @@ const adminConfig = require("../config/admin");
 const economy = require("../handlers/economy");
 const race = require("../race");
 const work = require("../work");
+const cho = require("../cho");
 const noitu = require("../noitu");
 const dothach = require("../dothach");
 const baucua = require("../baucua");
@@ -36,6 +37,7 @@ const modules = {
     economy,
     race,
     work,
+    cho,
     noitu,
     dothach,
     dothachTournament,

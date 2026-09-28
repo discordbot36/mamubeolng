@@ -766,8 +766,8 @@ function buildLobbyComponents(realm) {
     return rows;
 }
 
-async function tryTrigger(interaction, source) {
-    if (!config.enabled) {
+async function tryTrigger(interaction, source, options = {}) {
+    if (!config.enabled && !options.force) {
         return null;
     }
 
@@ -780,10 +780,10 @@ async function tryTrigger(interaction, source) {
     }
 
     const chance = Number(config.triggerChance?.[source] || 0);
-    if (chance <= 0) {
+    if (chance <= 0 && !options.force) {
         return null;
     }
-    if (!combat.roll(chance)) {
+    if (!options.force && !combat.roll(chance)) {
         return null;
     }
 
@@ -2750,6 +2750,7 @@ async function selectBattleAction(interaction, realm, action) {
 
 module.exports = {
     tryTrigger,
+    createFromPill: (interaction) => tryTrigger(interaction, "potion", { force: true }),
     handleButton,
     recover,
 };

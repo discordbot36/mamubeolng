@@ -1076,6 +1076,16 @@ async function execute(interaction) {
         }
 
         if (action === "dung") {
+            if (recipeId === "bi_canh_khai_gioi_dan") {
+                const result = await useRealmCreationPill(interaction, userId, recipeId, qualityLevel);
+                if (!result.success) {
+                    return interaction.reply({ content: `❌ ${result.message}`, ephemeral: true });
+                }
+                return interaction.reply({
+                    content: `🌌 Đã dùng **Bí Cảnh Khai Giới Đan**. Bí Cảnh của bạn mở tại <#${result.realm.channelId}>; hãy mời đạo hữu vào đội!`,
+                    ephemeral: true,
+                });
+            }
             const result = usePill(userId, recipeId, qualityLevel, quantity);
 
             if (!result.success) {
@@ -1203,6 +1213,21 @@ async function execute(interaction) {
     } finally {
         processingUsers.delete(userId);
     }
+}
+
+async function useRealmCreationPill(interaction, userId, recipeId, qualityLevel) {
+    if (!interaction.guildId) return { success: false, message: "Đan này chỉ dùng được trong server." };
+    const profile = database.getAlchemyProfile(userId);
+    const owned = getOwnedPillAmount(profile, recipeId, qualityLevel);
+    if (owned < 1) return { success: false, message: `Bạn không có ${getQuality(qualityLevel).name} của Bí Cảnh Khai Giới Đan.` };
+    const realm = await require("./bicanh").createFromPill(interaction);
+    if (!realm) return { success: false, message: "Bạn đang có Bí Cảnh khác hoặc đã chạm giới hạn mở Bí Cảnh." };
+    const consumed = database.updateAlchemyProfile(userId, current => {
+        if (!removeCustomPill(current, recipeId, qualityLevel, 1)) return false;
+        return true;
+    });
+    if (!consumed) return { success: false, message: "Không thể tiêu thụ đan dược." };
+    return { success: true, realm };
 }
 
 module.exports = {

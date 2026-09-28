@@ -142,6 +142,18 @@ const FURNACES = [
             },
         },
     },
+    {
+        level: 8,
+        name: "Vạn Tượng Bí Cảnh Lô",
+        emoji: "🌌",
+        successBonus: 0.24,
+        maxQuality: 4,
+        maxDurability: 380,
+        upgradeCost: {
+            money: 150000000,
+            materials: { yeu_dan_tinh_anh: 100, linh_huyet: 100, yeu_hach: 60 },
+        },
+    },
 ];
 
 const QUALITIES = {
@@ -507,11 +519,27 @@ const RECIPES = {
             yeu_hach: 35,
         },
     },
+
+    bi_canh_khai_gioi_dan: {
+        id: "bi_canh_khai_gioi_dan",
+        name: "Bí Cảnh Khai Giới Đan",
+        emoji: "🌌",
+        type: "secret_realm",
+        description: "Dùng trong server để lập tức mở một Bí Cảnh Hữu Duyên do bạn làm chủ.",
+        requiredAlchemyLevel: 8,
+        requiredFurnaceLevel: 8,
+        baseSuccessRate: 0.48,
+        alchemyExp: 700,
+        furnaceDurabilityCost: 12,
+        craftMoney: 60000000,
+        buybackPrice: 30000000,
+        materials: { yeu_dan_tinh_anh: 100, linh_huyet: 100, yeu_hach: 60 },
+    },
 };
 
 module.exports = {
     maxAlchemyLevel: 10,
-    maxFurnaceLevel: 7,
+    maxFurnaceLevel: 8,
 
     dailyCultivationPillLimit: 10,
     dailyHuntRunPillLimit: 2,
