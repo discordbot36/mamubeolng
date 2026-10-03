@@ -371,7 +371,8 @@ function calculateCombatStats(profile) {
     const activePowerBonus = calculateActiveSkillPowerBonus(profile);
 
     const atk = Math.floor(
-        baseAtk * (1 + passiveBonus.atkBonus + weaponBonus.atkPercent),
+        baseAtk * (1 + passiveBonus.atkBonus + weaponBonus.atkPercent) +
+            Math.max(0, toSafeNumber(profile.companionAttack, 0)),
     );
 
     const defense = Math.floor(

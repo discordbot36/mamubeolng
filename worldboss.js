@@ -20,6 +20,7 @@ const worldBossConfig = require("./config/worldboss");
 const shop = require("./config/shop");
 const tuTienConfig = require("./config/tutien");
 const combat = require("./utils/combat");
+const { withDogCombatBonus } = require("./utils/dogCombat");
 const {
     givePhapBaoFarmReward,
     formatPhapBaoFarmReward,
@@ -1206,7 +1207,7 @@ class WorldBossManager {
                     });
                 }
 
-                const profile = ensureTuTienProfile(interaction.user.id);
+                const profile = withDogCombatBonus(ensureTuTienProfile(interaction.user.id), interaction.user.id);
 
                 if (!profile.rootId) {
                     return interaction.editReply({

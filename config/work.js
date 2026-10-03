@@ -70,10 +70,16 @@ module.exports = {
             pricePerKg: 50,
             chance: 1,
         },
+        {
+            id: "cho_soopi",
+            name: "Chó Soopi",
+            pricePerKg: 80,
+            chance: 0.5,
+        },
     ],
     dogWeight: {
         minKg: 0.5,
-        maxKg: 20,
+        maxKg: 100,
         decimalPlaces: 1,
     },
 };

@@ -1,4 +1,11 @@
 module.exports = {
+    thuc_an_cho: {
+        name: "Thức Ăn Cho Chó",
+        emoji: "🦴",
+        price: 2500,
+        shopCategory: "normal",
+        description: "Dùng để cho chó ăn; mỗi chó chỉ ăn một lần trong 6 giờ.",
+    },
     da_lo: {
         name: "Đá Lỏ",
         emoji: "🪨",

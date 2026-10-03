@@ -246,6 +246,7 @@ class WorkManager {
         const dogItem = {
             id: dog.id,
             name: dog.name,
+            speciesName: dog.name,
             type: "dog",
             weightKg,
             pricePerKg: dog.pricePerKg,
@@ -270,7 +271,7 @@ class WorkManager {
         return finishWork(interaction, {
             content:
                 `${interaction.user} đi ${job.name}\n\n` +
-                `${dog.name}\n` +
+                `${dogItem.name}\n` +
                 `⚖️ ${weightKg}kg\n` +
                 `💰 Giá trị: ${formatMoney(value)}\n\n` +
                 `Đã bỏ vào kho đồ`,

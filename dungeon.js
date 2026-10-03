@@ -20,6 +20,7 @@ const {
 const dungeonConfig = require("./config/dungeon");
 const quest = require("./quest");
 const combat = require("./utils/combat");
+const { withDogCombatBonus } = require("./utils/dogCombat");
 const bicanh = require("./bicanh");
 
 function formatNumber(number) {
@@ -650,7 +651,7 @@ function buildDungeonHomeEmbed(interaction, profile, dungeon) {
 
 class DungeonManager {
     async show(interaction) {
-        const profile = ensureTuTienProfile(interaction.user.id);
+        const profile = withDogCombatBonus(ensureTuTienProfile(interaction.user.id), interaction.user.id);
         const dungeon = getDungeonProfile(interaction.user.id);
 
         if (!profile.rootId) {
@@ -695,7 +696,7 @@ class DungeonManager {
     }
 
     async challenge(interaction) {
-        const profile = ensureTuTienProfile(interaction.user.id);
+        const profile = withDogCombatBonus(ensureTuTienProfile(interaction.user.id), interaction.user.id);
         const dungeon = getDungeonProfile(interaction.user.id);
 
         if (!profile.rootId) {
@@ -830,7 +831,7 @@ class DungeonManager {
     }
 
     async sweep(interaction) {
-        const profile = ensureTuTienProfile(interaction.user.id);
+        const profile = withDogCombatBonus(ensureTuTienProfile(interaction.user.id), interaction.user.id);
         const dungeon = getDungeonProfile(interaction.user.id);
 
         if (!profile.rootId) {

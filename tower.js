@@ -19,6 +19,7 @@ const {
 const towerConfig = require("./config/tower");
 const quest = require("./quest");
 const combat = require("./utils/combat");
+const { withDogCombatBonus } = require("./utils/dogCombat");
 const {
     givePhapBaoFarmReward,
     formatPhapBaoFarmReward,
@@ -842,7 +843,7 @@ async function handleFastCombatButton(interaction) {
 
 async function show(interaction) {
     const tower = ensureTowerProfile(interaction.user.id);
-    const profile = ensureTuTienProfile(interaction.user.id);
+    const profile = withDogCombatBonus(ensureTuTienProfile(interaction.user.id), interaction.user.id);
     const cooldownLeft = Math.max(
         0,
         (tower.loseCooldownUntil || 0) - Date.now(),
@@ -896,7 +897,7 @@ async function fight(interaction) {
 
     await interaction.deferUpdate();
 
-    const profile = ensureTuTienProfile(userId);
+    const profile = withDogCombatBonus(ensureTuTienProfile(userId), userId);
 
     const nextFloor = (tower.floor || 0) + 1;
 
