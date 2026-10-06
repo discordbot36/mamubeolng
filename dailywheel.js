@@ -300,6 +300,22 @@ function sleep(ms) {
     });
 }
 
+const SPIN_EDIT_TIMEOUT_MS = 8_000;
+
+function withTimeout(promise, timeoutMs = SPIN_EDIT_TIMEOUT_MS) {
+    let timer;
+
+    return Promise.race([
+        promise,
+        new Promise((_, reject) => {
+            timer = setTimeout(
+                () => reject(new Error("Cập nhật vòng quay quá thời gian.")),
+                timeoutMs,
+            );
+        }),
+    ]).finally(() => clearTimeout(timer));
+}
+
 function randomInt(min, max) {
     return Math.floor(
         Math.random() * (max - min + 1),
@@ -838,25 +854,7 @@ async function showWheel(
         );
     }
 
-    for (
-        let index = 1;
-        index < SPIN_FRAMES.length;
-        index += 1
-    ) {
-        await sleep(350 + index * 100);
-
-        await interaction.editReply({
-            content,
-            embeds: [
-                buildSpinEmbed(index),
-            ],
-            components: [],
-        });
-    }
-
-    await sleep(500);
-
-    return interaction.editReply({
+    const finalPayload = {
         content,
         embeds: [
             buildWheelEmbed(state),
@@ -866,7 +864,47 @@ async function showWheel(
                 interaction.user.id,
                 state,
             ),
-    });
+    };
+
+    try {
+        for (
+            let index = 1;
+            index < SPIN_FRAMES.length;
+            index += 1
+        ) {
+            await sleep(350 + index * 100);
+
+            await withTimeout(interaction.editReply({
+                content,
+                embeds: [buildSpinEmbed(index)],
+                components: [],
+            }));
+        }
+
+        await sleep(500);
+        return await withTimeout(interaction.editReply(finalPayload));
+    } catch (error) {
+        console.error("[DAILY WHEEL] Animation error:", error);
+
+        // Kết quả và nút xử lý quà luôn được ưu tiên hơn hoạt ảnh.
+        try {
+            return await withTimeout(interaction.editReply(finalPayload));
+        } catch (finalError) {
+            console.error("[DAILY WHEEL] Final edit error:", finalError);
+
+            try {
+                return await withTimeout(interaction.followUp({
+                    content:
+                        "⚠️ Vòng quay bị timeout khi cập nhật. Lượt quà vẫn được giữ; " +
+                        "hãy dùng `/diemdanh` để mở lại và xử lý, không bị mất lượt.",
+                    ephemeral: true,
+                }));
+            } catch (notifyError) {
+                console.error("[DAILY WHEEL] Timeout notice error:", notifyError);
+                return undefined;
+            }
+        }
+    }
 }
 
 async function start(

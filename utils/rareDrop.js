@@ -2,7 +2,8 @@ const { EmbedBuilder } = require("discord.js");
 
 const GAMBLE_DROP_MIN_PAYOUT = 50_000_000;
 const GEM_DROP_MIN_VALUE = 5_000_000;
-const DOG_DROP_MIN_VALUE = 800;
+// Chỉ thông báo những chó có giá trị thực sự cao để tránh spam Lucky Drops.
+const DOG_DROP_MIN_VALUE = 5_000;
 
 async function announceRareDrop(client, data) {
     const channelId = process.env.RARE_DROP_CHANNEL_ID;
