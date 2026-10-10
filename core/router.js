@@ -32,6 +32,7 @@ const duyen = require("../duyen");
 const molinhthach = require("../molinhthach");
 const limbo = require("../limbo");
 const hilo = require("../hilo");
+const vietlott = require("../vietlott");
 const caorua = require("../caorua");
 const modules = {
     economy,
@@ -66,6 +67,7 @@ const modules = {
     raidserver,
     limbo,
     hilo,
+    vietlott,
     caorua,
 };
 

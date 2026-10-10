@@ -2,6 +2,18 @@ const { GAMBLE_MAX_BET } = require("./gamble");
 
 module.exports = [
     {
+        name: "vietlott",
+        description: "Mua vé và theo dõi Vietlott 6/45",
+        handler: "vietlott.handle",
+        options: [
+            { type: "subcommand", name: "lich", description: "Xem giờ quay và jackpot" },
+            { type: "subcommand", name: "mua", description: "Mua một vé Vietlott 6/45", options: [
+                { type: "string", name: "so", description: "6 số khác nhau từ 1 đến 45", required: true },
+            ] },
+            { type: "subcommand", name: "ketqua", description: "Xem kết quả kỳ gần nhất" },
+        ],
+    },
+    {
         name: "caorua",
         description: "Tạo phòng chơi Ba Cào tối đa 6 người",
         handler: "caorua.create",

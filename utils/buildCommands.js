@@ -67,6 +67,13 @@ function applyChannelTypes(option, optionConfig) {
 }
 
 function applyOption(builder, optionConfig) {
+    if (optionConfig.type === "subcommand") {
+        return builder.addSubcommand((subcommand) => {
+            subcommand.setName(optionConfig.name).setDescription(optionConfig.description || "Không có mô tả");
+            for (const child of optionConfig.options || []) applyOption(subcommand, child);
+            return subcommand;
+        });
+    }
     const method = optionBuilders[optionConfig.type];
 
     if (!method) {

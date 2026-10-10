@@ -13,9 +13,9 @@ const timers = new Map();
 const STATE_KEY = "duyen:random:active";
 
 const MERCHANT_OFFERS = [
-    { id: "gold", emoji: "🪙", name: "Túi linh thạch", cost: 5_000, reward: 9_000 },
-    { id: "jade", emoji: "💎", name: "Ngọc đổi vận", cost: 14_000, reward: 26_000 },
-    { id: "relic", emoji: "🗝️", name: "Mảnh cổ vật", cost: 35_000, reward: 70_000 },
+    { id: "gold", emoji: "🪙", name: "Túi linh thạch", cost: 5_000, reward: 6_500 },
+    { id: "jade", emoji: "💎", name: "Ngọc đổi vận", cost: 14_000, reward: 17_000 },
+    { id: "relic", emoji: "🗝️", name: "Mảnh cổ vật", cost: 35_000, reward: 42_000 },
 ];
 
 function getOptions() {
@@ -71,17 +71,21 @@ function eventDescription(event) {
     const remaining = Math.max(0, Math.ceil((event.expiresAt - Date.now()) / 1000));
 
     if (event.kind === "doors") {
-        return "Ba cánh cổng vừa xuất hiện. Chọn một cổng — có thể nhận linh thạch, gặp tiền bối, hoặc chỉ mang về một câu chuyện.\n\n" +
-            `⏳ Còn **${remaining}s** • Mỗi người chọn một lần.`;
+        const outcomes = event.outcomes || [];
+        const history = outcomes.length
+            ? `\n\n**Người đã thử vận may:**\n${outcomes.slice(-8).map((result) => `${result.name}: ${result.text}${result.money ? ` **+${db.formatMoney(result.money)} ${coin}**` : ""}`).join("\n")}`
+            : "";
+        return "Ba cánh cổng vừa xuất hiện. Mỗi người chỉ chọn được một cổng.\n\n" +
+            `🎁 **Quà có thể nhận (mỗi loại 1/3):** túi linh thạch **${db.formatMoney(3_000)}–${db.formatMoney(7_000)}**, lộc tiền bối **${db.formatMoney(5_000)}–${db.formatMoney(10_000)}**, hoặc cổng trống.\n⏳ Còn **${remaining}s**${history}`;
     }
     if (event.kind === "merchant") {
         const offers = event.offers.map((offer, index) =>
-            `${offer.emoji} **${index + 1}. ${offer.name}** — ${coin} ${db.formatMoney(offer.cost)}\n> Giá trị bí ẩn, chỉ mua một lần.`,
+            `${offer.emoji} **${index + 1}. ${offer.name}**\n> Trả **${db.formatMoney(offer.cost)} ${coin}** · nhận chắc **${db.formatMoney(offer.reward)} ${coin}** (lời **${db.formatMoney(offer.reward - offer.cost)} ${coin}**).`,
         );
         return `Một thương nhân lạ ghé qua trong chốc lát. Hàng hóa có lời, nhưng không hoàn tiền.\n\n${offers.join("\n\n")}\n\n⏳ Còn **${remaining}s**.`;
     }
     const hpPercent = Math.max(0, Math.ceil((event.hp / event.maxHp) * 100));
-    return `Yêu thú đang quấy phá linh mạch! Cả kênh cùng đánh bại nó để chia thưởng.\n\n❤️ HP: **${event.hp.toLocaleString("en-US")} / ${event.maxHp.toLocaleString("en-US")}** (${hpPercent}%)\n👥 Người tham gia: **${Object.keys(event.damageByUser).length}**\n⏳ Còn **${remaining}s**.`;
+    return `Yêu thú đang quấy phá linh mạch! Cả kênh cùng đánh bại nó. Mỗi người gây sát thương nhận **3.000 ${coin}** cộng phần chia tối đa **12.000 ${coin}** theo tỷ lệ sát thương.\n\n❤️ HP: **${event.hp.toLocaleString("en-US")} / ${event.maxHp.toLocaleString("en-US")}** (${hpPercent}%)\n👥 Người tham gia: **${Object.keys(event.damageByUser).length}**\n⏳ Còn **${remaining}s**.`;
 }
 
 function buildComponents(event, disabled = false) {
@@ -247,9 +251,12 @@ async function handleButton(interaction) {
         ];
         const reward = rewards[crypto.randomInt(0, rewards.length)];
         event.users[userId] = true;
+        event.outcomes ||= [];
+        event.outcomes.push({ userId, name: interaction.user.username, text: reward.text, money: reward.money });
         if (reward.money) db.addMoney(userId, reward.money);
         saveState();
         await interaction.reply({ content: `🚪 ${reward.text}${reward.money ? ` Nhận **${db.getCurrencyEmoji()} ${db.formatMoney(reward.money)}**.` : ""}`, ephemeral: true });
+        await updateMessage(event);
         return true;
     }
     if (action === "buy") {

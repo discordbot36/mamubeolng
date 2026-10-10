@@ -1130,6 +1130,27 @@ function sellItem(userId, itemId, quantity = 1) {
                 };
             }
 
+            if (specialItem.type === "dog" && specialItem.id === "cho_do") {
+                return {
+                    success: false,
+                    message: "Chó được bảo vệ nên không thể bán.",
+                };
+            }
+
+            if (specialItem.type === "dog" && specialItem.locked) {
+                return {
+                    success: false,
+                    message: "Chó đang khóa nên không thể bán. Hãy mở khóa trước.",
+                };
+            }
+
+            if (specialItem.type === "dog" && specialItem.equippedAsPet) {
+                return {
+                    success: false,
+                    message: "Chó đang trang bị chiến đấu nên không thể bán. Hãy tháo trang bị trước.",
+                };
+            }
+
             if (specialItem.type === "dog" && !specialItem.dogStatsCounted) {
                 if (!user.dogStats) {
                     user.dogStats = {
@@ -1375,7 +1396,7 @@ function sellAllDoThachUnder360k(userId) {
 }
 
 function isProtectedDog(item) {
-    return item?.type === "dog" && item?.id === "cho_do";
+    return item?.type === "dog" && (item?.id === "cho_do" || item?.locked || item?.equippedAsPet);
 }
 
 function sellAllDogs(userId) {
@@ -1394,6 +1415,7 @@ function sellAllDogs(userId) {
 
         const keptItems = [];
         const soldItems = [];
+        let protectedCount = 0;
 
         let totalPrice = 0;
 
@@ -1405,6 +1427,7 @@ function sellAllDogs(userId) {
 
             if (isProtectedDog(item)) {
                 keptItems.push(item);
+                protectedCount += 1;
                 continue;
             }
             const dogValue = Math.max(0, Math.floor(Number(item.value || 0)));
@@ -1437,7 +1460,9 @@ function sellAllDogs(userId) {
         if (soldItems.length <= 0) {
             return {
                 success: false,
-                message: "Bạn không có con chó nào có thể bán.",
+                message: protectedCount > 0
+                    ? "Không có chó nào có thể bán. Chó bị khóa, đang trang bị hoặc được bảo vệ vẫn ở lại trong kho."
+                    : "Bạn không có con chó nào có thể bán.",
             };
         }
 
@@ -1449,6 +1474,7 @@ function sellAllDogs(userId) {
             quantity: soldItems.length,
             totalPrice,
             soldItems,
+            protectedCount,
         };
     });
 }

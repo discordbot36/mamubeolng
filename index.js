@@ -13,6 +13,7 @@ const duyenConfig = require("./config/duyen");
 const raidserver = require("./raidserver");
 const molinhthach = require("./molinhthach");
 const channelCleanup = require("./utils/channelCleanup");
+const vietlott = require("./vietlott");
 
 function requireEnv(name) {
     const value = process.env[name];
@@ -229,6 +230,7 @@ client.once("clientReady", async () => {
      * Chỉ khởi động lịch tự động sau khi recover hoàn tất.
      */
     scheduleAutoDuyen(client);
+    vietlott.start(client);
     raidserver.startAutoSchedule(client);
     router.startAutoActiveRain?.(client);
     leaderboard.startAutoUpdate(client);

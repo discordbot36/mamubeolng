@@ -1040,7 +1040,8 @@ async function sell(interaction) {
 
         return interaction.reply({
             content:
-                `💸 Đã có **${result.quantity}** con chó phải trả giá\n` +
+                `💸 Đã bán **${result.quantity}** con chó\n` +
+                (result.protectedCount ? `🔒 Đã giữ lại **${result.protectedCount}** chó bị khóa/đang trang bị/được bảo vệ.\n` : "") +
                 `${coin} Tổng nhận: **${formatMoney(result.totalPrice)}**`,
         });
     }
