@@ -8,7 +8,8 @@ module.exports = [
         options: [
             { type: "subcommand", name: "lich", description: "Xem giờ quay và jackpot" },
             { type: "subcommand", name: "mua", description: "Mua một vé Vietlott 6/45", options: [
-                { type: "string", name: "so", description: "6 số khác nhau từ 1 đến 45", required: true },
+                { type: "string", name: "so", description: "Bỏ trống để bot chọn ngẫu nhiên; hoặc nhập 6 số khác nhau", required: false },
+                { type: "integer", name: "soluong", description: "Số vé muốn mua (mỗi vé 10.000 xu)", required: false, minValue: 1, maxValue: 20 },
             ] },
             { type: "subcommand", name: "ketqua", description: "Xem kết quả kỳ gần nhất" },
         ],

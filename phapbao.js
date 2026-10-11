@@ -2026,14 +2026,6 @@ function canUpgradeStars(user, weapon) {
 
     const rarity = getWeaponDisplayRarity(weapon);
 
-    if (rarity.id === "EX") {
-        return {
-            ok: false,
-            message:
-                "EX bản 3.0 chưa cho nâng sao. Để dành làm hàng nhá hàng cho server.",
-        };
-    }
-
     const currentStars = Number(weapon.stars || 0);
     const maxStars = Number(rarity.maxStars || 0);
 

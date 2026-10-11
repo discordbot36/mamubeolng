@@ -49,13 +49,18 @@ async function draw() {
         if (current.nextDrawAt > Date.now()) return;
         const announcementChannels = [...new Set((current.tickets || []).map((ticket) => ticket.channelId).filter(Boolean))];
         const numbers = chooseNumbers();
-        const tiers = { 3: 100000, 4: 500000, 5: 5000000 };
+        const tiers = { 3: 30000, 4: 300000, 5: 10000000 };
         const winners = [];
         for (const ticket of current.tickets) {
             const matches = ticket.numbers.filter((n) => numbers.includes(n)).length;
             if (matches >= 3) winners.push({ ...ticket, matches, prize: matches === 6 ? current.jackpot : tiers[matches] });
         }
-        const jackpotWinner = winners.some((w) => w.matches === 6);
+        const jackpotTickets = winners.filter((winner) => winner.matches === 6);
+        const jackpotWinner = jackpotTickets.length > 0;
+        if (jackpotWinner) {
+            const share = Math.floor(current.jackpot / jackpotTickets.length);
+            for (const winner of jackpotTickets) winner.prize = share;
+        }
         for (const winner of winners) addMoney(winner.userId, winner.prize);
         const result = { round: current.round, numbers, drawnAt: Date.now(), winners };
         current.results = [result, ...(current.results || [])].slice(0, 10);
@@ -67,7 +72,7 @@ async function draw() {
         if (clientRef) {
             const channelIds = announcementChannels.length ? announcementChannels : (current.lastChannelId ? [current.lastChannelId] : []);
             const embed = new EmbedBuilder().setColor(0xf1c40f).setTitle(`🎉 Kết quả Vietlott 6/45 — kỳ ${result.round}`)
-                .setDescription(`**Bộ số:** ${numbers.map((n) => `\`${String(n).padStart(2, "0")}\``).join(" · ")}\n\n${winners.length ? winners.map((w) => `<@${w.userId}> trúng **${w.matches}/6** — ${currency(w.prize)}`).join("\n") : "Không có vé trúng thưởng."}\n\n${jackpotWinner ? "🎊 Có người trúng Jackpot!" : `Jackpot được cộng dồn lên **${currency(current.jackpot)}**.`}\nKỳ tiếp theo: **${formatDate(current.nextDrawAt)}**`);
+                .setDescription(`**Bộ số:** ${numbers.map((n) => `\`${String(n).padStart(2, "0")}\``).join(" · ")}\n\n${winners.length ? winners.map((w) => `<@${w.userId}> trúng **${w.matches}/6** — ${currency(w.prize)}`).join("\n") : "Không có vé trúng thưởng."}\n\n🏅 5 số: ${currency(10000000)} · 4 số: ${currency(300000)} · 3 số: ${currency(30000)}\n${jackpotWinner ? `🎊 Jackpot chia cho ${jackpotTickets.length} vé trúng.` : `Jackpot được cộng dồn lên **${currency(current.jackpot)}**.`}\nKỳ tiếp theo: **${formatDate(current.nextDrawAt)}**`);
             for (const id of channelIds) { const channel = await clientRef.channels.fetch(id).catch(() => null); if (channel?.isTextBased()) await channel.send({ embeds: [embed] }).catch(() => undefined); }
         }
     } finally { drawing = false; }
@@ -78,17 +83,30 @@ async function handle(interaction) {
     current.nextDrawAt ||= Date.now() + INTERVAL_MS;
     if (sub === "lich") {
         save(current);
-        return interaction.reply({ content: `🎟️ **Vietlott 6/45 — kỳ ${current.round}**\nJackpot hiện tại: **${currency(current.jackpot)}**\nMở bán đến trước giờ quay: **${formatDate(current.nextDrawAt)}**\nGiá vé: **${currency(TICKET_PRICE)}**/vé. Dùng **/vietlott mua** và nhập 6 số khác nhau từ 1 đến 45.`, ephemeral: true });
+        return interaction.reply({ content: `🎟️ **Vietlott 6/45 — kỳ ${current.round}**\nJackpot hiện tại: **${currency(current.jackpot)}**\nMở bán đến trước giờ quay: **${formatDate(current.nextDrawAt)}**\nGiá vé: **${currency(TICKET_PRICE)}**/vé. Dùng **/vietlott mua**; có thể nhập 6 số hoặc bỏ trống để bot chọn ngẫu nhiên.\n🏅 5 số: **${currency(10000000)}** · 4 số: **${currency(300000)}** · 3 số: **${currency(30000)}**`, ephemeral: true });
     }
     if (sub === "mua") {
-        const numbers = parseNumbers(interaction.options.getString("so"));
-        if (!numbers) return interaction.reply({ content: "Vui lòng chọn đúng 6 số khác nhau từ 1 đến 45 (ví dụ: 1 8 16 24 32 45).", ephemeral: true });
+        const rawNumbers = interaction.options.getString("so");
+        const chosen = rawNumbers ? parseNumbers(rawNumbers) : null;
+        const quantity = interaction.options.getInteger("soluong") || 1;
+        if (rawNumbers && !chosen) return interaction.reply({ content: "Vui lòng chọn đúng 6 số khác nhau từ 1 đến 45 (ví dụ: 1 8 16 24 32 45), hoặc bỏ trống để chọn ngẫu nhiên.", ephemeral: true });
         if (Date.now() >= current.nextDrawAt) { await draw(); return interaction.reply({ content: "Kỳ quay đã đóng bán vé. Hãy xem lịch kỳ tiếp theo bằng /vietlott lich.", ephemeral: true }); }
-        const payment = removeMoney(interaction.user.id, TICKET_PRICE);
-        if (!payment.success) return interaction.reply({ content: `Bạn cần **${currency(TICKET_PRICE)}** để mua vé.`, ephemeral: true });
-        const ticket = { userId: interaction.user.id, numbers, purchasedAt: Date.now(), channelId: interaction.channelId };
-        current.tickets.push(ticket); current.lastChannelId = interaction.channelId; save(current);
-        return interaction.reply({ content: `✅ Đã mua vé kỳ **${current.round}**: ${numbers.map((n) => `**${n}**`).join(" · ")}\nGiá vé: ${currency(TICKET_PRICE)}. Dò vé tự động lúc **${formatDate(current.nextDrawAt)}**.`, ephemeral: true });
+        const totalCost = TICKET_PRICE * quantity;
+        const payment = removeMoney(interaction.user.id, totalCost);
+        if (!payment.success) return interaction.reply({ content: `Bạn cần **${currency(totalCost)}** để mua **${quantity} vé** (${currency(TICKET_PRICE)}/vé).`, ephemeral: true });
+        const tickets = [];
+        const seen = new Set();
+        for (let index = 0; index < quantity; index += 1) {
+            let numbers = chosen;
+            if (!numbers) {
+                do { numbers = chooseNumbers(); } while (seen.has(numbers.join("-")));
+                seen.add(numbers.join("-"));
+            }
+            tickets.push({ userId: interaction.user.id, numbers: [...numbers], purchasedAt: Date.now(), channelId: interaction.channelId });
+        }
+        current.tickets.push(...tickets); current.lastChannelId = interaction.channelId; save(current);
+        const ticketList = tickets.map((ticket, index) => `**${index + 1}.** ${ticket.numbers.map((n) => `\`${String(n).padStart(2, "0")}\``).join(" · ")}`).join("\n");
+        return interaction.reply({ content: `✅ Đã mua **${quantity} vé** kỳ **${current.round}**${chosen ? " (dãy số đã chọn)" : " (số ngẫu nhiên)"}:\n${ticketList}\nTổng tiền: **${currency(totalCost)}**. Tự dò lúc **${formatDate(current.nextDrawAt)}**.`, ephemeral: true });
     }
     const latest = (current.results || [])[0];
     if (!latest) return interaction.reply({ content: `Chưa có kết quả nào. Kỳ hiện tại quay lúc **${formatDate(current.nextDrawAt)}**.`, ephemeral: true });
