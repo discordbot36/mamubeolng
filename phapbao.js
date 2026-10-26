@@ -891,10 +891,6 @@ async function autocompleteUpgradeableWeapon(interaction) {
 
             const rarity = getWeaponDisplayRarity(weapon);
 
-            if (rarity.id === "EX") {
-                return false;
-            }
-
             const maxStars = Number(rarity.maxStars || 0);
 
             return Number(weapon.stars || 0) < maxStars;
@@ -3555,7 +3551,7 @@ function buildPhapBaoInfoUpgradeEmbed() {
             {
                 name: "⭐ Nâng sao",
                 value: [
-                    "`/nangsao` dùng bản trùng để nâng sao.",
+                    "`/nangsao` dùng bản trùng để nâng sao, bao gồm EX (tối đa 9⭐).",
                     "Phải cùng vũ khí thật.",
                     "Nguyên liệu không được khóa và không được đang trang bị.",
                 ].join("\n"),

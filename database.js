@@ -2068,7 +2068,41 @@ function updateSecretRealmFatigue(userId, updater) {
     });
 }
 
+// Settle the whole table synchronously in one cache mutation: no partial debits.
+function settleCaoRuaRound(playerIds, winnerIds, bet) {
+    const ids = [...new Set(playerIds)];
+    const winners = [...new Set(winnerIds)];
+    if (ids.length !== playerIds.length || ids.length < 2 || ids.length > 6 ||
+        !Number.isSafeInteger(bet) || bet < 100 || bet > require("./config/gamble").GAMBLE_MAX_BET ||
+        !winners.length || winners.some((id) => !ids.includes(id))) {
+        return { success: false, message: "Dữ liệu bàn cược không hợp lệ." };
+    }
+    return withData((data) => {
+        const users = ids.map((id) => ensureUser(data, id));
+        const insufficient = ids.filter((id, index) => Number(users[index].money) < bet || !Number.isFinite(Number(users[index].money)));
+        if (insufficient.length) return { success: false, insufficient, message: "Có người không đủ tiền; chưa trừ tiền của ai." };
+        const pot = bet * ids.length;
+        const share = Math.floor(pot / winners.length);
+        const remainder = pot % winners.length;
+        const payouts = Object.fromEntries(ids.map((id) => [id, 0]));
+        // Return any indivisible remainder fairly in randomized seating order.
+        winners.forEach((id, index) => { payouts[id] = share + (index < remainder ? 1 : 0); });
+        users.forEach((user, index) => {
+            const id = ids[index];
+            user.money = Number(user.money) - bet + payouts[id];
+            const stats = user.gamblingMoney || (user.gamblingMoney = { wagered: 0, received: 0, since: Date.now() });
+            stats.wagered += bet;
+            stats.received += payouts[id];
+            if (payouts[id] > bet) user.wins = Number(user.wins || 0) + 1;
+            if (payouts[id] < bet) user.losses = Number(user.losses || 0) + 1;
+            if (winners.includes(id)) user.caoRuaPoints = Number(user.caoRuaPoints || 0) + 1;
+        });
+        return { success: true, pot, payouts };
+    });
+}
+
 module.exports = {
+    settleCaoRuaRound,
     createUser,
     getUser,
     updateUser,

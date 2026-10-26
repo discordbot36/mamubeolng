@@ -17,8 +17,9 @@ module.exports = [
     },
     {
         name: "caorua",
-        description: "Tạo phòng chơi Ba Cào tối đa 6 người",
+        description: "Chơi Ba Cào bằng tiền game, 2–6 người, thắng nhận quỹ chung",
         handler: "caorua.create",
+        options: [{ type: "integer", name: "cuoc", description: "Tiền mỗi người cược mỗi ván (mặc định 1.000 xu)", required: false, minValue: 100, maxValue: GAMBLE_MAX_BET }],
     },
     {
         name: "diemcaorua",

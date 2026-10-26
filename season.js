@@ -135,6 +135,22 @@ function getSeasonState() {
     return database.getSystemValue(SEASON_STATE_KEY) || null;
 }
 
+function cleanupRewardedSeasonHistory() {
+    const history = database.getSystemValue("seasonLeagueHistory") || [];
+    const current = getSeasonState();
+    const previousNumber = Number(database.getSystemValue("seasonLeagueLastNumber") || 0);
+    const highestNumber = history.reduce((highest, item) => Math.max(highest, Number(item?.number || 0)), Math.max(previousNumber, Number(current?.number || 0)));
+    if (highestNumber > previousNumber) {
+        database.setSystemValue("seasonLeagueLastNumber", highestNumber);
+    }
+    // rewardsGranted is also set before paying, so only finished seasons are safe to remove.
+    const remaining = history.filter((season) => !(season?.status === "finished" && season.rewardsGranted === true));
+    if (remaining.length !== history.length) {
+        database.setSystemValue("seasonLeagueHistory", remaining);
+    }
+    return remaining;
+}
+
 function getSeasonStats(user, seasonId) {
     if (
         !user.seasonStats ||
@@ -660,7 +676,8 @@ async function finish(interaction) {
 
         history.push(finishedSeason);
 
-        database.setSystemValue("seasonLeagueHistory", history.slice(-20));
+        database.setSystemValue("seasonLeagueHistory", history);
+        cleanupRewardedSeasonHistory();
     } catch (error) {
         console.error("[SEASON] Lỗi phát thưởng:", error);
 
@@ -719,18 +736,10 @@ async function status(interaction) {
     });
 }
 function getNextSeasonNumber() {
+    const history = cleanupRewardedSeasonHistory();
     const current = getSeasonState();
-
-    if (Number(current?.number || 0) > 0) {
-        return Number(current.number) + 1;
-    }
-
-    const history = database.getSystemValue("seasonLeagueHistory") || [];
-
-    const highestNumber = history.reduce((highest, item) => {
-        return Math.max(highest, Number(item?.number || 0));
-    }, 0);
-
+    const highestNumber = history.reduce((highest, item) => Math.max(highest, Number(item?.number || 0)),
+        Math.max(Number(current?.number || 0), Number(database.getSystemValue("seasonLeagueLastNumber") || 0)));
     return highestNumber + 1;
 }
 
@@ -879,7 +888,7 @@ async function finishAutomaticSeason(client, season) {
 
         history.push(emptyFinishedSeason);
 
-        database.setSystemValue("seasonLeagueHistory", history.slice(-20));
+        database.setSystemValue("seasonLeagueHistory", history);
 
         if (channel) {
             await channel.send({
@@ -905,6 +914,7 @@ async function processAutomaticSeason(client) {
     isProcessingSeason = true;
 
     try {
+        cleanupRewardedSeasonHistory();
         let season = getSeasonState();
 
         /*
