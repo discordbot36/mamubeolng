@@ -9,8 +9,8 @@ const {
 
 const {
     getBalance,
-    addMoney,
-    removeMoney,
+    addGamblingMoney: addMoney,
+    removeGamblingMoney: removeMoney,
     addWin,
     addLoss,
     getCurrencyEmoji,

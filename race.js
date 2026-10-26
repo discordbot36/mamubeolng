@@ -8,7 +8,7 @@ const {
 } = require("discord.js");
 
 const {
-    addMoney,
+    addGamblingMoney: addMoney,
     addWin,
     addLoss,
     formatMoney,

@@ -604,10 +604,20 @@ function updateUser(userId, updater) {
     });
 }
 
-function addMoney(userId, amount) {
+function addMoney(userId, amount, gambling = false) {
     return withData((data) => {
         const user = ensureUser(data, userId);
 
+        if (gambling) {
+            if (!Number.isSafeInteger(amount)) throw new Error("Số tiền cược không hợp lệ");
+            const stats = user.gamblingMoney || (user.gamblingMoney = {
+                wagered: 0, received: 0, since: Date.now(),
+            });
+            // Count actual wallet changes, including refunds, so net remains accurate.
+            const change = Math.max(0, user.money + amount) - user.money;
+            if (change < 0) stats.wagered += -change;
+            else stats.received += change;
+        }
         user.money += amount;
 
         if (user.money < 0) {
@@ -623,7 +633,7 @@ function getBalance(userId) {
     return Number(user.money || 0);
 }
 
-function removeMoney(userId, amount) {
+function removeMoney(userId, amount, gambling = false) {
     const safeAmount = Math.max(0, Number(amount || 0));
 
     if (safeAmount <= 0) {
@@ -643,7 +653,7 @@ function removeMoney(userId, amount) {
         };
     }
 
-    addMoney(userId, -safeAmount);
+    addMoney(userId, -safeAmount, gambling);
 
     return {
         success: true,
@@ -2065,6 +2075,8 @@ module.exports = {
     getBalance,
     addMoney,
     removeMoney,
+    addGamblingMoney: (userId, amount) => addMoney(userId, amount, true),
+    removeGamblingMoney: (userId, amount) => removeMoney(userId, amount, true),
     addWin,
     addLoss,
     recordNoiTuCorrect,

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="vi">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chamber Farm</title><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body><main class="shell">
+<header class="topbar"><div class="brand"><span class="brand-mark">C</span><h1>Chamber Farm</h1></div><span id="connection" class="status-pill">Chưa kết nối</span></header>
+<div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+<section class="metrics" aria-label="Số liệu phiên">
+<article class="metric"><div class="metric-label">Số dư <small>coin</small></div><div class="metric-value" id="balance">—</div><p id="balance-note">Kiểm tra ví để lấy số dư.</p><p id="verified" class="muted">Chưa kiểm tra ví</p></article>
+<article class="metric"><div class="metric-label">Lời / lỗ phiên <small>coin</small></div><div class="metric-value" id="session-net">—</div><p id="net-note">Tính từ số dư đầu phiên</p><p class="muted">Blackjack <b id="bj-net">—</b> · Điểm danh <b id="daily-net">—</b></p></article>
+<article class="metric"><div class="metric-label">Cược tiếp <small>coin</small></div><div class="metric-value" id="next-bet">1</div><p id="round-state">Chưa mở ván mới</p><p id="record" class="muted">0 thắng · 0 thua · 0 hòa</p></article>
+</section>
+<section class="panel controls" aria-label="Điều khiển">
+<div class="panel-head"><h2>Phiên chơi</h2><span id="phase" class="tag">Sẵn sàng</span></div>
+<div class="primary-actions"><button class="button primary" id="start" type="button">Bắt đầu</button><button class="button secondary" id="pause" type="button">Tạm dừng</button></div>
+<div class="secondary-actions"><button class="button quiet" id="account" type="button">Kiểm tra ví</button><button class="button quiet" id="daily" type="button">Điểm danh</button><span id="daily-note" class="muted">Nhận thưởng trong ngày</span></div>
+<div class="strategy-strip"><strong id="strategy-name">Martingale</strong><span id="strategy-summary">Thua ×2 · Thắng về gốc · Hòa giữ cược</span></div>
+<p id="stop-reason" class="pending-info" role="status" hidden></p><div id="pending-info" class="pending-info" hidden></div>
+<button class="button secondary" id="recover" type="button" hidden>Đối soát ván đang chờ</button>
+<p class="footnote">Tạm dừng sẽ chơi xong ván hiện tại. Đóng tab không dừng bot.</p>
+</section>
+<details class="panel settings"><summary><span>Cài đặt cược</span><span class="summary-note" id="settings-summary">Gốc 1 coin · Trần 50 coin</span></summary><div class="details-body">
+<div class="stake-editor"><label for="base">Cược gốc (coin)</label><div class="stepper"><button id="halve" type="button" aria-label="Giảm cược gốc một nửa">÷2</button><input id="base" type="number" min="1" max="50" step="1" value="1" inputmode="numeric"><button id="double" type="button" aria-label="Tăng cược gốc gấp đôi">×2</button></div></div>
+<p class="muted" id="sequence-label">Chuỗi khi thua liên tiếp</p><div id="sequence" class="sequence" aria-live="polite"></div>
+<div class="calculation"><div><span>Cược lớn nhất trong chuỗi</span><strong id="maximum">32 coin</strong></div><div><span>Tỷ lệ cược lớn nhất / vốn</span><strong id="risk">—</strong></div></div><p id="cycle-note" class="footnote"></p>
+<button class="button primary" id="apply" type="button">Áp dụng cược gốc</button><p class="footnote" id="apply-note">Tạm dừng và chờ hết ván trước khi đổi cược.</p>
+<details class="calculator"><summary>Tính cược theo vốn</summary><div class="auto-row"><label for="risk-target" id="risk-label">Ngân sách cược gốc / vốn (%)</label><input id="risk-target" type="number" min="0.1" max="100" step="0.1" value="1"><button class="button secondary" id="calculate" type="button">Tính</button></div><p class="footnote" id="calculation-note"></p></details>
+<p class="footnote">Trần cược <b id="cap">50</b> coin. Bot dừng nếu cược kế tiếp vượt trần hoặc số dư. Martingale không bảo đảm lợi nhuận.</p>
+</div></details>
+<details class="panel history-panel"><summary><span>Lịch sử phiên</span><span id="round-count" class="summary-note">0 ván</span></summary><div class="details-body">
+<div class="chart-caption"><span>Số dư theo kết quả</span><span id="initial-balance">Đầu phiên: —</span></div><svg class="sparkline" viewBox="0 0 600 120" role="img" aria-label="Diễn biến số dư"><path class="chart-grid" d="M0 30H600M0 75H600M0 119H600"/><polyline id="chart-line" points="0,80 600,80"/></svg>
+<div class="table-wrap"><table><thead><tr><th>Kết quả</th><th>Cược</th><th>Thay đổi</th><th>Ví dự tính</th></tr></thead><tbody id="history"></tbody></table></div><div id="history-empty" class="empty-state">Chưa có ván trong phiên này.</div>
+<p class="footnote">Ví được xác nhận lại bằng /taikhoan mỗi 50 ván và sau điểm danh. Thưởng thắng thường tạm tính 1:1; blackjack hai lá 2:1 theo dữ liệu đã quan sát.</p>
+</div></details>
+<details class="panel activity-panel"><summary>Nhật ký hoạt động</summary><ol id="activity" class="activity-list details-body"><li>Giao diện đã sẵn sàng.</li></ol></details>
+<footer><button class="text-button" id="refresh-page" type="button">Làm mới</button><button class="text-button" id="disconnect" type="button">Ngắt kết nối bot</button></footer>
+</main></body></html>
+

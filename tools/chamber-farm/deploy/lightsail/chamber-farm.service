@@ -1,0 +1,35 @@
+[Unit]
+Description=Chamber Farm background runner
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=simple
+User=chamber-farm
+Group=chamber-farm
+WorkingDirectory=/var/lib/chamber-farm
+Environment=CHAMBER_DATA_DIR=/var/lib/chamber-farm
+Environment=NODE_ENV=production
+Environment=NODE_OPTIONS=--max-old-space-size=512
+RuntimeDirectory=chamber-farm
+RuntimeDirectoryMode=0700
+StateDirectory=chamber-farm
+StateDirectoryMode=0700
+ExecStart=/opt/chamber-farm/start-service.sh
+Restart=always
+RestartSec=30
+TimeoutStopSec=180
+KillSignal=SIGTERM
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=/var/lib/chamber-farm /run/chamber-farm
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=chamber-farm
+
+[Install]
+WantedBy=multi-user.target

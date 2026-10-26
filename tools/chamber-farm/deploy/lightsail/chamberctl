@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ $EUID -ne 0 ]]; then exec sudo -- "$0" "$@"; fi
+action=${1:-status}
+case "$action" in
+    menu)
+        while true; do
+            printf '\nCHAMBER FARM - LIGHTSAIL\n1. Trang thai\n2. Tiep tuc choi\n3. Tam dung sau van hien tai\n4. Diem danh\n5. Xem log\n6. Kiem tra vi\n0. Thoat (bot van chay)\n'
+            read -r -p 'Chon: ' choice || exit 0
+            case "$choice" in
+                1) "$0" status ;;
+                2) "$0" resume ;;
+                3) "$0" pause ;;
+                4) "$0" daily ;;
+                5) "$0" logs ;;
+                6) "$0" account ;;
+                0) exit 0 ;;
+                *) echo 'Chon 0-6.' ;;
+            esac
+        done
+        ;;
+    status)
+        systemctl show chamber-farm --property=ActiveState,SubState,MainPID,NRestarts
+        /opt/chamber-farm/node/bin/node /opt/chamber-farm/status.js
+        ;;
+    logs) journalctl -u chamber-farm -n 60 --no-pager ;;
+    pause|resume|daily|account|recover)
+        if ! systemctl is-active --quiet chamber-farm; then
+            echo 'Service is not active. Use: sudo systemctl start chamber-farm' >&2
+            exit 1
+        fi
+        if [[ ! -p /run/chamber-farm/commands ]]; then echo 'Control pipe is not ready.' >&2; exit 1; fi
+        # No arbitrary shell input is accepted. A dead reader cannot block SSH.
+        timeout 3 bash -c 'printf "%s\n" "$1" > /run/chamber-farm/commands' -- "$action"
+        echo "Command submitted: $action. Use sudo chamberctl status or sudo chamberctl logs to confirm completion."
+        ;;
+    check|verify)
+        exec runuser -u chamber-farm -- env CHAMBER_DATA_DIR=/var/lib/chamber-farm \
+            /opt/chamber-farm/node/bin/node --env-file=/var/lib/chamber-farm/.env \
+            /opt/chamber-farm/app/index.js "--$action"
+        ;;
+    restart) systemctl restart chamber-farm ;;
+    stop) systemctl stop chamber-farm ;;
+    *) echo 'Usage: sudo chamberctl menu|status|logs|pause|resume|daily|account|recover|check|verify|restart|stop' >&2; exit 2 ;;
+esac

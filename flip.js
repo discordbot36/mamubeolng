@@ -7,8 +7,8 @@ const {
 
 const {
     getBalance,
-    addMoney,
-    removeMoney,
+    addGamblingMoney: addMoney,
+    removeGamblingMoney: removeMoney,
     getCurrencyEmoji,
     formatMoney,
 } = require("./database");

@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require("discord.js");
-const { getSystemValue, setSystemValue, getBalance, removeMoney, addMoney, formatMoney, getCurrencyEmoji } = require("./database");
+const { getSystemValue, setSystemValue, getBalance, removeGamblingMoney: removeMoney, addGamblingMoney: addMoney, formatMoney, getCurrencyEmoji } = require("./database");
 
 const INTERVAL_MS = 3 * 24 * 60 * 60 * 1000;
 const TICKET_PRICE = 10000;

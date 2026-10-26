@@ -373,6 +373,39 @@ async function balance(interaction) {
     });
 }
 
+async function statistics(interaction) {
+    const target = interaction.options.getUser("nguoichoi") || interaction.user;
+    if (target.bot) {
+        return interaction.reply({
+            content: "❌ Vui lòng chọn một người chơi, không phải bot.",
+            ephemeral: true,
+        });
+    }
+    const user = getUser(target.id);
+    const stats = user.gamblingMoney || {};
+    const wagered = Number(stats.wagered || 0);
+    const received = Number(stats.received || 0);
+    const net = received - wagered;
+    const signed = (net > 0 ? "+" : net < 0 ? "−" : "") + formatMoney(Math.abs(net));
+    const coin = getCurrencyEmoji();
+    const embed = new EmbedBuilder()
+        .setColor(net > 0 ? 0x2ecc71 : net < 0 ? 0xe74c3c : 0x3498db)
+        .setTitle("📊 Thống kê tiền thắng thua")
+        .setDescription("Người chơi: <@" + target.id + ">")
+        .addFields(
+            { name: "💸 Tổng tiền đã cược", value: formatMoney(wagered) + " " + coin, inline: true },
+            { name: "💰 Tổng tiền nhận về", value: formatMoney(received) + " " + coin, inline: true },
+            { name: net > 0 ? "📈 Đang lãi (dương)" : net < 0 ? "📉 Đang lỗ (âm)" : "⚖️ Hòa vốn", value: signed + " " + coin, inline: true },
+        )
+        .setFooter({ text: "Lãi/lỗ = tiền nhận − tiền cược. Tiền nhận gồm vốn trả lại và hoàn cược." });
+    if (stats.since) {
+        embed.addFields({ name: "Bắt đầu ghi nhận", value: "<t:" + Math.floor(stats.since / 1000) + ":f>" });
+    } else {
+        embed.addFields({ name: "Chưa có dữ liệu tiền cược", value: "Thống kê được ghi từ bản cập nhật này; không thể tính lại tiền thắng/thua cũ từ số trận." });
+    }
+    return interaction.reply({ embeds: [embed] });
+}
+
 async function daily(interaction) {
     const result = claimDaily(interaction.user.id);
 
@@ -1172,6 +1205,7 @@ module.exports = {
     autocompleteShop,
     autocompleteInventory,
     balance,
+    statistics,
     daily,
     shop,
     handleButton,

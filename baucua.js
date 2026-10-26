@@ -9,7 +9,7 @@ const {
 
 const {
     getUser,
-    addMoney,
+    addGamblingMoney: addMoney,
     addWin,
     addLoss,
     formatMoney,

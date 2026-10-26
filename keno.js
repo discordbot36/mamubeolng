@@ -2,8 +2,8 @@ const { EmbedBuilder } = require("discord.js");
 const { announceGambleWin } = require("./utils/rareDrop");
 const {
     getBalance,
-    addMoney,
-    removeMoney,
+    addGamblingMoney: addMoney,
+    removeGamblingMoney: removeMoney,
     addWin,
     addLoss,
     getCurrencyEmoji,

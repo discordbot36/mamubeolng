@@ -63,6 +63,17 @@ module.exports = [
         handler: "race.start",
     },
     {
+        name: "thongke",
+        description: "Xem tiền cược, tiền nhận và lãi lỗ của người chơi",
+        handler: "economy.statistics",
+        options: [{
+            type: "user",
+            name: "nguoichoi",
+            description: "Người muốn xem thống kê (mặc định là bạn)",
+            required: false,
+        }],
+    },
+    {
         name: "sodu",
         description: "Xem số dư",
         handler: "economy.balance",

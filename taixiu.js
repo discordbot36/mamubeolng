@@ -9,7 +9,7 @@ const {
 const { announceGambleWin } = require("./utils/rareDrop");
 const {
     getUser,
-    addMoney,
+    addGamblingMoney: addMoney,
     addWin,
     addLoss,
     formatMoney,

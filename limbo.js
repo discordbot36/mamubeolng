@@ -4,12 +4,12 @@ const { EmbedBuilder } = require("discord.js");
 
 const {
     addLoss,
-    addMoney,
+    addGamblingMoney: addMoney,
     addWin,
     formatMoney,
     getBalance,
     getCurrencyEmoji,
-    removeMoney,
+    removeGamblingMoney: removeMoney,
 } = require("./database");
 
 const { GAMBLE_MAX_BET } = require("./config/gamble");

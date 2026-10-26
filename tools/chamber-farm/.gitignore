@@ -1,0 +1,10 @@
+.env
+state.json
+state.json.tmp
+runner.lock
+diagnostic.json
+rounds.jsonl
+node_modules/
+.npm-cache/
+dist/
+.ui/

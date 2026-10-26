@@ -1,0 +1,17 @@
+{
+  "name": "chamber-farm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local Chamber daily check-in and blackjack runner",
+  "type": "commonjs",
+  "engines": { "node": ">=22.16" },
+  "scripts": {
+    "start": "node --env-file=.env index.js",
+    "ui": "node --env-file=.env ui-server.js",
+    "check": "node --env-file=.env index.js --check",
+    "verify": "node --env-file=.env index.js --verify",
+    "build:exe": "powershell.exe -NoProfile -ExecutionPolicy RemoteSigned -File packaging/build.ps1",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": { "discord.js-selfbot-v13": "3.7.1" }
+}
