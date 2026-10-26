@@ -11,6 +11,7 @@ module.exports = [
                 { type: "string", name: "so", description: "Bỏ trống để bot chọn ngẫu nhiên; hoặc nhập 6 số khác nhau", required: false },
                 { type: "integer", name: "soluong", description: "Số vé muốn mua (mỗi vé 10.000 xu)", required: false, minValue: 1, maxValue: 20 },
             ] },
+            { type: "subcommand", name: "ve", description: "Xem các vé bạn đã mua ở kỳ hiện tại", options: [{ type: "integer", name: "trang", description: "Trang vé muốn xem", required: false, minValue: 1 }] },
             { type: "subcommand", name: "ketqua", description: "Xem kết quả kỳ gần nhất" },
         ],
     },
